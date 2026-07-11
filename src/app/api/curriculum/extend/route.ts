@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, tables } from "@/db";
 import {
   createJob,
@@ -46,19 +46,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const refId = `${profileId}:${next}`;
-  const existing = db.query.generationJobs
-    .findFirst({
-      where: and(
-        eq(tables.generationJobs.jobType, "chapter"),
-        eq(tables.generationJobs.refId, refId),
-        inArray(tables.generationJobs.status, ["queued", "running"])
-      ),
-    })
-    .sync();
-  if (existing) return NextResponse.json({ jobId: existing.id, level: next });
-
-  const jobId = createJob("chapter", refId);
+  // createJob dedupes on (jobType, refId): an in-flight job's id is returned.
+  const jobId = createJob("chapter", `${profileId}:${next}`);
   void runJob(jobId);
   return NextResponse.json({ jobId, level: next });
 }

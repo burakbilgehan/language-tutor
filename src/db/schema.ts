@@ -8,6 +8,7 @@ import {
 import type {
   LessonContent,
   GrammarTopicContent,
+  SideQuestPayload,
 } from "@/lib/llm/schemas";
 
 const id = () => text("id").primaryKey();
@@ -107,6 +108,12 @@ export const nodes = sqliteTable("nodes", {
     .default("locked"),
   prereqNodeId: text("prereq_node_id"),
   completedAt: integer("completed_at", { mode: "timestamp" }),
+  // Cached drill payload for side quests: generated on first start, cleared on
+  // completion so each *completed run* gets fresh content — but re-opens and
+  // page refreshes don't pay for a new LLM call.
+  sideQuestPayload: text("side_quest_payload", {
+    mode: "json",
+  }).$type<SideQuestPayload | null>(),
 });
 
 export const lessons = sqliteTable(

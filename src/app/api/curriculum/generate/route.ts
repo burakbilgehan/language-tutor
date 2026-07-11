@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq, and, inArray } from "drizzle-orm";
-import { db, tables } from "@/db";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
@@ -16,19 +14,10 @@ export async function POST(req: Request) {
   }
   const { profileId } = parsed.data;
 
-  // Guard: an in-flight curriculum job for this profile → return it.
-  const existing = db.query.generationJobs
-    .findFirst({
-      where: and(
-        eq(tables.generationJobs.jobType, "curriculum"),
-        eq(tables.generationJobs.refId, profileId),
-        inArray(tables.generationJobs.status, ["queued", "running"])
-      ),
-    })
-    .sync();
-  if (existing) return NextResponse.json({ jobId: existing.id });
-
-  const jobId = createJob("curriculum", profileId);
+  // First chapter (N5). Same (jobType, refId) namespace as extend/auto-extend
+  // so all chapter enqueue paths dedupe against each other; createJob itself
+  // returns the in-flight job id if one exists.
+  const jobId = createJob("chapter", `${profileId}:N5`);
   void runJob(jobId); // fire-and-forget; client polls /api/jobs/[id]
   return NextResponse.json({ jobId });
 }
