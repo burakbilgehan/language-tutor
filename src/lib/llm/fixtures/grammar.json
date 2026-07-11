@@ -1,0 +1,40 @@
+{
+  "title_tr": "は Konu Edatı",
+  "intro_tr": "は (wa okunur) cümlenin konusunu işaretler. 'X hakkında konuşursak...' anlamı katar. Yazılışta ha karakteri kullanılır ama edat olarak wa okunur.",
+  "tables": [
+    {
+      "caption_tr": "Temel は Kalıbı",
+      "column_headers": ["Japonca", "Okunuş", "Türkçe"],
+      "rows": [
+        ["わたしは トルコじん です", "watashi wa torukojin desu", "Ben Türküm"],
+        ["これは ほん です", "kore wa hon desu", "Bu bir kitap"],
+        ["田中さんは せんせい です", "Tanaka-san wa sensei desu", "Tanaka Bey öğretmendir"]
+      ],
+      "footnotes_tr": ["は edat olarak her zaman 'wa' okunur."]
+    },
+    {
+      "caption_tr": "は ve が Karşılaştırması",
+      "column_headers": ["Edat", "İşlev", "Örnek"],
+      "rows": [
+        ["は", "Konu işaretler, bilinen bilgi", "わたしは がくせい です"],
+        ["が", "Özne işaretler, yeni bilgi", "だれが きますか"]
+      ],
+      "footnotes_tr": null
+    }
+  ],
+  "examples": [
+    {
+      "target": "わたしは ブラクです。",
+      "reading": "watashi wa Buraku desu.",
+      "translation_tr": "Ben Burak'ım.",
+      "note_tr": null
+    },
+    {
+      "target": "にほんごは たのしい です。",
+      "reading": "nihongo wa tanoshii desu.",
+      "translation_tr": "Japonca eğlencelidir.",
+      "note_tr": "Konu cansız bir kavram da olabilir."
+    }
+  ],
+  "related_slugs": ["desu-copula", "ka-question"]
+}

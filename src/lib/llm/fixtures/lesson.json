@@ -1,0 +1,71 @@
+{
+  "title_tr": "Selamlaşma",
+  "explanation_tr": "Japoncada selamlaşma günün saatine göre değişir.\n\n- **おはよう (ohayou)** — Günaydın (samimi)\n- **こんにちは (konnichiwa)** — Merhaba / İyi günler\n- **こんばんは (konbanwa)** — İyi akşamlar\n\nResmî ortamlarda おはようございます (ohayou gozaimasu) kullanılır.",
+  "examples": [
+    {
+      "target": "こんにちは、田中さん。",
+      "reading": "konnichiwa, Tanaka-san.",
+      "translation_tr": "Merhaba, Tanaka Bey.",
+      "note_tr": "さん isimden sonra gelen saygı ekidir."
+    },
+    {
+      "target": "おはようございます。",
+      "reading": "ohayou gozaimasu.",
+      "translation_tr": "Günaydın (kibar).",
+      "note_tr": null
+    }
+  ],
+  "grammar_notes": [
+    {
+      "heading_tr": "さん saygı eki",
+      "body_tr": "İsimlerin sonuna eklenir; Bey/Hanım gibidir. Kendi adına asla eklenmez."
+    }
+  ],
+  "vocab": [
+    { "term": "こんにちは", "reading": "konnichiwa", "meaning_tr": "merhaba", "example": "こんにちは、田中さん。" },
+    { "term": "おはよう", "reading": "ohayou", "meaning_tr": "günaydın", "example": null },
+    { "term": "こんばんは", "reading": "konbanwa", "meaning_tr": "iyi akşamlar", "example": null }
+  ],
+  "exercises": [
+    {
+      "type": "mcq",
+      "prompt_tr": "Sabah bir arkadaşına nasıl selam verirsin?",
+      "target_text": null,
+      "options": ["こんばんは", "おはよう", "こんにちは", "さようなら"],
+      "answer": "おはよう",
+      "accept_also": null
+    },
+    {
+      "type": "mcq",
+      "prompt_tr": "「こんにちは」 ne anlama gelir?",
+      "target_text": null,
+      "options": ["Günaydın", "Merhaba", "İyi geceler", "Hoşça kal"],
+      "answer": "Merhaba",
+      "accept_also": null
+    },
+    {
+      "type": "fill_blank",
+      "prompt_tr": "Akşam selamlaşması: ___ (iyi akşamlar)",
+      "target_text": "___",
+      "options": null,
+      "answer": "こんばんは",
+      "accept_also": ["konbanwa"]
+    },
+    {
+      "type": "translate",
+      "prompt_tr": "Türkçeye çevir:",
+      "target_text": "おはようございます。",
+      "options": null,
+      "answer": "Günaydın",
+      "accept_also": ["Günaydın (kibar)", "İyi sabahlar"]
+    },
+    {
+      "type": "free_response",
+      "prompt_tr": "Tanaka Bey'e öğlen vakti nasıl selam verirdin? Japonca yaz.",
+      "target_text": null,
+      "options": null,
+      "answer": "こんにちは、田中さん。 gibi bir selamlama bekleniyor; こんにちは kullanımı ve さん eki doğru olmalı.",
+      "accept_also": null
+    }
+  ]
+}

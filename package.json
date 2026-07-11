@@ -1,0 +1,39 @@
+{
+  "name": "language-tutor",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "start": "next start",
+    "lint": "eslint",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "llm:smoke": "tsx scripts/llm-smoke.ts",
+    "seed:fixtures": "tsx scripts/seed-fixtures.ts",
+    "test": "tsx --test src/lib/*.test.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.44.7",
+    "nanoid": "^5.1.16",
+    "next": "15.5.20",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.20",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.0",
+    "typescript": "^5"
+  }
+}

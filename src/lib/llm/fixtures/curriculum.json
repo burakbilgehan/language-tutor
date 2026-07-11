@@ -1,0 +1,141 @@
+{
+  "title": "Sıfırdan Japonca Yolculuğu",
+  "units": [
+    {
+      "title_tr": "Hiragana Dünyasına Giriş",
+      "description_tr": "Japoncanın temel alfabesi hiragana ile tanış.",
+      "theme": "kana",
+      "nodes": [
+        {
+          "lesson_type": "lesson",
+          "title_tr": "İlk Hiraganalar: あ-お",
+          "subtitle_tr": "Sesli harflerle başla",
+          "objectives": ["あいうえお karakterlerini tanı", "Basit sesleri oku"],
+          "xp_reward": 20
+        },
+        {
+          "lesson_type": "lesson",
+          "title_tr": "K Satırı: か-こ",
+          "subtitle_tr": "İlk ünsüz grubu",
+          "objectives": ["かきくけこ karakterlerini öğren"],
+          "xp_reward": 20
+        },
+        {
+          "lesson_type": "checkpoint",
+          "title_tr": "Kana Kontrol Noktası",
+          "subtitle_tr": "Öğrendiklerini test et",
+          "objectives": ["İlk 10 hiraganayı hatasız oku"],
+          "xp_reward": 40
+        }
+      ]
+    },
+    {
+      "title_tr": "İlk Sözler",
+      "description_tr": "Selamlaşma ve kendini tanıtma.",
+      "theme": "greetings",
+      "nodes": [
+        {
+          "lesson_type": "lesson",
+          "title_tr": "Selamlaşma",
+          "subtitle_tr": "こんにちは!",
+          "objectives": ["Temel selamlaşmaları kullan"],
+          "xp_reward": 25
+        },
+        {
+          "lesson_type": "lesson",
+          "title_tr": "Kendini Tanıtma",
+          "subtitle_tr": "わたしは...",
+          "objectives": ["İsim söyleme kalıbını öğren"],
+          "xp_reward": 25
+        },
+        {
+          "lesson_type": "boss",
+          "title_tr": "İlk Konuşma",
+          "subtitle_tr": "Bir tanışma diyaloğu kur",
+          "objectives": ["Tanışma diyaloğunu tamamla"],
+          "xp_reward": 60
+        }
+      ]
+    },
+    {
+      "title_tr": "Temel Cümle Yapısı",
+      "description_tr": "は ve です ile ilk cümleler.",
+      "theme": "grammar",
+      "nodes": [
+        {
+          "lesson_type": "lesson",
+          "title_tr": "X は Y です",
+          "subtitle_tr": "Temel cümle kalıbı",
+          "objectives": ["は edatını kullan", "です ile cümle kur"],
+          "xp_reward": 30
+        },
+        {
+          "lesson_type": "lesson",
+          "title_tr": "Soru Sorma: か",
+          "subtitle_tr": "Cümleyi soruya çevir",
+          "objectives": ["か ile soru kur"],
+          "xp_reward": 30
+        },
+        {
+          "lesson_type": "checkpoint",
+          "title_tr": "Cümle Kurma Sınavı",
+          "subtitle_tr": "Kalıpları birleştir",
+          "objectives": ["5 doğru cümle kur"],
+          "xp_reward": 45
+        }
+      ]
+    },
+    {
+      "title_tr": "Sayılar ve Zaman",
+      "description_tr": "Saymayı ve saat söylemeyi öğren.",
+      "theme": "numbers",
+      "nodes": [
+        {
+          "lesson_type": "lesson",
+          "title_tr": "1'den 10'a Sayılar",
+          "subtitle_tr": "いち、に、さん...",
+          "objectives": ["10'a kadar say"],
+          "xp_reward": 25
+        },
+        {
+          "lesson_type": "lesson",
+          "title_tr": "Saat Kaç?",
+          "subtitle_tr": "いま なんじ ですか",
+          "objectives": ["Saati söyle"],
+          "xp_reward": 30
+        },
+        {
+          "lesson_type": "boss",
+          "title_tr": "Zaman Ustası",
+          "subtitle_tr": "Sayı ve zaman birleştirme",
+          "objectives": ["Karma alıştırmaları çöz"],
+          "xp_reward": 70
+        }
+      ]
+    }
+  ],
+  "side_quests": [
+    {
+      "kind": "kana_drill",
+      "title_tr": "Kana Antrenmanı",
+      "description_tr": "Hiragana ve katakana hız alıştırması"
+    },
+    {
+      "kind": "pop_quiz",
+      "title_tr": "Sürpriz Quiz",
+      "description_tr": "Öğrendiklerinden karışık sorular"
+    },
+    {
+      "kind": "vocab_review",
+      "title_tr": "Kelime Tekrarı",
+      "description_tr": "SRS ile kelime kartları"
+    }
+  ],
+  "grammar_index": [
+    { "slug": "wa-topic-particle", "title_tr": "は Konu Edatı", "category": "particles" },
+    { "slug": "desu-copula", "title_tr": "です Koşacı", "category": "verbs" },
+    { "slug": "ka-question", "title_tr": "か Soru Edatı", "category": "particles" },
+    { "slug": "no-possessive", "title_tr": "の İyelik Edatı", "category": "particles" },
+    { "slug": "numbers-counters", "title_tr": "Sayılar ve Sayaçlar", "category": "numbers" }
+  ]
+}
