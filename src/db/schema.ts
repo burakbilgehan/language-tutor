@@ -47,11 +47,34 @@ export const curricula = sqliteTable("curricula", {
   generatedAt: integer("generated_at", { mode: "timestamp" }),
 });
 
+export const curriculumChapters = sqliteTable(
+  "curriculum_chapters",
+  {
+    id: id(),
+    curriculumId: text("curriculum_id")
+      .notNull()
+      .references(() => curricula.id),
+    level: text("level").notNull(), // 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
+    position: integer("position").notNull(), // 0-based JLPT ordinal (N5=0..N1=4)
+    status: text("status", {
+      enum: ["pending", "generating", "ready", "error"],
+    })
+      .notNull()
+      .default("pending"),
+    titleTr: text("title_tr").notNull().default(""),
+    generatedAt: integer("generated_at", { mode: "timestamp" }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("chapter_level_idx").on(t.curriculumId, t.level)]
+);
+
 export const units = sqliteTable("units", {
   id: id(),
   curriculumId: text("curriculum_id")
     .notNull()
     .references(() => curricula.id),
+  chapterId: text("chapter_id").references(() => curriculumChapters.id),
+  level: text("level"), // denormalized chapter level for cheap filtering/labels
   position: integer("position").notNull(),
   titleTr: text("title_tr").notNull(),
   descriptionTr: text("description_tr").notNull().default(""),
@@ -253,10 +276,17 @@ export const llmCalls = sqliteTable("llm_calls", {
   createdAt: createdAt(),
 });
 
+// Single-row KV metadata baked into an exported save so import can verify
+// schema compatibility before swapping in the file.
+export const saveMeta = sqliteTable("save_meta", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
 export const generationJobs = sqliteTable("generation_jobs", {
   id: id(),
   jobType: text("job_type", {
-    enum: ["curriculum", "lesson", "grammar", "side_quest"],
+    enum: ["curriculum", "chapter", "lesson", "grammar", "side_quest"],
   }).notNull(),
   refId: text("ref_id").notNull(),
   status: text("status", {

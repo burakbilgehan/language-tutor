@@ -39,10 +39,13 @@ export const CurriculumSideQuestSchema = z.object({
   description_tr: z.string(),
 });
 
+// min(2)/min(0): a single appended JLPT chapter is a small block of units and
+// (for non-first chapters) emits no side quests. The initial N5 chapter still
+// produces a full journey by prompt design.
 export const CurriculumSchema = z.object({
   title: z.string(),
-  units: z.array(CurriculumUnitSchema).min(4).max(18),
-  side_quests: z.array(CurriculumSideQuestSchema).min(1),
+  units: z.array(CurriculumUnitSchema).min(2).max(18),
+  side_quests: z.array(CurriculumSideQuestSchema).min(0),
 });
 export type Curriculum = z.infer<typeof CurriculumSchema>;
 

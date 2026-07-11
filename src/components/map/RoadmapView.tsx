@@ -22,9 +22,14 @@ interface RoadmapDto {
     titleTr: string;
     descriptionTr: string;
     theme: string;
+    level: string | null;
     nodes: NodeDto[];
   }[];
   sideQuests: NodeDto[];
+  chapters: { level: string; status: string }[];
+  topLevel: string | null;
+  nextLevel: string | null;
+  isGenerating: string | null;
   xpTotal: number;
   streak: { current: number; longest: number };
   dueCards?: number;
@@ -43,12 +48,19 @@ const QUEST_ICON: Record<string, string> = {
   vocab_review: "🔁",
 };
 
+const LEVEL_NAME: Record<string, string> = {
+  N5: "N5", N4: "N4", N3: "N3", N2: "N2", N1: "N1",
+};
+
 export function RoadmapView() {
   const router = useRouter();
   const [data, setData] = useState<RoadmapDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [extendJobId, setExtendJobId] = useState<string | null>(null);
+  const [extendError, setExtendError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadRoadmap = () =>
     fetch("/api/roadmap")
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json()).error ?? "Yüklenemedi");
@@ -56,7 +68,48 @@ export function RoadmapView() {
       })
       .then(setData)
       .catch((e) => setError(e.message));
+
+  useEffect(() => {
+    loadRoadmap();
+    fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.profile?.id && setProfileId(d.profile.id))
+      .catch(() => {});
   }, []);
+
+  // Poll while a chapter is generating (either auto-triggered or manual).
+  const generating = extendJobId != null || data?.isGenerating != null;
+  useEffect(() => {
+    if (!generating) return;
+    const t = setInterval(() => {
+      loadRoadmap().then(() => {
+        // stop the local job spinner once the server no longer reports it
+      });
+    }, 4000);
+    return () => clearInterval(t);
+  }, [generating]);
+
+  // Clear the local job id once the server confirms generation finished.
+  useEffect(() => {
+    if (extendJobId && data && data.isGenerating == null) setExtendJobId(null);
+  }, [data, extendJobId]);
+
+  const startExtend = async () => {
+    if (!profileId) return;
+    setExtendError(null);
+    try {
+      const r = await fetch("/api/curriculum/extend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "Başlatılamadı");
+      setExtendJobId(j.jobId);
+    } catch (e) {
+      setExtendError(e instanceof Error ? e.message : "Başlatılamadı");
+    }
+  };
 
   if (error) {
     return (
@@ -110,6 +163,54 @@ export function RoadmapView() {
             </div>
           </section>
         ))}
+
+        {/* End-of-map: extend to the next JLPT level */}
+        <div className="my-10 flex flex-col items-center gap-3 text-center">
+          {data.isGenerating || extendJobId ? (
+            <div className="flex flex-col items-center gap-2 rounded-cozy bg-surface px-6 py-5 shadow-cozy">
+              <div className="flex gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="h-2 w-2 animate-bounce rounded-full bg-accent"
+                    style={{ animationDelay: `${i * 0.18}s` }}
+                  />
+                ))}
+              </div>
+              <p className="text-sm text-ink-soft">
+                {LEVEL_NAME[data.isGenerating ?? ""] ?? "Sonraki seviye"}{" "}
+                hazırlanıyor... Bu birkaç dakika sürebilir.
+              </p>
+            </div>
+          ) : data.nextLevel ? (
+            <>
+              <div className="text-3xl">🗻</div>
+              <p className="text-sm text-ink-soft">
+                Bu seviyeyi bitirince{" "}
+                <strong>{LEVEL_NAME[data.nextLevel]}</strong> otomatik açılır —
+                ya da şimdi hazırlayabilirsin.
+              </p>
+              <button
+                onClick={startExtend}
+                disabled={!profileId}
+                className="rounded-full bg-accent px-6 py-2.5 text-sm font-semibold text-surface shadow-cozy transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+              >
+                Sonraki seviyeyi hazırla ({LEVEL_NAME[data.nextLevel]})
+              </button>
+              {extendError && (
+                <p className="text-xs text-red-500">{extendError}</p>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="text-3xl">🎌</div>
+              <p className="text-sm text-ink-soft">
+                Tüm seviyeler (N1&apos;e kadar) tamamlandı. Sözlük + gramer
+                artık senin.
+              </p>
+            </>
+          )}
+        </div>
       </main>
 
       {/* Side quest rail */}

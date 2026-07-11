@@ -1,4 +1,4 @@
-import { and, eq, lt } from "drizzle-orm";
+import { and, asc, desc, eq, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getProvider, LlmError } from "@/lib/llm/provider";
@@ -7,10 +7,15 @@ import {
   GrammarTopicSchema,
   LessonSchema,
 } from "@/lib/llm/schemas";
-import { curriculumPrompt } from "@/lib/llm/prompts/curriculum";
+import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
 import { lessonPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
 import { grammarIndexFor } from "@/lib/grammar-index";
+import {
+  levelOrdinal,
+  isJlptLevel,
+  type JlptLevel,
+} from "@/lib/curriculum/levels";
 
 type JobType = (typeof tables.generationJobs.$inferSelect)["jobType"];
 
@@ -61,7 +66,15 @@ export async function runJob(jobId: string) {
 
   try {
     if (job.jobType === "curriculum") {
-      await runCurriculumJob(job.refId);
+      // Legacy shim: an old "curriculum" job = generate the N5 chapter.
+      await runChapterJob(job.refId, "N5");
+    } else if (job.jobType === "chapter") {
+      // refId encodes "profileId:level".
+      const sep = job.refId.lastIndexOf(":");
+      const profileId = job.refId.slice(0, sep);
+      const level = job.refId.slice(sep + 1);
+      if (!isJlptLevel(level)) throw new Error(`Geçersiz seviye: ${level}`);
+      await runChapterJob(profileId, level);
     } else if (job.jobType === "lesson") {
       await runLessonJob(job.refId);
     } else if (job.jobType === "grammar") {
@@ -232,20 +245,212 @@ async function runGrammarJob(topicId: string) {
   }
 }
 
-async function runCurriculumJob(profileId: string) {
+/**
+ * Walks the prereqNodeId chain from the head (prereqNodeId === null) to the
+ * tail (a main node no other main node points at). Returns the tail node id,
+ * or null if the curriculum has no main nodes yet. Using the actual chain
+ * (not a position sort) is the correct way to find the append target.
+ */
+function findChainTail(curriculumId: string): string | null {
+  const unitIds = db
+    .select({ id: tables.units.id })
+    .from(tables.units)
+    .where(eq(tables.units.curriculumId, curriculumId))
+    .all()
+    .map((u) => u.id);
+  if (unitIds.length === 0) return null;
+
+  const mains = db.query.nodes
+    .findMany({ where: eq(tables.nodes.nodeType, "main") })
+    .sync()
+    .filter((n) => unitIds.includes(n.unitId));
+  if (mains.length === 0) return null;
+
+  const byId = new Map(mains.map((n) => [n.id, n]));
+  const pointedAt = new Set(
+    mains.map((n) => n.prereqNodeId).filter((p): p is string => !!p && byId.has(p))
+  );
+  // The tail is the main node that no other main node references as prereq.
+  const tails = mains.filter((n) => !pointedAt.has(n.id));
+  // A well-formed chain has exactly one tail; if malformed, prefer the one
+  // reachable by walking from the head so we never append to a branch.
+  const head = mains.find((n) => !n.prereqNodeId);
+  if (head) {
+    let cur = head;
+    const seen = new Set<string>();
+    while (!seen.has(cur.id)) {
+      seen.add(cur.id);
+      const next = mains.find((n) => n.prereqNodeId === cur.id);
+      if (!next) return cur.id;
+      cur = next;
+    }
+  }
+  return tails[0]?.id ?? null;
+}
+
+/** Highest JLPT level already present as a chapter, or null. */
+function topChapterLevel(curriculumId: string): JlptLevel | null {
+  const chapters = db.query.curriculumChapters
+    .findMany({
+      where: eq(tables.curriculumChapters.curriculumId, curriculumId),
+      orderBy: [desc(tables.curriculumChapters.position)],
+    })
+    .sync();
+  const top = chapters.find((c) => isJlptLevel(c.level));
+  return top && isJlptLevel(top.level) ? top.level : null;
+}
+
+/**
+ * Backfill: an existing pre-chapters curriculum (units with chapterId=null)
+ * gets a single "N4" chapter row (the old ceiling) so extend logic knows where
+ * it stands. Idempotent — safe to call repeatedly.
+ */
+export function ensureChaptersBackfilled() {
+  // drizzle eq(col, null) doesn't emit IS NULL; scan and filter in JS instead.
+  const units = db.query.units.findMany().sync();
+  const orphans = units.filter((u) => u.chapterId == null);
+  if (orphans.length === 0) return;
+
+  const byCurriculum = new Map<string, typeof orphans>();
+  for (const u of orphans) {
+    const list = byCurriculum.get(u.curriculumId) ?? [];
+    list.push(u);
+    byCurriculum.set(u.curriculumId, list);
+  }
+
+  for (const [curriculumId, unitList] of byCurriculum) {
+    // Skip if this curriculum already has a chapter row (avoid dupes).
+    const existing = db.query.curriculumChapters
+      .findFirst({
+        where: eq(tables.curriculumChapters.curriculumId, curriculumId),
+      })
+      .sync();
+    const chapterId = existing?.id ?? nanoid();
+    db.transaction((tx) => {
+      if (!existing) {
+        tx.insert(tables.curriculumChapters)
+          .values({
+            id: chapterId,
+            curriculumId,
+            level: "N4",
+            position: levelOrdinal("N4"),
+            status: "ready",
+            titleTr: "N4",
+            generatedAt: new Date(),
+          })
+          .onConflictDoNothing()
+          .run();
+      }
+      for (const u of unitList) {
+        tx.update(tables.units)
+          .set({ chapterId, level: "N4" })
+          .where(eq(tables.units.id, u.id))
+          .run();
+      }
+    });
+  }
+}
+
+/** Compact summary of already-taught units + covered grammar for the prompt. */
+function buildPriorSummary(
+  curriculumId: string,
+  targetLanguage: string,
+  level: JlptLevel
+): string {
+  const units = db.query.units
+    .findMany({
+      where: eq(tables.units.curriculumId, curriculumId),
+      orderBy: [asc(tables.units.position)],
+    })
+    .sync();
+  if (units.length === 0) return "";
+
+  const unitLines = units
+    .map((u) => `• ${u.titleTr}${u.theme ? ` (${u.theme})` : ""}`)
+    .join("\n");
+
+  // Grammar slugs at levels strictly below the target level.
+  const targetOrd = levelOrdinal(level);
+  const coveredGrammar = grammarIndexFor(targetLanguage)
+    .filter((g) => isJlptLevel(g.level) && levelOrdinal(g.level) < targetOrd)
+    .map((g) => g.title_tr);
+  const grammarLine =
+    coveredGrammar.length > 0
+      ? `\nKapsanan dilbilgisi (özet): ${coveredGrammar.slice(0, 60).join(", ")}`
+      : "";
+
+  return `Önceki üniteler:\n${unitLines}${grammarLine}`;
+}
+
+/**
+ * Generates ONE JLPT chapter for a profile and appends it to the profile's
+ * single curriculum. First chapter (N5) creates the curriculum + side quests;
+ * later chapters stitch onto the existing prereq chain.
+ */
+async function runChapterJob(profileId: string, level: JlptLevel) {
   const profile = db.query.profiles.findFirst({
     where: eq(tables.profiles.id, profileId),
   }).sync();
   if (!profile) throw new Error("Profil bulunamadı");
 
-  const curriculumId = nanoid();
-  db.insert(tables.curricula)
-    .values({ id: curriculumId, profileId, status: "generating" })
-    .run();
+  ensureChaptersBackfilled();
 
-  const { system, prompt } = curriculumPrompt(profile);
+  // Resolve (or create) the profile's single curriculum.
+  const curriculum = db.query.curricula
+    .findFirst({ where: eq(tables.curricula.profileId, profileId) })
+    .sync();
+  const isFirst = !curriculum;
+  const curriculumId = curriculum?.id ?? nanoid();
+  if (!curriculum) {
+    db.insert(tables.curricula)
+      .values({ id: curriculumId, profileId, status: "generating" })
+      .run();
+  }
+
+  // Concurrency guard: upsert the chapter row; abort if already done/in-flight.
+  const existingChapter = db.query.curriculumChapters
+    .findFirst({
+      where: and(
+        eq(tables.curriculumChapters.curriculumId, curriculumId),
+        eq(tables.curriculumChapters.level, level)
+      ),
+    })
+    .sync();
+  if (
+    existingChapter &&
+    (existingChapter.status === "ready" ||
+      existingChapter.status === "generating")
+  ) {
+    return; // someone else is on it / already done
+  }
+  const chapterId = existingChapter?.id ?? nanoid();
+  if (existingChapter) {
+    db.update(tables.curriculumChapters)
+      .set({ status: "generating" })
+      .where(eq(tables.curriculumChapters.id, chapterId))
+      .run();
+  } else {
+    db.insert(tables.curriculumChapters)
+      .values({
+        id: chapterId,
+        curriculumId,
+        level,
+        position: levelOrdinal(level),
+        status: "generating",
+        titleTr: level,
+      })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  const priorSummary = isFirst
+    ? undefined
+    : buildPriorSummary(curriculumId, profile.targetLanguage, level);
+
+  const { system, prompt } = chapterPrompt({ profile, level, priorSummary });
+
   try {
-    const curriculum = await getProvider().generateJson({
+    const chapter = await getProvider().generateJson({
       system,
       prompt,
       schema: CurriculumSchema,
@@ -254,28 +459,55 @@ async function runCurriculumJob(profileId: string) {
       timeoutMs: 600_000,
     });
 
-    db.transaction((tx) => {
-      tx.update(tables.curricula)
-        .set({
-          title: curriculum.title,
-          status: "ready",
-          modelUsed: process.env.LLM_PROVIDER === "fixture" ? "fixture" : "deep",
-          generatedAt: new Date(),
-        })
-        .where(eq(tables.curricula.id, curriculumId))
-        .run();
+    // Compute append anchors OUTSIDE the transaction (reads only).
+    const basePositionRow = db
+      .select({ position: tables.units.position })
+      .from(tables.units)
+      .where(eq(tables.units.curriculumId, curriculumId))
+      .orderBy(desc(tables.units.position))
+      .limit(1)
+      .all();
+    const basePosition =
+      basePositionRow.length > 0 ? basePositionRow[0].position + 1 : 0;
+    const chainTail = findChainTail(curriculumId);
+    const hasSideQuests =
+      db.query.nodes
+        .findFirst({ where: eq(tables.nodes.nodeType, "side_quest") })
+        .sync() != null;
 
-      let prevMainNodeId: string | null = null;
+    db.transaction((tx) => {
+      if (isFirst) {
+        tx.update(tables.curricula)
+          .set({
+            title: chapter.title,
+            status: "ready",
+            modelUsed:
+              process.env.LLM_PROVIDER === "fixture" ? "fixture" : "deep",
+            generatedAt: new Date(),
+          })
+          .where(eq(tables.curricula.id, curriculumId))
+          .run();
+      } else {
+        // Ensure the curriculum stays ready even if it was somehow left pending.
+        tx.update(tables.curricula)
+          .set({ status: "ready" })
+          .where(eq(tables.curricula.id, curriculumId))
+          .run();
+      }
+
+      let prevMainNodeId: string | null = chainTail;
       let firstUnitId: string | null = null;
 
-      curriculum.units.forEach((unit, ui) => {
+      chapter.units.forEach((unit, ui) => {
         const unitId = nanoid();
         firstUnitId ??= unitId;
         tx.insert(tables.units)
           .values({
             id: unitId,
             curriculumId,
-            position: ui,
+            chapterId,
+            level,
+            position: basePosition + ui,
             titleTr: unit.title_tr,
             descriptionTr: unit.description_tr,
             theme: unit.theme,
@@ -295,6 +527,9 @@ async function runCurriculumJob(profileId: string) {
               subtitleTr: node.subtitle_tr,
               objectives: node.objectives,
               xpReward: node.xp_reward,
+              // Head of the whole curriculum is available; every other node
+              // (including each chapter's first) starts locked and unlocks
+              // when its prereq completes.
               status: prevMainNodeId === null ? "available" : "locked",
               prereqNodeId: prevMainNodeId,
             })
@@ -303,26 +538,27 @@ async function runCurriculumJob(profileId: string) {
         });
       });
 
-      // Side quests live as always-available nodes on the first unit.
-      curriculum.side_quests.forEach((sq, i) => {
-        tx.insert(tables.nodes)
-          .values({
-            id: nanoid(),
-            unitId: firstUnitId!,
-            position: 1000 + i,
-            nodeType: "side_quest",
-            sideQuestKind: sq.kind,
-            titleTr: sq.title_tr,
-            subtitleTr: sq.description_tr,
-            objectives: [],
-            xpReward: 15,
-            status: "available",
-          })
-          .run();
-      });
+      // Side quests: only ever created once (first chapter / none exist yet).
+      if (isFirst && !hasSideQuests) {
+        chapter.side_quests.forEach((sq, i) => {
+          tx.insert(tables.nodes)
+            .values({
+              id: nanoid(),
+              unitId: firstUnitId!,
+              position: 1000 + i,
+              nodeType: "side_quest",
+              sideQuestKind: sq.kind,
+              titleTr: sq.title_tr,
+              subtitleTr: sq.description_tr,
+              objectives: [],
+              xpReward: 15,
+              status: "available",
+            })
+            .run();
+        });
+      }
 
-      // Grammar cheatsheet skeleton: deterministic, language-wide index
-      // (content per topic is generated on demand and cached).
+      // Grammar cheatsheet skeleton (idempotent; safe every chapter).
       grammarIndexFor(profile.targetLanguage).forEach((g, i) => {
         tx.insert(tables.grammarTopics)
           .values({
@@ -337,12 +573,27 @@ async function runCurriculumJob(profileId: string) {
           .onConflictDoNothing()
           .run();
       });
+
+      tx.update(tables.curriculumChapters)
+        .set({ status: "ready", generatedAt: new Date() })
+        .where(eq(tables.curriculumChapters.id, chapterId))
+        .run();
     });
   } catch (err) {
-    db.update(tables.curricula)
+    db.update(tables.curriculumChapters)
       .set({ status: "error" })
-      .where(eq(tables.curricula.id, curriculumId))
+      .where(eq(tables.curriculumChapters.id, chapterId))
       .run();
+    // An append failure must NOT knock a working curriculum back to error.
+    if (isFirst) {
+      db.update(tables.curricula)
+        .set({ status: "error" })
+        .where(eq(tables.curricula.id, curriculumId))
+        .run();
+    }
     throw err;
   }
 }
+
+/** Exposed for the extend/complete routes to find the current top level. */
+export { topChapterLevel };

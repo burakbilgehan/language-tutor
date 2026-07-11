@@ -1,0 +1,87 @@
+import fs from "node:fs";
+import path from "node:path";
+import Database from "better-sqlite3";
+import { nanoid } from "nanoid";
+import { db, resetDb, DB_PATH } from "@/db";
+import { SAVE_SCHEMA_VERSION } from "./version";
+
+export class SaveImportError extends Error {}
+
+/**
+ * Replace-all import: validates the uploaded SQLite snapshot, then atomically
+ * swaps it in as the live database. The current progress is wiped (a single
+ * timestamped .bak is kept for recovery). Throws SaveImportError with a Turkish
+ * message on any validation failure — the live DB is untouched until every
+ * check passes.
+ */
+export function importSave(bytes: Buffer): void {
+  const dataDir = path.dirname(DB_PATH);
+  fs.mkdirSync(dataDir, { recursive: true });
+  const tmpPath = path.join(dataDir, `import-${nanoid()}.db`);
+  fs.writeFileSync(tmpPath, bytes);
+
+  // ---- Validate the incoming file (read-only, throwaway connection) --------
+  try {
+    let probe: Database.Database | null = null;
+    try {
+      probe = new Database(tmpPath, { readonly: true, fileMustExist: true });
+      const integrity = probe.pragma("integrity_check", {
+        simple: true,
+      }) as string;
+      if (integrity !== "ok") {
+        throw new SaveImportError("Kayıt dosyası bozuk görünüyor.");
+      }
+
+      let version = 0;
+      try {
+        const row = probe
+          .prepare("SELECT value FROM save_meta WHERE key = 'schemaVersion'")
+          .get() as { value?: string } | undefined;
+        version = row?.value ? Number(row.value) : 0;
+      } catch {
+        version = 0; // no save_meta table → pre-feature / unknown
+      }
+      if (version !== SAVE_SCHEMA_VERSION) {
+        throw new SaveImportError(
+          version === 0
+            ? "Bu kayıt tanınmıyor veya çok eski."
+            : `Kayıt sürümü uyumsuz (dosya: ${version}, beklenen: ${SAVE_SCHEMA_VERSION}). İki makinede de aynı sürümü kullanman gerek.`
+        );
+      }
+
+      // Sanity: it must actually be this app's DB.
+      probe.prepare("SELECT count(*) FROM profiles").get();
+    } finally {
+      probe?.close();
+    }
+  } catch (err) {
+    fs.rmSync(tmpPath, { force: true });
+    if (err instanceof SaveImportError) throw err;
+    throw new SaveImportError("Kayıt dosyası okunamadı veya geçersiz.");
+  }
+
+  // ---- Swap (close live handle, back up, move file in, reopen) -------------
+  resetDb(); // closes the current connection so the file handle is released
+
+  const backupPath = `${DB_PATH}.bak-${Date.now()}`;
+  try {
+    if (fs.existsSync(DB_PATH)) fs.renameSync(DB_PATH, backupPath);
+    // Remove stale WAL/SHM sidecars of the old DB.
+    for (const sidecar of [`${DB_PATH}-wal`, `${DB_PATH}-shm`]) {
+      if (fs.existsSync(sidecar)) fs.rmSync(sidecar, { force: true });
+    }
+    fs.renameSync(tmpPath, DB_PATH);
+  } catch {
+    // Best-effort rollback if the move failed mid-way.
+    if (!fs.existsSync(DB_PATH) && fs.existsSync(backupPath)) {
+      fs.renameSync(backupPath, DB_PATH);
+    }
+    fs.rmSync(tmpPath, { force: true });
+    throw new SaveImportError("Kayıt yüklenirken dosya değiştirilemedi.");
+  }
+
+  // Touch the db so the next request reopens against the new file, and make
+  // sure it's back in WAL mode (a serialized image may carry a different
+  // journal mode).
+  db.$client.pragma("journal_mode = WAL");
+}
