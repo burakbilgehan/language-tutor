@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db, tables } from "@/db";
-import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
+import { ensureLessonJob, recoverStaleJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
@@ -62,21 +62,8 @@ export async function POST(
     });
   }
 
-  // Not ready → make sure a generation job is running and tell client to poll.
-  const inflight = db.query.generationJobs
-    .findFirst({
-      where: and(
-        eq(tables.generationJobs.jobType, "lesson"),
-        eq(tables.generationJobs.refId, nodeId),
-        inArray(tables.generationJobs.status, ["queued", "running"])
-      ),
-    })
-    .sync();
-  if (inflight) {
-    return NextResponse.json({ status: "generating", jobId: inflight.id });
-  }
-
-  const jobId = createJob("lesson", nodeId);
-  void runJob(jobId);
+  // Not ready → ensure a generation job is running (deduped centrally in
+  // createJob) and tell the client to poll.
+  const jobId = ensureLessonJob(nodeId);
   return NextResponse.json({ status: "generating", jobId });
 }

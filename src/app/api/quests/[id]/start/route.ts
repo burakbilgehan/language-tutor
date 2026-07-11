@@ -23,6 +23,16 @@ export async function POST(
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
 
+  // Cached payload from an uncompleted run → serve for free. Completing the
+  // quest clears the cache (complete route), so each finished run is fresh,
+  // but refreshes/re-opens don't pay for a new LLM call.
+  if (node.sideQuestPayload) {
+    return NextResponse.json({
+      node: { id: node.id, titleTr: node.titleTr, xpReward: node.xpReward },
+      quest: node.sideQuestPayload,
+    });
+  }
+
   const recentVocab = db.query.srsCards
     .findMany({
       where: eq(tables.srsCards.profileId, profile.id),
@@ -48,7 +58,7 @@ export async function POST(
     completedTitles,
   });
 
-  // Fresh content every run — that's the point of a drill. Fast tier, sync.
+  // Fresh content per completed run. Fast tier, sync.
   const payload = await getProvider().generateJson({
     system,
     prompt,
@@ -57,6 +67,11 @@ export async function POST(
     tier: "fast",
     timeoutMs: 120_000,
   });
+
+  db.update(tables.nodes)
+    .set({ sideQuestPayload: payload })
+    .where(eq(tables.nodes.id, node.id))
+    .run();
 
   return NextResponse.json({
     node: { id: node.id, titleTr: node.titleTr, xpReward: node.xpReward },

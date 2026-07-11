@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getProvider } from "@/lib/llm/provider";
@@ -63,28 +63,54 @@ export async function POST(
           gradedBy: "deterministic",
         };
   } else {
-    const { system, prompt } = gradingPrompt({
-      targetLanguage: profile.targetLanguage,
-      exerciseType: exercise.type,
-      promptTr: exercise.promptTr,
-      targetText: exercise.targetText,
-      expectedAnswer: exercise.answer,
-      userResponse,
-    });
-    const grade = await getProvider().generateJson({
-      system,
-      prompt,
-      schema: GradeSchema,
-      fixtureKey: "grade",
-      tier: exercise.type === "free_response" ? "balanced" : "fast",
-      timeoutMs: 90_000,
-    });
-    result = {
-      isCorrect: grade.correct,
-      score: grade.score,
-      feedbackTr: grade.feedback_tr,
-      gradedBy: "llm",
-    };
+    // Same answer resubmitted → reuse the previous LLM verdict instead of
+    // paying for an identical grading call.
+    const priorSame = db.query.attempts
+      .findMany({
+        where: eq(tables.attempts.exerciseId, exercise.id),
+        orderBy: [desc(tables.attempts.createdAt)],
+        limit: 20,
+      })
+      .sync()
+      .find(
+        (a) =>
+          a.gradedBy === "llm" &&
+          a.isCorrect !== null &&
+          answersMatch(a.response, userResponse)
+      );
+
+    if (priorSame) {
+      result = {
+        isCorrect: priorSame.isCorrect!,
+        score: priorSame.score ?? (priorSame.isCorrect ? 100 : 0),
+        feedbackTr: priorSame.feedbackTr ?? "",
+        gradedBy: "llm",
+      };
+    } else {
+      const { system, prompt } = gradingPrompt({
+        targetLanguage: profile.targetLanguage,
+        exerciseType: exercise.type,
+        promptTr: exercise.promptTr,
+        targetText: exercise.targetText,
+        expectedAnswer: exercise.answer,
+        acceptAlso: exercise.acceptAlso,
+        userResponse,
+      });
+      const grade = await getProvider().generateJson({
+        system,
+        prompt,
+        schema: GradeSchema,
+        fixtureKey: "grade",
+        tier: exercise.type === "free_response" ? "balanced" : "fast",
+        timeoutMs: 90_000,
+      });
+      result = {
+        isCorrect: grade.correct,
+        score: grade.score,
+        feedbackTr: grade.feedback_tr,
+        gradedBy: "llm",
+      };
+    }
   }
 
   db.insert(tables.attempts)

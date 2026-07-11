@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getProvider, LlmError } from "@/lib/llm/provider";
@@ -11,6 +11,7 @@ import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
 import { lessonPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
 import { grammarIndexFor } from "@/lib/grammar-index";
+import { getStrugglesLine } from "@/lib/struggles";
 import {
   levelOrdinal,
   isJlptLevel,
@@ -41,12 +42,46 @@ export function recoverStaleJobs() {
     .run();
 }
 
+/**
+ * Enqueue a generation job. Deduped centrally: if a job with the same
+ * (jobType, refId) is already queued/running, its id is returned instead of
+ * inserting a duplicate — the same resource is never paid for twice. The
+ * check+insert is a synchronous block (no await), so it's atomic per process.
+ */
 export function createJob(jobType: JobType, refId: string): string {
+  const inFlight = db.query.generationJobs
+    .findFirst({
+      where: and(
+        eq(tables.generationJobs.jobType, jobType),
+        eq(tables.generationJobs.refId, refId),
+        inArray(tables.generationJobs.status, ["queued", "running"])
+      ),
+    })
+    .sync();
+  if (inFlight) return inFlight.id;
+
   const id = nanoid();
   db.insert(tables.generationJobs)
     .values({ id, jobType, refId, status: "queued" })
     .run();
   return id;
+}
+
+/**
+ * Make sure a lesson exists or is being generated for a node. Returns null if
+ * the lesson is already ready (nothing to do), otherwise the job id (existing
+ * in-flight or freshly enqueued + fired). Used by the open route (on-demand)
+ * and the complete route (prefetch for just-unlocked nodes).
+ */
+export function ensureLessonJob(nodeId: string): string | null {
+  const lesson = db.query.lessons
+    .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
+    .sync();
+  if (lesson?.status === "ready" && lesson.content) return null;
+
+  const jobId = createJob("lesson", nodeId);
+  void runJob(jobId); // no-op if the returned job is already running
+  return jobId;
 }
 
 export function getJob(id: string) {
@@ -151,6 +186,7 @@ async function runLessonJob(nodeId: string) {
       unitTitle: unit.titleTr,
       unitTheme: unit.theme,
       completedTitles,
+      strugglesLine: getStrugglesLine(profile.id),
     });
     const lesson = await getProvider().generateJson({
       system,

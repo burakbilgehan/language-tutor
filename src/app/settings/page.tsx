@@ -23,6 +23,7 @@ export default function SettingsPage() {
     todayCalls: number;
     totalUsd: number;
     totalCalls: number;
+    byPurpose?: { purpose: string; calls: number; usd: number }[];
   } | null>(null);
 
   useEffect(() => {
@@ -140,6 +141,26 @@ export default function SettingsPage() {
             </dl>
           ) : (
             <p className="text-sm text-ink-soft">Henüz kayıtlı çağrı yok.</p>
+          )}
+          {llm?.byPurpose && llm.byPurpose.length > 0 && (
+            <div className="mt-4 border-t border-surface-2 pt-3">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                Çağrı dağılımı
+              </h3>
+              <dl className="grid grid-cols-2 gap-y-1 text-sm">
+                {llm.byPurpose.map((p) => (
+                  <div key={p.purpose} className="contents">
+                    <dt className="text-ink-soft">{p.purpose}</dt>
+                    <dd>
+                      {p.calls} çağrı{" "}
+                      <span className="text-ink-soft">
+                        (${p.usd.toFixed(2)})
+                      </span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
           )}
           <p className="mt-3 text-xs text-ink-soft">
             Max aboneliği kullanıldığı için bu tutar faturalandırılmaz — API ile

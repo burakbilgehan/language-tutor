@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { completeNode, isCurriculumTail } from "@/lib/roadmap";
 import { awardXp } from "@/lib/xp";
-import { createJob, runJob, topChapterLevel } from "@/lib/jobs";
+import {
+  createJob,
+  ensureLessonJob,
+  runJob,
+  topChapterLevel,
+} from "@/lib/jobs";
 import { nextLevel } from "@/lib/curriculum/levels";
 
 export const runtime = "nodejs";
@@ -25,19 +30,8 @@ function maybeAutoExtend(profileId: string, nodeId: string): string | null {
   const next = top ? nextLevel(top) : null;
   if (!next) return null;
 
-  const refId = `${profileId}:${next}`;
-  const inFlight = db.query.generationJobs
-    .findFirst({
-      where: and(
-        eq(tables.generationJobs.jobType, "chapter"),
-        eq(tables.generationJobs.refId, refId),
-        inArray(tables.generationJobs.status, ["queued", "running"])
-      ),
-    })
-    .sync();
-  if (inFlight) return next;
-
-  const jobId = createJob("chapter", refId);
+  // createJob dedupes on (jobType, refId) — safe to call unconditionally.
+  const jobId = createJob("chapter", `${profileId}:${next}`);
   void runJob(jobId);
   return next;
 }
@@ -60,6 +54,22 @@ export async function POST(
 
   const alreadyCompleted = node.status === "completed";
   const unlockedNodeIds = alreadyCompleted ? [] : completeNode(nodeId);
+
+  // Prefetch: generate the just-unlocked lesson(s) in the background so the
+  // learner never stares at a 90s spinner — by the time they open the next
+  // node, it's ready (open route serves cached lessons instantly).
+  for (const unlockedId of unlockedNodeIds) {
+    ensureLessonJob(unlockedId);
+  }
+
+  // Side quests: clear the cached drill payload on completion so the NEXT run
+  // gets fresh content (re-opens without completing stay free).
+  if (node.nodeType === "side_quest") {
+    db.update(tables.nodes)
+      .set({ sideQuestPayload: null })
+      .where(eq(tables.nodes.id, nodeId))
+      .run();
+  }
 
   // Auto-extend to the next JLPT level when the learner clears the tail.
   const extendingLevel =

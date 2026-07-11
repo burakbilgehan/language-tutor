@@ -12,6 +12,8 @@ export function lessonPrompt(opts: {
   unitTitle: string;
   unitTheme: string;
   completedTitles: string[];
+  /** Prompt-ready line of items/topics the learner struggles with, if any. */
+  strugglesLine?: string | null;
 }) {
   const lang =
     LANGUAGE_NAMES[opts.profile.targetLanguage] ?? opts.profile.targetLanguage;
@@ -40,6 +42,10 @@ export function lessonPrompt(opts: {
     opts.completedTitles.length
       ? opts.completedTitles.join(", ")
       : "yok, bu ilk dersi"
+  }${
+    opts.strugglesLine
+      ? `\n- ZORLANDIĞI alanlar (${opts.strugglesLine}) — bu ders konusuyla kesişiyorsa alıştırmalarda bunlara ekstra tekrar ve pekiştirme fırsatı ver; kesişmiyorsa zorla dahil etme.`
+      : ""
   }
 ${boss}
 Bu ders için içerik üret:
@@ -50,7 +56,7 @@ Bu ders için içerik üret:
 - "exercises": 6-10 karışık alıştırma:
   * "mcq": options 4 seçenek, answer seçeneklerden birinin AYNEN kendisi.
   * "fill_blank": prompt_tr içinde ___ bulunan cümle; answer boşluğa gelen ifade; accept_also kabul edilebilir alternatifler.
-  * "translate": target_text hedef dilde cümle; answer Türkçe kanonik çeviri; accept_also alternatifler.
+  * "translate": target_text hedef dilde cümle; answer Türkçe kanonik çeviri; accept_also İÇİNE 3-6 kabul edilebilir alternatif yaz (eş anlamlılar, farklı sözcük sıraları, resmî/gayriresmî varyantlar) — bunlar ucuz otomatik değerlendirmeyi mümkün kılar.
   * "free_response": prompt_tr serbest üretim istesin; answer alanına DEĞERLENDİRME KILAVUZU yaz (doğru cevabın nasıl görünmesi gerektiği).
 - Örnek bağlamlarını öğrencinin ilgi alanlarından seç.
 
@@ -65,6 +71,7 @@ export function gradingPrompt(opts: {
   promptTr: string;
   targetText: string | null;
   expectedAnswer: string;
+  acceptAlso?: string[] | null;
   userResponse: string;
 }) {
   const lang = LANGUAGE_NAMES[opts.targetLanguage] ?? opts.targetLanguage;
@@ -72,7 +79,11 @@ export function gradingPrompt(opts: {
   const prompt = `Alıştırma (${opts.exerciseType}):
 Soru: ${opts.promptTr}
 ${opts.targetText ? `Hedef metin: ${opts.targetText}` : ""}
-Beklenen cevap / değerlendirme kılavuzu: ${opts.expectedAnswer}
+Beklenen cevap / değerlendirme kılavuzu: ${opts.expectedAnswer}${
+    opts.acceptAlso?.length
+      ? `\nKabul edilebilir alternatifler: ${opts.acceptAlso.join(" / ")}`
+      : ""
+  }
 
 Öğrencinin cevabı: "${opts.userResponse}"
 
