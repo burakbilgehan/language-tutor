@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Nunito_Sans } from "next/font/google";
+import { SelectionTooltip } from "@/components/shared/SelectionTooltip";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -35,6 +36,7 @@ export default function RootLayout({
         className={`${fraunces.variable} ${nunito.variable} antialiased min-h-dvh`}
       >
         {children}
+        <SelectionTooltip />
       </body>
     </html>
   );

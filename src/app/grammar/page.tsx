@@ -8,6 +8,7 @@ interface TopicDto {
   slug: string;
   titleTr: string;
   category: string;
+  level: string | null;
   status: "pending" | "generating" | "ready" | "error";
 }
 
@@ -66,7 +67,12 @@ export default function GrammarIndexPage() {
                   className="flex items-center justify-between rounded-cozy bg-surface px-5 py-4 shadow-cozy transition-transform hover:-translate-y-0.5"
                 >
                   <span className="font-medium">{t.titleTr}</span>
-                  <span className="text-xs text-ink-soft">
+                  <span className="flex items-center gap-2 text-xs text-ink-soft">
+                    {t.level && (
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 font-semibold">
+                        {t.level}
+                      </span>
+                    )}
                     {t.status === "ready" ? "📖" : "✨"}
                   </span>
                 </Link>

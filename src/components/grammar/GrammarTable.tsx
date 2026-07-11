@@ -1,4 +1,5 @@
 import type { GrammarTable as GrammarTableData } from "@/lib/llm/schemas";
+import { Furigana } from "@/components/shared/Furigana";
 
 export function GrammarTable({ table }: { table: GrammarTableData }) {
   return (
@@ -26,12 +27,11 @@ export function GrammarTable({ table }: { table: GrammarTableData }) {
                 {row.map((cell, ci) => (
                   <td
                     key={ci}
-                    lang={ci === 0 ? "ja" : undefined}
                     className={`border-b border-surface-2 px-3 py-2 ${
                       ci === 0 ? "text-base font-medium" : ""
                     }`}
                   >
-                    {cell}
+                    <Furigana text={cell} />
                   </td>
                 ))}
               </tr>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { GrammarTable } from "@/components/grammar/GrammarTable";
 import { CozyButton } from "@/components/shared/CozyButton";
+import { Furigana } from "@/components/shared/Furigana";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
 
 interface TopicResponse {
@@ -85,7 +86,7 @@ export default function GrammarTopicPage({
               <div className="flex flex-col gap-3">
                 {topic.content.examples.map((ex, i) => (
                   <div key={i} className="rounded-xl bg-background p-4">
-                    <div lang="ja" className="text-lg">{ex.target}</div>
+                    <div className="text-lg"><Furigana text={ex.target} /></div>
                     {ex.reading && (
                       <div className="text-sm text-ink-soft">{ex.reading}</div>
                     )}

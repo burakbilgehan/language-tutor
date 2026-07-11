@@ -3,7 +3,7 @@
   "explanation_tr": "Japoncada selamlaşma günün saatine göre değişir.\n\n- **おはよう (ohayou)** — Günaydın (samimi)\n- **こんにちは (konnichiwa)** — Merhaba / İyi günler\n- **こんばんは (konbanwa)** — İyi akşamlar\n\nResmî ortamlarda おはようございます (ohayou gozaimasu) kullanılır.",
   "examples": [
     {
-      "target": "こんにちは、田中さん。",
+      "target": "こんにちは、田中[たなか]さん。",
       "reading": "konnichiwa, Tanaka-san.",
       "translation_tr": "Merhaba, Tanaka Bey.",
       "note_tr": "さん isimden sonra gelen saygı ekidir."

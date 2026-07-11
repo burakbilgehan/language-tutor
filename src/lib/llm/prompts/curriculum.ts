@@ -21,7 +21,7 @@ export function curriculumPrompt(profile: Profile) {
 
   const jaExtras =
     profile.targetLanguage === "ja"
-      ? `\n- Japonca'ya özgü: müfredat hiragana ile başlamalı (seviye sıfırsa), katakana ve temel kanji uygun yerlerde girmeli. side_quests içine "kana_drill" ve "kanji" türlerini ekle.`
+      ? `\n- Japonca'ya özgü: müfredat hiragana ile başlamalı (seviye sıfırsa), katakana erken gelmeli. KANJI'Yİ ERTELEME: en temel kanjiler (一二三, 人, 日, 月, 本...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı; ileri kanjiler sonraya kalsın ama her ünitede kanji teması ilerlesin. side_quests içine "kana_drill" ve "kanji" türlerini ekle.`
       : `\n- Bu dil için kana/kanji side quest türleri KULLANMA; "pop_quiz" ve "vocab_review" yeterli.`;
 
   const prompt = `Öğrenci profili:
@@ -35,14 +35,13 @@ export function curriculumPrompt(profile: Profile) {
 Bu öğrenci için kişiselleştirilmiş bir ${lang} müfredatı tasarla.
 
 Kurallar:
-- 8-12 ünite ("units"), her ünitede 4-8 ders düğümü ("nodes").
+- 12-16 ünite ("units"), her ünitede 5-8 ders düğümü ("nodes"). Müfredat KAPSAMLI olsun: sıfırdan sağlam bir orta-alt seviyeye (JLPT N4 dengi) uzanan uzun bir yolculuk tasarla.
 - Üniteler mantıklı bir öğrenme sırası izlemeli; temalar öğrencinin ilgi alanlarına bağlansın (ör. ilgi alanı "anime" ise örnek bağlamları oradan seçilebilecek temalar).
 - Her ünitenin son düğümü "checkpoint" ya da "boss" olmalı (boss = üniteyi taçlandıran zorlu görev). Diğerleri "lesson".
 - xp_reward: lesson 20-35, checkpoint 40-50, boss 60-80.
 - "theme" alanı kısa bir ingilizce etiket (ör: "kana", "food", "travel").
 - "objectives" her düğüm için 1-3 somut öğrenme hedefi (Türkçe).
 - "side_quests": sürekli erişilebilir yan görev türleri.${jaExtras}
-- "grammar_index": bu müfredat boyunca öğretilecek 10-20 gramer konusunun listesi (slug kebab-case İngilizce, title_tr Türkçe, category: particles/verbs/adjectives/nouns/numbers/syntax gibi).
 
 Sadece şemaya uygun JSON döndür.`;
 

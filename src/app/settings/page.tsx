@@ -18,11 +18,21 @@ export default function SettingsPage() {
   const [health, setHealth] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [dark, setDark] = useState(false);
+  const [llm, setLlm] = useState<{
+    todayUsd: number;
+    todayCalls: number;
+    totalUsd: number;
+    totalCalls: number;
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/profile")
       .then((r) => r.json())
       .then((d) => setProfile(d.profile));
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then((d) => setLlm(d.llm))
+      .catch(() => {});
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
 
@@ -81,6 +91,30 @@ export default function SettingsPage() {
           <CozyButton variant="soft" onClick={toggleDark}>
             {dark ? "☀️ Açık tema" : "🌙 Koyu tema"}
           </CozyButton>
+        </section>
+
+        <section className="rounded-cozy bg-surface p-6 shadow-cozy">
+          <h2 className="mb-3 font-semibold">LLM Harcaması</h2>
+          {llm ? (
+            <dl className="grid grid-cols-2 gap-y-2 text-sm">
+              <dt className="text-ink-soft">Bugün</dt>
+              <dd>
+                ${llm.todayUsd.toFixed(2)}{" "}
+                <span className="text-ink-soft">({llm.todayCalls} çağrı)</span>
+              </dd>
+              <dt className="text-ink-soft">Toplam</dt>
+              <dd>
+                ${llm.totalUsd.toFixed(2)}{" "}
+                <span className="text-ink-soft">({llm.totalCalls} çağrı)</span>
+              </dd>
+            </dl>
+          ) : (
+            <p className="text-sm text-ink-soft">Henüz kayıtlı çağrı yok.</p>
+          )}
+          <p className="mt-3 text-xs text-ink-soft">
+            Max aboneliği kullanıldığı için bu tutar faturalandırılmaz — API ile
+            yapılsaydı ne tutacağını gösterir (CLI&apos;ın raporladığı değer).
+          </p>
         </section>
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">

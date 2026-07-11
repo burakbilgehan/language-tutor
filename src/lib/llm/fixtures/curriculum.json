@@ -130,12 +130,5 @@
       "title_tr": "Kelime Tekrarı",
       "description_tr": "SRS ile kelime kartları"
     }
-  ],
-  "grammar_index": [
-    { "slug": "wa-topic-particle", "title_tr": "は Konu Edatı", "category": "particles" },
-    { "slug": "desu-copula", "title_tr": "です Koşacı", "category": "verbs" },
-    { "slug": "ka-question", "title_tr": "か Soru Edatı", "category": "particles" },
-    { "slug": "no-possessive", "title_tr": "の İyelik Edatı", "category": "particles" },
-    { "slug": "numbers-counters", "title_tr": "Sayılar ve Sayaçlar", "category": "numbers" }
   ]
 }
