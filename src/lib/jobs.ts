@@ -2,8 +2,9 @@ import { and, eq, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getProvider, LlmError } from "@/lib/llm/provider";
-import { CurriculumSchema } from "@/lib/llm/schemas";
+import { CurriculumSchema, LessonSchema } from "@/lib/llm/schemas";
 import { curriculumPrompt } from "@/lib/llm/prompts/curriculum";
+import { lessonPrompt } from "@/lib/llm/prompts/lesson";
 
 type JobType = (typeof tables.generationJobs.$inferSelect)["jobType"];
 
@@ -55,6 +56,8 @@ export async function runJob(jobId: string) {
   try {
     if (job.jobType === "curriculum") {
       await runCurriculumJob(job.refId);
+    } else if (job.jobType === "lesson") {
+      await runLessonJob(job.refId);
     } else {
       throw new Error(`Bilinmeyen job tipi: ${job.jobType}`);
     }
@@ -74,6 +77,104 @@ export async function runJob(jobId: string) {
       .where(eq(tables.generationJobs.id, jobId))
       .run();
     console.error(`[job ${jobId}] failed:`, err);
+  }
+}
+
+async function runLessonJob(nodeId: string) {
+  const node = db.query.nodes
+    .findFirst({ where: eq(tables.nodes.id, nodeId) })
+    .sync();
+  if (!node) throw new Error("Node bulunamadı");
+
+  const unit = db.query.units
+    .findFirst({ where: eq(tables.units.id, node.unitId) })
+    .sync();
+  if (!unit) throw new Error("Ünite bulunamadı");
+
+  const curriculum = db.query.curricula
+    .findFirst({ where: eq(tables.curricula.id, unit.curriculumId) })
+    .sync();
+  const profile = db.query.profiles
+    .findFirst({ where: eq(tables.profiles.id, curriculum!.profileId) })
+    .sync();
+  if (!profile) throw new Error("Profil bulunamadı");
+
+  const completedTitles = db
+    .select({ title: tables.nodes.titleTr })
+    .from(tables.nodes)
+    .where(eq(tables.nodes.status, "completed"))
+    .all()
+    .map((r) => r.title)
+    .slice(-12);
+
+  // Ensure a lessons row exists (status marker for the UI).
+  const existing = db.query.lessons
+    .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
+    .sync();
+  const lessonId = existing?.id ?? nanoid();
+  if (!existing) {
+    db.insert(tables.lessons)
+      .values({ id: lessonId, nodeId, status: "generating" })
+      .run();
+  } else {
+    db.update(tables.lessons)
+      .set({ status: "generating" })
+      .where(eq(tables.lessons.id, lessonId))
+      .run();
+  }
+
+  try {
+    const { system, prompt } = lessonPrompt({
+      profile,
+      node,
+      unitTitle: unit.titleTr,
+      unitTheme: unit.theme,
+      completedTitles,
+    });
+    const lesson = await getProvider().generateJson({
+      system,
+      prompt,
+      schema: LessonSchema,
+      fixtureKey: "lesson",
+      tier: "balanced",
+      timeoutMs: 300_000,
+    });
+
+    db.transaction((tx) => {
+      tx.update(tables.lessons)
+        .set({ content: lesson, status: "ready", generatedAt: new Date() })
+        .where(eq(tables.lessons.id, lessonId))
+        .run();
+      // Re-generation: replace old exercises.
+      tx.delete(tables.exercises)
+        .where(eq(tables.exercises.lessonId, lessonId))
+        .run();
+      lesson.exercises.forEach((ex, i) => {
+        tx.insert(tables.exercises)
+          .values({
+            id: nanoid(),
+            lessonId,
+            position: i,
+            type: ex.type,
+            promptTr: ex.prompt_tr,
+            targetText: ex.target_text ?? null,
+            options: ex.options ?? null,
+            answer: ex.answer,
+            acceptAlso: ex.accept_also ?? null,
+            grading:
+              ex.type === "free_response" || ex.type === "translate"
+                ? "llm"
+                : "deterministic",
+          })
+          .run();
+      });
+    });
+  } catch (err) {
+    db.update(tables.lessons)
+      .set({ status: "error" })
+      .where(eq(tables.lessons.id, lessonId))
+      .run();
+    throw err;
   }
 }
 
