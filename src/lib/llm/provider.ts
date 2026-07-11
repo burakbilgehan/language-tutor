@@ -53,13 +53,12 @@ let provider: LlmProvider | undefined;
 export function getProvider(): LlmProvider {
   if (provider) return provider;
   if (process.env.LLM_PROVIDER === "fixture") {
-    // Lazy require to keep fixture code out of the prod path.
-    const { FixtureProvider } = require("./fixture-provider") as
-      typeof import("./fixture-provider");
+    const { FixtureProvider } =
+      require("./fixture-provider") as typeof import("./fixture-provider"); // eslint-disable-line @typescript-eslint/no-require-imports
     provider = new FixtureProvider();
   } else {
-    const { ClaudeCliProvider } = require("./claude-cli") as
-      typeof import("./claude-cli");
+    const { ClaudeCliProvider } =
+      require("./claude-cli") as typeof import("./claude-cli"); // eslint-disable-line @typescript-eslint/no-require-imports
     provider = new ClaudeCliProvider();
   }
   return provider;

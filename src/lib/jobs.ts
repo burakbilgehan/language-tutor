@@ -2,9 +2,14 @@ import { and, eq, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getProvider, LlmError } from "@/lib/llm/provider";
-import { CurriculumSchema, LessonSchema } from "@/lib/llm/schemas";
+import {
+  CurriculumSchema,
+  GrammarTopicSchema,
+  LessonSchema,
+} from "@/lib/llm/schemas";
 import { curriculumPrompt } from "@/lib/llm/prompts/curriculum";
 import { lessonPrompt } from "@/lib/llm/prompts/lesson";
+import { grammarPrompt } from "@/lib/llm/prompts/grammar";
 
 type JobType = (typeof tables.generationJobs.$inferSelect)["jobType"];
 
@@ -58,6 +63,8 @@ export async function runJob(jobId: string) {
       await runCurriculumJob(job.refId);
     } else if (job.jobType === "lesson") {
       await runLessonJob(job.refId);
+    } else if (job.jobType === "grammar") {
+      await runGrammarJob(job.refId);
     } else {
       throw new Error(`Bilinmeyen job tipi: ${job.jobType}`);
     }
@@ -173,6 +180,52 @@ async function runLessonJob(nodeId: string) {
     db.update(tables.lessons)
       .set({ status: "error" })
       .where(eq(tables.lessons.id, lessonId))
+      .run();
+    throw err;
+  }
+}
+
+async function runGrammarJob(topicId: string) {
+  const topic = db.query.grammarTopics
+    .findFirst({ where: eq(tables.grammarTopics.id, topicId) })
+    .sync();
+  if (!topic) throw new Error("Gramer konusu bulunamadı");
+
+  const profile = db.query.profiles.findFirst().sync();
+  const siblingTitles = db
+    .select({ title: tables.grammarTopics.titleTr })
+    .from(tables.grammarTopics)
+    .where(eq(tables.grammarTopics.targetLanguage, topic.targetLanguage))
+    .all()
+    .map((r) => r.title);
+
+  db.update(tables.grammarTopics)
+    .set({ status: "generating" })
+    .where(eq(tables.grammarTopics.id, topicId))
+    .run();
+
+  try {
+    const { system, prompt } = grammarPrompt({
+      topic,
+      selfLevel: profile?.selfLevel ?? "zero",
+      siblingTitles,
+    });
+    const content = await getProvider().generateJson({
+      system,
+      prompt,
+      schema: GrammarTopicSchema,
+      fixtureKey: "grammar",
+      tier: "balanced",
+      timeoutMs: 300_000,
+    });
+    db.update(tables.grammarTopics)
+      .set({ content, status: "ready", generatedAt: new Date() })
+      .where(eq(tables.grammarTopics.id, topicId))
+      .run();
+  } catch (err) {
+    db.update(tables.grammarTopics)
+      .set({ status: "error" })
+      .where(eq(tables.grammarTopics.id, topicId))
       .run();
     throw err;
   }

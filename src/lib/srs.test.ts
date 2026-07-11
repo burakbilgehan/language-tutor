@@ -26,7 +26,7 @@ test("second good → 3 days, third good → interval * EF", () => {
 });
 
 test("again resets repetitions, bumps lapses, ~10min due, EF floor holds", () => {
-  let state: SrsState = { easeFactor: 1.35, intervalDays: 20, repetitions: 5, lapses: 0 };
+  const state: SrsState = { easeFactor: 1.35, intervalDays: 20, repetitions: 5, lapses: 0 };
   const r = review(state, 0, now);
   assert.equal(r.repetitions, 0);
   assert.equal(r.lapses, 1);

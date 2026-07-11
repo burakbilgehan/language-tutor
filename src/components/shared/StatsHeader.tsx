@@ -45,6 +45,7 @@ export function StatsHeader({
             <Link href="/grammar" className="rounded-full px-3 py-1.5 hover:bg-surface-2 transition-colors">Gramer</Link>
             <Link href="/review" className="rounded-full px-3 py-1.5 hover:bg-surface-2 transition-colors">Tekrar</Link>
             <Link href="/chat" className="rounded-full px-3 py-1.5 hover:bg-surface-2 transition-colors">Sohbet</Link>
+            <Link href="/settings" className="rounded-full px-3 py-1.5 hover:bg-surface-2 transition-colors" title="Ayarlar">⚙︎</Link>
           </nav>
         </div>
       </div>
