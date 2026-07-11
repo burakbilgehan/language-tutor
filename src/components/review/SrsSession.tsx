@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
+import { Furigana } from "@/components/shared/Furigana";
 
 interface CardDto {
   id: string;
@@ -99,8 +100,8 @@ export function SrsSession() {
           disabled={revealed}
           className="flex min-h-72 w-full flex-col items-center justify-center gap-3 rounded-cozy bg-surface p-8 text-center shadow-cozy transition-transform active:scale-[0.99] cursor-pointer disabled:cursor-default"
         >
-          <div lang="ja" className="text-4xl font-semibold">
-            {card.front}
+          <div className="text-4xl font-semibold">
+            <Furigana text={card.front} />
           </div>
           {revealed ? (
             <>

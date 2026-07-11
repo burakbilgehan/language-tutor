@@ -39,19 +39,10 @@ export const CurriculumSideQuestSchema = z.object({
   description_tr: z.string(),
 });
 
-export const GrammarIndexEntrySchema = z.object({
-  slug: z
-    .string()
-    .regex(/^[a-z0-9-]+$/, "slug must be kebab-case ascii"),
-  title_tr: z.string(),
-  category: z.string(),
-});
-
 export const CurriculumSchema = z.object({
   title: z.string(),
-  units: z.array(CurriculumUnitSchema).min(4).max(14),
+  units: z.array(CurriculumUnitSchema).min(4).max(18),
   side_quests: z.array(CurriculumSideQuestSchema).min(1),
-  grammar_index: z.array(GrammarIndexEntrySchema).min(5),
 });
 export type Curriculum = z.infer<typeof CurriculumSchema>;
 

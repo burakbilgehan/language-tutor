@@ -1,6 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+interface LlmStats {
+  todayUsd: number;
+  totalUsd: number;
+  todayCalls: number;
+}
+
+function CostBadge() {
+  const [stats, setStats] = useState<LlmStats | null>(null);
+
+  useEffect(() => {
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then((d) => setStats(d.llm))
+      .catch(() => {});
+  }, []);
+
+  if (!stats || stats.totalUsd <= 0) return null;
+  return (
+    <span
+      className="hidden sm:flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-moss shadow-cozy"
+      title={`Bugün: $${stats.todayUsd.toFixed(2)} (${stats.todayCalls} çağrı) · Toplam: $${stats.totalUsd.toFixed(2)}`}
+    >
+      💸 ${stats.todayUsd.toFixed(2)}
+    </span>
+  );
+}
 
 export function StatsHeader({
   title,
@@ -41,6 +69,7 @@ export function StatsHeader({
               ✦ {xpTotal} XP
             </span>
           )}
+          <CostBadge />
           <nav className="hidden sm:flex items-center gap-1 text-sm">
             <Link href="/grammar" className="rounded-full px-3 py-1.5 hover:bg-surface-2 transition-colors">Gramer</Link>
             <Link href="/review" className="rounded-full px-3 py-1.5 hover:bg-surface-2 transition-colors">Tekrar</Link>

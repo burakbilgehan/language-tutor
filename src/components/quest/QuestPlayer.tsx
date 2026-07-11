@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
+import { Furigana } from "@/components/shared/Furigana";
+import { answersMatch, stripFurigana } from "@/lib/jp";
 
 interface QuestItem {
   type: "mcq" | "type_answer";
@@ -17,9 +19,6 @@ interface QuestData {
   node: { id: string; titleTr: string; xpReward: number };
   quest: { title_tr: string; items: QuestItem[] };
 }
-
-const normalize = (s: string) =>
-  s.trim().toLocaleLowerCase("tr").replace(/[.,!?。、！？\s]+/g, " ").trim();
 
 export function QuestPlayer({ nodeId }: { nodeId: string }) {
   const router = useRouter();
@@ -89,7 +88,7 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
 
   const item = items[idx];
   const check = (value: string) => {
-    const correct = normalize(value) === normalize(item.answer);
+    const correct = answersMatch(stripFurigana(item.answer), value);
     if (correct) setCorrectCount((c) => c + 1);
     setOutcome({ correct });
   };
@@ -118,8 +117,8 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
         <div className="rounded-cozy bg-surface p-6 shadow-cozy">
           <h2 className="font-semibold">{item.prompt_tr}</h2>
           {item.target_text && (
-            <div lang="ja" className="my-4 rounded-xl bg-background p-6 text-center text-5xl">
-              {item.target_text}
+            <div className="my-4 rounded-xl bg-background p-6 text-center text-5xl">
+              <Furigana text={item.target_text} />
             </div>
           )}
 
@@ -138,12 +137,12 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
                       ? outcome.correct
                         ? "border-moss bg-moss-soft"
                         : "border-danger bg-danger/10"
-                      : outcome && normalize(opt) === normalize(item.answer)
+                      : outcome && answersMatch(stripFurigana(item.answer), opt)
                         ? "border-moss bg-moss-soft"
                         : "border-surface-2 bg-background hover:border-accent-soft"
                   }`}
                 >
-                  <span lang="ja">{opt}</span>
+                  <Furigana text={opt} />
                 </button>
               ))}
             </div>
@@ -178,7 +177,13 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
               }`}
             >
               <span className="font-semibold">
-                {outcome.correct ? "Doğru! 🌸" : `Cevap: ${item.answer}`}
+                {outcome.correct ? (
+                  "Doğru! 🌸"
+                ) : (
+                  <>
+                    Cevap: <Furigana text={item.answer} />
+                  </>
+                )}
               </span>
               <CozyButton variant="soft" onClick={next}>
                 {idx + 1 < items.length ? "Sıradaki →" : "Bitir 🏅"}

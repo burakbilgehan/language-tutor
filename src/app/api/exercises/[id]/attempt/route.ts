@@ -7,15 +7,9 @@ import { getProvider } from "@/lib/llm/provider";
 import { GradeSchema } from "@/lib/llm/schemas";
 import { gradingPrompt } from "@/lib/llm/prompts/lesson";
 import { awardXp } from "@/lib/xp";
+import { answersMatch, stripFurigana } from "@/lib/jp";
 
 export const runtime = "nodejs";
-
-const normalize = (s: string) =>
-  s
-    .trim()
-    .toLocaleLowerCase("tr")
-    .replace(/[.,!?。、！？\s]+/g, " ")
-    .trim();
 
 export async function POST(
   req: Request,
@@ -41,10 +35,11 @@ export async function POST(
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
 
+  // Romaji-tolerant: "konnichiwa" matches こんにちは (see lib/jp.ts).
   const accepted = [exercise.answer, ...(exercise.acceptAlso ?? [])].map(
-    normalize
+    stripFurigana
   );
-  const isExactMatch = accepted.includes(normalize(userResponse));
+  const isExactMatch = accepted.some((a) => answersMatch(a, userResponse));
 
   let result: {
     isCorrect: boolean;

@@ -181,6 +181,7 @@ export const grammarTopics = sqliteTable(
     slug: text("slug").notNull(),
     titleTr: text("title_tr").notNull(),
     category: text("category").notNull(),
+    level: text("level"),
     position: integer("position").notNull().default(0),
     content: text("content", { mode: "json" }).$type<GrammarTopicContent>(),
     status: text("status", {
@@ -238,6 +239,18 @@ export const streaks = sqliteTable("streaks", {
   currentStreak: integer("current_streak").notNull().default(0),
   longestStreak: integer("longest_streak").notNull().default(0),
   lastActivityDate: text("last_activity_date"), // ISO date 'YYYY-MM-DD'
+});
+
+export const llmCalls = sqliteTable("llm_calls", {
+  id: id(),
+  purpose: text("purpose").notNull(), // fixtureKey: curriculum/lesson/grade/...
+  model: text("model").notNull(),
+  tier: text("tier").notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  costUsd: real("cost_usd").notNull().default(0),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  createdAt: createdAt(),
 });
 
 export const generationJobs = sqliteTable("generation_jobs", {

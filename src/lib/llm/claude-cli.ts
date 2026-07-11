@@ -21,7 +21,28 @@ interface CliEnvelope {
   type?: string;
   is_error?: boolean;
   result?: string;
-  usage?: unknown;
+  total_cost_usd?: number;
+  usage?: { input_tokens?: number; output_tokens?: number };
+}
+
+function recordCall(row: {
+  purpose: string;
+  model: string;
+  tier: ModelTier;
+  durationMs: number;
+  costUsd: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}) {
+  // Lazy import: keeps the provider usable from plain tsx scripts too.
+  import("@/db")
+    .then(({ db, tables }) =>
+      db
+        .insert(tables.llmCalls)
+        .values({ id: crypto.randomUUID(), ...row })
+        .run()
+    )
+    .catch((err) => console.warn("[llm] usage kaydedilemedi:", err));
 }
 
 function workdir(): string {
@@ -35,6 +56,7 @@ function runCli(opts: {
   prompt: string;
   system?: string;
   tier: ModelTier;
+  purpose: string;
   jsonSchema?: object;
   timeoutMs: number;
 }): Promise<string> {
@@ -122,6 +144,15 @@ function runCli(opts: {
         }
         return reject(new LlmError("LLM hata döndürdü", envelope.result));
       }
+      recordCall({
+        purpose: opts.purpose,
+        model: modelForTier(opts.tier),
+        tier: opts.tier,
+        durationMs: Date.now() - started,
+        costUsd: envelope.total_cost_usd ?? 0,
+        inputTokens: envelope.usage?.input_tokens,
+        outputTokens: envelope.usage?.output_tokens,
+      });
       resolve(envelope.result ?? "");
     });
 
@@ -156,6 +187,7 @@ export class ClaudeCliProvider implements LlmProvider {
         prompt: opts.prompt,
         system: opts.system,
         tier: opts.tier,
+        purpose: opts.fixtureKey,
         jsonSchema,
         timeoutMs,
       });
@@ -177,6 +209,7 @@ export class ClaudeCliProvider implements LlmProvider {
             `\n\nÖnceki çıktın şemaya uymadı. Hatalar: ${parsed.error.message}\nSADECE geçerli JSON döndür, başka hiçbir şey yazma.`,
           system: opts.system,
           tier: opts.tier,
+          purpose: `${opts.fixtureKey}-retry`,
           jsonSchema,
           timeoutMs,
         });
@@ -191,6 +224,7 @@ export class ClaudeCliProvider implements LlmProvider {
         prompt: opts.prompt,
         system: opts.system,
         tier: opts.tier,
+        purpose: opts.fixtureKey,
         timeoutMs,
       })
     );

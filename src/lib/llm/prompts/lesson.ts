@@ -16,7 +16,12 @@ export function lessonPrompt(opts: {
   const lang =
     LANGUAGE_NAMES[opts.profile.targetLanguage] ?? opts.profile.targetLanguage;
 
-  const system = `Sen sıcak ve sabırlı bir ${lang} öğretmenisin. Türk öğrencilere ders içeriği hazırlıyorsun. Açıklamalar Türkçe, hedef dildeki her metnin okunuşu (reading) mutlaka verilir. Sadece istenen JSON'u döndür.`;
+  const jaRules =
+    opts.profile.targetLanguage === "ja"
+      ? ` Kanji kullanmaktan kaçınma: seviyeye uygun temel kanjileri erken tanıt ve kullan; kanji içeren HER metinde furigana'yı köşeli parantezle ekle: 私[わたし]は日本語[にほんご]を勉強[べんきょう]します. Öğrenci cevaplarını ROMAJI ile yazar (klavyesinde kana yok) — alıştırma cevapları (answer/accept_also) parantezsiz, sade olsun.`
+      : "";
+
+  const system = `Sen sıcak ve sabırlı bir ${lang} öğretmenisin. Türk öğrencilere ders içeriği hazırlıyorsun. Açıklamalar Türkçe, hedef dildeki her metnin okunuşu (reading, latin harfli) mutlaka verilir.${jaRules} Sadece istenen JSON'u döndür.`;
 
   const boss =
     opts.node.lessonType === "boss"
@@ -71,6 +76,7 @@ Beklenen cevap / değerlendirme kılavuzu: ${opts.expectedAnswer}
 
 Öğrencinin cevabı: "${opts.userResponse}"
 
-Değerlendir: correct (anlamca doğru mu — küçük yazım farklarına takılma), score 0-100, feedback_tr (1-3 cümle, cesaretlendirici), gerekiyorsa corrected_answer ve mistakes. Sadece JSON döndür.`;
+Değerlendir: correct (anlamca doğru mu — küçük yazım farklarına takılma), score 0-100, feedback_tr (1-3 cümle, cesaretlendirici), gerekiyorsa corrected_answer ve mistakes.
+Önemli: Öğrenci hedef dildeki cevabı ROMAJI ile yazabilir (klavyesinde kana/kanji yok). "konnichiwa" = こんにちは say; yazı sistemi farkını asla hata sayma, içeriğe göre değerlendir. Sadece JSON döndür.`;
   return { system, prompt };
 }

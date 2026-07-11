@@ -38,8 +38,8 @@ ${kindInstructions[opts.node.sideQuestKind ?? "pop_quiz"]}
 
 8-12 soruluk bir set üret:
 - "mcq": options 4 seçenek, answer seçeneklerden birinin AYNEN kendisi.
-- "type_answer": kısa yazılı cevap; answer kanonik cevap.
-- target_text alanına hedef dildeki karakter/kelimeyi koy (varsa).
+- "type_answer": kısa yazılı cevap; answer kanonik cevap. Öğrenci romaji yazar — answer romaji ya da kana olabilir, ikisi de kabul edilir.
+- target_text alanına hedef dildeki karakter/kelimeyi koy (varsa). Kanji kullanırsan furigana'yı köşeli parantezle ekle: 日[に]本[ほん] değil, kelime bütünüyle: 日本[にほん].
 
 Sadece şemaya uygun JSON döndür.`;
 

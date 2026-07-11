@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
+import { Furigana } from "@/components/shared/Furigana";
 
 interface ExerciseDto {
   id: string;
@@ -159,8 +160,8 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
               <div className="flex flex-col gap-4">
                 {lesson.examples.map((ex, i) => (
                   <div key={i} className="rounded-xl bg-background p-4">
-                    <div lang="ja" className="text-xl">
-                      {ex.target}
+                    <div className="text-xl">
+                      <Furigana text={ex.target} />
                     </div>
                     {ex.reading && (
                       <div className="text-sm text-ink-soft">{ex.reading}</div>
@@ -268,8 +269,8 @@ function ExerciseCard({
 
       <h2 className="text-lg font-semibold">{exercise.promptTr}</h2>
       {exercise.targetText && (
-        <div lang="ja" className="mt-3 rounded-xl bg-background p-4 text-xl">
-          {exercise.targetText}
+        <div className="mt-3 rounded-xl bg-background p-4 text-xl">
+          <Furigana text={exercise.targetText} />
         </div>
       )}
 
@@ -292,7 +293,7 @@ function ExerciseCard({
                     : "border-surface-2 bg-background hover:border-accent-soft"
                 }`}
               >
-                <span lang="ja">{opt}</span>
+                <Furigana text={opt} />
               </button>
             ))}
           </div>
@@ -318,7 +319,7 @@ function ExerciseCard({
                 value={response}
                 onChange={(e) => setResponse(e.target.value)}
                 disabled={!!result}
-                placeholder="Cevabını yaz..."
+                placeholder="Cevabını yaz (romaji olur: konnichiwa)..."
                 className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
               />
             )}

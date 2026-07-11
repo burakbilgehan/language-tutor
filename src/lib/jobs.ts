@@ -10,6 +10,7 @@ import {
 import { curriculumPrompt } from "@/lib/llm/prompts/curriculum";
 import { lessonPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
+import { grammarIndexFor } from "@/lib/grammar-index";
 
 type JobType = (typeof tables.generationJobs.$inferSelect)["jobType"];
 
@@ -320,7 +321,9 @@ async function runCurriculumJob(profileId: string) {
           .run();
       });
 
-      curriculum.grammar_index.forEach((g, i) => {
+      // Grammar cheatsheet skeleton: deterministic, language-wide index
+      // (content per topic is generated on demand and cached).
+      grammarIndexFor(profile.targetLanguage).forEach((g, i) => {
         tx.insert(tables.grammarTopics)
           .values({
             id: nanoid(),
@@ -328,6 +331,7 @@ async function runCurriculumJob(profileId: string) {
             slug: g.slug,
             titleTr: g.title_tr,
             category: g.category,
+            level: g.level,
             position: i,
           })
           .onConflictDoNothing()

@@ -1,7 +1,7 @@
 {
   "correct": true,
   "score": 90,
-  "feedback_tr": "Çok iyi! こんにちは kullanımın doğru. Küçük bir not: yazıda virgülden sonra boşluk bırakmana gerek yok.",
-  "corrected_answer": "こんにちは、田中さん。",
+  "feedback_tr": "[FIXTURE MODU — gerçek değerlendirme değil] Bu sabit bir örnek geri bildirim. Gerçek notlama için uygulamayı LLM_PROVIDER=fixture olmadan çalıştır.",
+  "corrected_answer": null,
   "mistakes": []
 }
