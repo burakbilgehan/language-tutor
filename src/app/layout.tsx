@@ -23,7 +23,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr">
+    <html lang="tr" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{const t=localStorage.getItem("theme");if(t)document.documentElement.classList.add(t)}catch(e){}`,
+          }}
+        />
+      </head>
       <body
         className={`${fraunces.variable} ${nunito.variable} antialiased min-h-dvh`}
       >
