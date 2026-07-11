@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 
@@ -42,6 +42,36 @@ export default function SettingsPage() {
     document.documentElement.classList.toggle("dark", next);
     document.documentElement.classList.toggle("light", !next);
     localStorage.setItem("theme", next ? "dark" : "light");
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    const ok = window.confirm(
+      "Bu, bu makinedeki tüm ilerlemeyi silip yüklenen kayıtla değiştirir. Emin misin?"
+    );
+    if (!ok) return;
+
+    setImporting(true);
+    setSaveMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/save/import", { method: "POST", body: fd });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Yüklenemedi");
+      window.location.href = "/map"; // full reload → fresh server reads
+    } catch (err) {
+      setSaveMsg(
+        `❌ ${err instanceof Error ? err.message : "Kayıt yüklenemedi"}`
+      );
+      setImporting(false);
+    }
   };
 
   const checkLlm = async () => {
@@ -128,6 +158,44 @@ export default function SettingsPage() {
             {checking ? "Kontrol ediliyor..." : "Bağlantıyı test et"}
           </CozyButton>
           {health && <p className="mt-3 text-sm">{health}</p>}
+        </section>
+
+        <section className="rounded-cozy bg-surface p-6 shadow-cozy">
+          <h2 className="mb-1 font-semibold">Kayıt ve Yedekleme</h2>
+          <p className="mb-3 text-sm text-ink-soft">
+            Tüm ilerlemeni tek dosyaya indir, başka bir bilgisayarda yükleyip
+            kaldığın yerden devam et. Dosyayı Drive veya USB ile taşıyabilirsin.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <CozyButton
+              variant="soft"
+              onClick={() => {
+                window.location.href = "/api/save/export";
+              }}
+            >
+              ⬇️ Kaydı indir
+            </CozyButton>
+            <CozyButton
+              variant="soft"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+            >
+              {importing ? "Yükleniyor..." : "⬆️ Kaydı yükle"}
+            </CozyButton>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".db"
+              className="hidden"
+              onChange={onImportFile}
+            />
+          </div>
+          <p className="mt-3 text-xs text-ink-soft">
+            Yükleme, bu makinedeki mevcut ilerlemeyi <strong>siler</strong> ve
+            yüklenen kayıtla değiştirir. İki makinede de uygulamanın aynı sürümü
+            kurulu olmalı.
+          </p>
+          {saveMsg && <p className="mt-3 text-sm">{saveMsg}</p>}
         </section>
       </main>
     </div>

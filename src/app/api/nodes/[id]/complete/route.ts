@@ -1,11 +1,46 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
-import { completeNode } from "@/lib/roadmap";
+import { completeNode, isCurriculumTail } from "@/lib/roadmap";
 import { awardXp } from "@/lib/xp";
+import { createJob, runJob, topChapterLevel } from "@/lib/jobs";
+import { nextLevel } from "@/lib/curriculum/levels";
 
 export const runtime = "nodejs";
+
+/**
+ * If the just-completed node is the curriculum tail and a next JLPT level
+ * exists, enqueue that chapter (fire-and-forget) so progression never
+ * dead-ends. No-op at N1, or if a chapter job is already queued/running.
+ * Returns the level being generated, if any.
+ */
+function maybeAutoExtend(profileId: string, nodeId: string): string | null {
+  if (!isCurriculumTail(nodeId)) return null;
+  const curriculum = db.query.curricula
+    .findFirst({ where: eq(tables.curricula.profileId, profileId) })
+    .sync();
+  if (!curriculum) return null;
+  const top = topChapterLevel(curriculum.id);
+  const next = top ? nextLevel(top) : null;
+  if (!next) return null;
+
+  const refId = `${profileId}:${next}`;
+  const inFlight = db.query.generationJobs
+    .findFirst({
+      where: and(
+        eq(tables.generationJobs.jobType, "chapter"),
+        eq(tables.generationJobs.refId, refId),
+        inArray(tables.generationJobs.status, ["queued", "running"])
+      ),
+    })
+    .sync();
+  if (inFlight) return next;
+
+  const jobId = createJob("chapter", refId);
+  void runJob(jobId);
+  return next;
+}
 
 export async function POST(
   _req: Request,
@@ -25,6 +60,12 @@ export async function POST(
 
   const alreadyCompleted = node.status === "completed";
   const unlockedNodeIds = alreadyCompleted ? [] : completeNode(nodeId);
+
+  // Auto-extend to the next JLPT level when the learner clears the tail.
+  const extendingLevel =
+    !alreadyCompleted && node.nodeType === "main"
+      ? maybeAutoExtend(profile.id, nodeId)
+      : null;
 
   // Harvest lesson vocab into SRS cards (dedup via unique index).
   let newCards = 0;
@@ -63,5 +104,10 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ xpAwarded, newCards, unlockedNodeIds });
+  return NextResponse.json({
+    xpAwarded,
+    newCards,
+    unlockedNodeIds,
+    extendingLevel,
+  });
 }

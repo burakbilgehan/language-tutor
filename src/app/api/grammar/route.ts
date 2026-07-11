@@ -6,25 +6,48 @@ import { grammarIndexFor } from "@/lib/grammar-index";
 
 export const runtime = "nodejs";
 
-/** Self-healing: seed the deterministic cheatsheet index if missing. */
+/**
+ * Self-healing: incrementally sync the deterministic cheatsheet index.
+ * Missing slugs are inserted (status "pending"); existing rows get their
+ * position/title/category/level re-synced so index reordering and growth
+ * reach existing profiles too. Generated content (content/status/generatedAt)
+ * is NEVER touched.
+ */
 function ensureSeeded(targetLanguage: string) {
   const existing = db.query.grammarTopics
-    .findFirst({ where: eq(tables.grammarTopics.targetLanguage, targetLanguage) })
+    .findMany({
+      where: eq(tables.grammarTopics.targetLanguage, targetLanguage),
+      columns: { id: true, slug: true },
+    })
     .sync();
-  if (existing) return;
+  const bySlug = new Map(existing.map((t) => [t.slug, t.id]));
+
   grammarIndexFor(targetLanguage).forEach((g, i) => {
-    db.insert(tables.grammarTopics)
-      .values({
-        id: nanoid(),
-        targetLanguage,
-        slug: g.slug,
-        titleTr: g.title_tr,
-        category: g.category,
-        level: g.level,
-        position: i,
-      })
-      .onConflictDoNothing()
-      .run();
+    const id = bySlug.get(g.slug);
+    if (id) {
+      db.update(tables.grammarTopics)
+        .set({
+          position: i,
+          titleTr: g.title_tr,
+          category: g.category,
+          level: g.level,
+        })
+        .where(eq(tables.grammarTopics.id, id))
+        .run();
+    } else {
+      db.insert(tables.grammarTopics)
+        .values({
+          id: nanoid(),
+          targetLanguage,
+          slug: g.slug,
+          titleTr: g.title_tr,
+          category: g.category,
+          level: g.level,
+          position: i,
+        })
+        .onConflictDoNothing()
+        .run();
+    }
   });
 }
 

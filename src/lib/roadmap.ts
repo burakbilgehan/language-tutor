@@ -1,12 +1,29 @@
 import { asc, eq } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { totalXp, getStreak } from "./xp";
+import { nextLevel, isJlptLevel, type JlptLevel } from "./curriculum/levels";
+import { ensureChaptersBackfilled } from "./jobs";
 
 export function getRoadmap(profileId: string) {
   const curriculum = db.query.curricula
     .findFirst({ where: eq(tables.curricula.profileId, profileId) })
     .sync();
   if (!curriculum || curriculum.status !== "ready") return null;
+
+  // Self-heal: a pre-chapters curriculum gets its N4 chapter row so the
+  // extend affordance and auto-trigger have a "current top level" to work from.
+  ensureChaptersBackfilled();
+
+  const chapterRows = db.query.curriculumChapters
+    .findMany({
+      where: eq(tables.curriculumChapters.curriculumId, curriculum.id),
+      orderBy: [asc(tables.curriculumChapters.position)],
+    })
+    .sync();
+  const topLevel = [...chapterRows]
+    .reverse()
+    .find((c) => isJlptLevel(c.level))?.level as JlptLevel | undefined;
+  const generatingChapter = chapterRows.find((c) => c.status === "generating");
 
   const unitRows = db.query.units
     .findMany({
@@ -36,6 +53,8 @@ export function getRoadmap(profileId: string) {
     }
   }
 
+  const next = topLevel ? nextLevel(topLevel) : null;
+
   return {
     curriculum: { id: curriculum.id, title: curriculum.title },
     units: unitRows.map((u) => ({
@@ -43,9 +62,17 @@ export function getRoadmap(profileId: string) {
       titleTr: u.titleTr,
       descriptionTr: u.descriptionTr,
       theme: u.theme,
+      level: u.level,
       nodes: (mainByUnit.get(u.id) ?? []).map(publicNode),
     })),
     sideQuests: sideQuests.map(publicNode),
+    chapters: chapterRows.map((c) => ({
+      level: c.level,
+      status: c.status,
+    })),
+    topLevel: topLevel ?? null,
+    nextLevel: next,
+    isGenerating: generatingChapter?.level ?? null,
     xpTotal: totalXp(profileId),
     streak: getStreak(profileId),
   };
@@ -92,4 +119,20 @@ export function completeNode(nodeId: string): string[] {
       .run();
   }
   return successors.map((s) => s.id);
+}
+
+/**
+ * True if this main node is the tail of the whole curriculum chain, i.e. no
+ * other main node lists it as prereq. Side quests are never a tail. Pure read;
+ * used by the complete route to decide whether to auto-extend.
+ */
+export function isCurriculumTail(nodeId: string): boolean {
+  const node = db.query.nodes
+    .findFirst({ where: eq(tables.nodes.id, nodeId) })
+    .sync();
+  if (!node || node.nodeType === "side_quest") return false;
+  const successor = db.query.nodes
+    .findFirst({ where: eq(tables.nodes.prereqNodeId, nodeId) })
+    .sync();
+  return !successor;
 }
