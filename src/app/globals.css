@@ -1,26 +1,114 @@
 @import "tailwindcss";
 
+/* Cozy warm palette — light: cream/terracotta/moss, dark: warm brown. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f2e9;
+  --surface: #fffdf7;
+  --surface-2: #f1e9db;
+  --ink: #2e2a24;
+  --ink-soft: #6b6257;
+  --accent: #c4643b;
+  --accent-soft: #e8c4b0;
+  --moss: #7a8b6f;
+  --moss-soft: #d7e0cf;
+  --gold: #d9a441;
+  --locked: #cfc6b8;
+  --danger: #b2503f;
+}
+
+.dark {
+  --background: #201b16;
+  --surface: #2a241d;
+  --surface-2: #352e25;
+  --ink: #ede5d8;
+  --ink-soft: #a89c8c;
+  --accent: #d97e55;
+  --accent-soft: #5c3a2a;
+  --moss: #93a687;
+  --moss-soft: #3a4433;
+  --gold: #e0b25e;
+  --locked: #4a4237;
+  --danger: #d1705d;
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-moss: var(--moss);
+  --color-moss-soft: var(--moss-soft);
+  --color-gold: var(--gold);
+  --color-locked: var(--locked);
+  --color-danger: var(--danger);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-nunito);
+  --shadow-cozy: 0 2px 8px rgb(46 42 36 / 0.06), 0 8px 24px rgb(46 42 36 / 0.08);
+  --radius-cozy: 1.25rem;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not(.light) {
+    --background: #201b16;
+    --surface: #2a241d;
+    --surface-2: #352e25;
+    --ink: #ede5d8;
+    --ink-soft: #a89c8c;
+    --accent: #d97e55;
+    --accent-soft: #5c3a2a;
+    --moss: #93a687;
+    --moss-soft: #3a4433;
+    --gold: #e0b25e;
+    --locked: #4a4237;
+    --danger: #d1705d;
   }
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+/* Japanese text gets a JP stack and breathing room. */
+[lang="ja"] {
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+    "Noto Sans JP", sans-serif;
+  line-height: 1.9;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(196 100 59 / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgb(196 100 59 / 0);
+  }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.animate-float-slow {
+  animation: float-slow 3.5s ease-in-out infinite;
 }
