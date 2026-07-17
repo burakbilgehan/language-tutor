@@ -13,6 +13,7 @@ const S = {
       grammar: "Gramer",
       kana: "Kana",
       stroke: "Yazım",
+      conjugate: "Çekim",
       review: "Tekrar",
       chat: "Sohbet",
     },
@@ -27,6 +28,7 @@ const S = {
       grammar: "Grammar",
       kana: "Kana",
       stroke: "Writing",
+      conjugate: "Conjugate",
       review: "Review",
       chat: "Chat",
     },
@@ -83,6 +85,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/grammar", label: "grammar" },
   { href: "/kana", label: "kana", jaOnly: true },
   { href: "/stroke", label: "stroke", jaOnly: true },
+  { href: "/conjugate", label: "conjugate", jaOnly: true },
   { href: "/review", label: "review" },
   { href: "/chat", label: "chat" },
 ];
