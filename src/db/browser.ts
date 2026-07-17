@@ -52,6 +52,9 @@ interface BrowserDbHandle {
   db: BrowserDb;
   /** Bir yazma işleminden sonra çağır: imaj debounce'la IndexedDB'ye iner. */
   persistSoon: () => void;
+  /** Navigasyon ÖNCESİ mutasyonlar için: yazmanın bittiğini bekler.
+   * (persistSoon debounce'u tam sayfa yenilemeye yenilir — yarış olur.) */
+  persistNow: () => Promise<void>;
   /** Save export: ham SQLite imajı (sunucu formatıyla aynı). */
   exportBytes: () => Uint8Array;
   /** Save import: imajı değiştir (replace-all) + kalıcılaştır. */
@@ -114,6 +117,13 @@ async function create(): Promise<BrowserDbHandle> {
   return {
     db: dbProxy,
     persistSoon,
+    persistNow: async () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      await idbPut(sqlite.export());
+    },
     exportBytes: () => sqlite.export(),
     importBytes: async (bytes: Uint8Array) => {
       sqlite.close();

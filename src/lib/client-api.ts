@@ -114,10 +114,13 @@ export async function switchProfile(profileId: string): Promise<void> {
     });
     return;
   }
-  const { db, persistSoon } = await browserDb();
+  const handle = await browserDb();
   const core = await import("@/core/profile");
-  if (!core.setActiveProfile(db, profileId)) throw new Error("Profil bulunamadı");
-  persistSoon();
+  if (!core.setActiveProfile(handle.db, profileId))
+    throw new Error("Profil bulunamadı");
+  // Çağıran hemen full-reload yapar — debounce yerine yazmayı BEKLE, yoksa
+  // switch yarışta kaybolur ve eski profil geri gelir.
+  await handle.persistNow();
 }
 
 export async function stats(): Promise<ReturnType<typeof import("@/core/stats").getStats>> {
