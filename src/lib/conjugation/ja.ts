@@ -169,6 +169,10 @@ interface FormDef {
   labelEn: string;
   pattern: string;
   build: (c: CoreForms) => string;
+  /** Verb-agnostic frame; 〇 is replaced with the conjugated word. */
+  exJa?: string;
+  exTr?: string;
+  exEn?: string;
 }
 
 interface GroupDef {
@@ -186,14 +190,22 @@ const VERB_GROUPS: GroupDef[] = [
     labelTr: "Temel",
     labelEn: "Basic",
     forms: [
-      { id: "dict", labelTr: "Sözlük", labelEn: "Dictionary", pattern: "〜る", build: (c) => c.dict },
-      { id: "masu", labelTr: "Kibar", labelEn: "Polite", pattern: "〜ます", build: (c) => c.stemI + "ます" },
-      { id: "nai", labelTr: "Olumsuz", labelEn: "Negative", pattern: "〜ない", build: (c) => c.nai },
-      { id: "masen", labelTr: "Kibar olumsuz", labelEn: "Polite negative", pattern: "〜ません", build: (c) => c.stemI + "ません" },
-      { id: "ta", labelTr: "Geçmiş", labelEn: "Past", pattern: "〜た", build: (c) => c.ta },
-      { id: "mashita", labelTr: "Kibar geçmiş", labelEn: "Polite past", pattern: "〜ました", build: (c) => c.stemI + "ました" },
-      { id: "nakatta", labelTr: "Olumsuz geçmiş", labelEn: "Negative past", pattern: "〜なかった", build: (c) => naiStem(c) + "かった" },
-      { id: "masendeshita", labelTr: "Kibar olumsuz geçmiş", labelEn: "Polite neg. past", pattern: "〜ませんでした", build: (c) => c.stemI + "ませんでした" },
+      { id: "dict", labelTr: "Sözlük — şimdiki/gelecek (düz)", labelEn: "Dictionary — present/future (plain)", pattern: "〜る", build: (c) => c.dict,
+        exJa: "明日も〇。", exTr: "Yarın da 〜.", exEn: "Tomorrow too, 〜." },
+      { id: "masu", labelTr: "Şimdiki/gelecek (kibar)", labelEn: "Present/future (polite)", pattern: "〜ます", build: (c) => c.stemI + "ます",
+        exJa: "毎日〇。", exTr: "Her gün 〜.", exEn: "Every day 〜." },
+      { id: "nai", labelTr: "Olumsuz (düz)", labelEn: "Negative (plain)", pattern: "〜ない", build: (c) => c.nai,
+        exJa: "今日は〇。", exTr: "Bugün 〜(-me-).", exEn: "Today, (not) 〜." },
+      { id: "masen", labelTr: "Olumsuz (kibar)", labelEn: "Negative (polite)", pattern: "〜ません", build: (c) => c.stemI + "ません",
+        exJa: "すみません、今日は〇。", exTr: "Kusura bakmayın, bugün 〜(-me-).", exEn: "Sorry, today (not) 〜." },
+      { id: "ta", labelTr: "Geçmiş (düz)", labelEn: "Past (plain)", pattern: "〜た", build: (c) => c.ta,
+        exJa: "昨日〇。", exTr: "Dün 〜(-di).", exEn: "Yesterday, 〜." },
+      { id: "mashita", labelTr: "Geçmiş (kibar)", labelEn: "Past (polite)", pattern: "〜ました", build: (c) => c.stemI + "ました",
+        exJa: "先週〇。", exTr: "Geçen hafta 〜(-di).", exEn: "Last week, 〜." },
+      { id: "nakatta", labelTr: "Olumsuz geçmiş (düz)", labelEn: "Negative past (plain)", pattern: "〜なかった", build: (c) => naiStem(c) + "かった",
+        exJa: "昨日は〇。", exTr: "Dün 〜(-medi).", exEn: "Yesterday, (not) 〜." },
+      { id: "masendeshita", labelTr: "Olumsuz geçmiş (kibar)", labelEn: "Negative past (polite)", pattern: "〜ませんでした", build: (c) => c.stemI + "ませんでした",
+        exJa: "先週は〇。", exTr: "Geçen hafta 〜(-medi).", exEn: "Last week, (not) 〜." },
     ],
   },
   {
@@ -201,12 +213,18 @@ const VERB_GROUPS: GroupDef[] = [
     labelTr: "Bağlayıcı",
     labelEn: "Connective",
     forms: [
-      { id: "te", labelTr: "Te-formu", labelEn: "Te-form", pattern: "〜て", build: (c) => c.te },
-      { id: "nakute", labelTr: "Olumsuz te (sebep)", labelEn: "Negative te (cause)", pattern: "〜なくて", build: (c) => naiStem(c) + "くて" },
-      { id: "naide", labelTr: "…meden", labelEn: "Without doing", pattern: "〜ないで", build: (c) => c.nai + "で" },
-      { id: "stem", labelTr: "Gövde (連用形)", labelEn: "Stem (ren'yōkei)", pattern: "〜ます kökü", build: (c) => c.stemI },
-      { id: "tari", labelTr: "…ip …ip (liste)", labelEn: "…and so on", pattern: "〜たり", build: (c) => c.ta + "り" },
-      { id: "nagara", labelTr: "…iyorken (eşzamanlı)", labelEn: "While doing", pattern: "〜ながら", build: (c) => c.stemI + "ながら" },
+      { id: "te", labelTr: "Te-formu", labelEn: "Te-form", pattern: "〜て", build: (c) => c.te,
+        exJa: "〇から、寝ました。", exTr: "〜dikten sonra uyudum.", exEn: "After 〜, I slept." },
+      { id: "nakute", labelTr: "Olumsuz te (sebep)", labelEn: "Negative te (cause)", pattern: "〜なくて", build: (c) => naiStem(c) + "くて",
+        exJa: "〇、困りました。", exTr: "〜meyince zor durumda kaldım.", exEn: "Not 〜, I was in trouble." },
+      { id: "naide", labelTr: "…meden", labelEn: "Without doing", pattern: "〜ないで", build: (c) => c.nai + "で",
+        exJa: "〇、出かけました。", exTr: "〜meden çıktım.", exEn: "I went out without 〜." },
+      { id: "stem", labelTr: "Gövde (連用形)", labelEn: "Stem (ren'yōkei)", pattern: "〜ます kökü", build: (c) => c.stemI,
+        exJa: "〇に行きます。", exTr: "〜meye gidiyorum.", exEn: "I'm going in order to 〜." },
+      { id: "tari", labelTr: "…ip …ip (liste)", labelEn: "…and so on", pattern: "〜たり", build: (c) => c.ta + "り",
+        exJa: "〇、休んだりしました。", exTr: "Kâh 〜, kâh dinlendim.", exEn: "I 〜, rested, and so on." },
+      { id: "nagara", labelTr: "…iyorken (eşzamanlı)", labelEn: "While doing", pattern: "〜ながら", build: (c) => c.stemI + "ながら",
+        exJa: "〇、音楽を聞きます。", exTr: "〜irken müzik dinlerim.", exEn: "I listen to music while 〜." },
     ],
   },
   {
@@ -214,11 +232,18 @@ const VERB_GROUPS: GroupDef[] = [
     labelTr: "Görünüş",
     labelEn: "Aspect",
     forms: [
-      { id: "teiru", labelTr: "Sürerlik / durum", labelEn: "Progressive/state", pattern: "〜ている", build: (c) => c.te + "いる" },
-      { id: "teita", labelTr: "Sürerlik geçmiş", labelEn: "Past progressive", pattern: "〜ていた", build: (c) => c.te + "いた" },
-      { id: "tearu", labelTr: "Yapılmış halde", labelEn: "Resultant state", pattern: "〜てある", build: (c) => c.te + "ある" },
-      { id: "teoku", labelTr: "Önceden yapmak", labelEn: "Do in advance", pattern: "〜ておく", build: (c) => c.te + "おく" },
-      { id: "teshimau", labelTr: "Bitirivermek / kazara", labelEn: "Completely/regret", pattern: "〜てしまう", build: (c) => c.te + "しまう" },
+      { id: "teiru", labelTr: "Sürerlik / durum", labelEn: "Progressive/state", pattern: "〜ている", build: (c) => c.te + "いる",
+        exJa: "今、〇。", exTr: "Şu anda 〜(-iyor).", exEn: "Right now, 〜(-ing)." },
+      { id: "teita", labelTr: "Sürerlik geçmiş", labelEn: "Past progressive", pattern: "〜ていた", build: (c) => c.te + "いた",
+        exJa: "さっきまで〇。", exTr: "Az önceye kadar 〜(-iyordu).", exEn: "Until a moment ago, 〜(-ing)." },
+      { id: "tearu", labelTr: "Yapılmış halde", labelEn: "Resultant state", pattern: "〜てある", build: (c) => c.te + "ある",
+        exJa: "もう〇。", exTr: "Çoktan 〜(-ilmiş durumda).", exEn: "Already 〜 (done and in place)." },
+      { id: "teoku", labelTr: "Önceden yapmak", labelEn: "Do in advance", pattern: "〜ておく", build: (c) => c.te + "おく",
+        exJa: "先に〇。", exTr: "Önceden 〜(-ivereyim).", exEn: "I'll 〜 in advance." },
+      { id: "teshimau", labelTr: "Bitirivermek / kazara", labelEn: "Completely/regret", pattern: "〜てしまう", build: (c) => c.te + "しまう",
+        exJa: "全部〇。", exTr: "Hepsini 〜(-iverdim).", exEn: "I 〜 it all (completely)." },
+      { id: "takotogaaru", labelTr: "…mişliği olmak (deneyim)", labelEn: "Have done before", pattern: "〜たことがある", build: (c) => c.ta + "ことがある",
+        exJa: "一度〇。", exTr: "Bir kez 〜mişliğim var.", exEn: "I have 〜 once before." },
     ],
   },
   {
@@ -226,11 +251,16 @@ const VERB_GROUPS: GroupDef[] = [
     labelTr: "Koşul",
     labelEn: "Conditional",
     forms: [
-      { id: "tara", labelTr: "…ince / …irse", labelEn: "If/when (tara)", pattern: "〜たら", build: (c) => c.ta + "ら" },
-      { id: "ba", labelTr: "…irse (ba)", labelEn: "If (ba)", pattern: "〜ば", build: (c) => c.ba },
-      { id: "nakereba", labelTr: "…mezse", labelEn: "If not", pattern: "〜なければ", build: (c) => naiStem(c) + "ければ" },
-      { id: "nara", labelTr: "…iyorsa (bağlam)", labelEn: "If (contextual)", pattern: "〜なら", build: (c) => c.dict + "なら" },
-      { id: "to", labelTr: "…ince hep (doğal sonuç)", labelEn: "Whenever (to)", pattern: "〜と", build: (c) => c.dict + "と" },
+      { id: "tara", labelTr: "…ince / …irse", labelEn: "If/when (tara)", pattern: "〜たら", build: (c) => c.ta + "ら",
+        exJa: "〇、電話してください。", exTr: "〜ince arayın.", exEn: "When 〜, please call." },
+      { id: "ba", labelTr: "…irse (ba)", labelEn: "If (ba)", pattern: "〜ば", build: (c) => c.ba,
+        exJa: "〇、間に合います。", exTr: "〜irsen yetişirsin.", exEn: "If 〜, you'll make it." },
+      { id: "nakereba", labelTr: "…mezse", labelEn: "If not", pattern: "〜なければ", build: (c) => naiStem(c) + "ければ",
+        exJa: "〇、だめです。", exTr: "〜mezsen olmaz.", exEn: "If not 〜, it won't do." },
+      { id: "nara", labelTr: "…iyorsa (bağlam)", labelEn: "If (contextual)", pattern: "〜なら", build: (c) => c.dict + "なら",
+        exJa: "〇、私も行きます。", exTr: "〜eceksen ben de gelirim.", exEn: "If (you) 〜, I'll come too." },
+      { id: "to", labelTr: "…ince hep (doğal sonuç)", labelEn: "Whenever (to)", pattern: "〜と", build: (c) => c.dict + "と",
+        exJa: "〇、うれしいです。", exTr: "〜ince sevinirim.", exEn: "Whenever 〜, I'm happy." },
     ],
   },
   {
@@ -238,10 +268,18 @@ const VERB_GROUPS: GroupDef[] = [
     labelTr: "İstek & niyet",
     labelEn: "Desire & intent",
     forms: [
-      { id: "tai", labelTr: "…mek istemek", labelEn: "Want to", pattern: "〜たい", build: (c) => c.stemI + "たい" },
-      { id: "takunai", labelTr: "…mek istememek", labelEn: "Not want to", pattern: "〜たくない", build: (c) => c.stemI + "たくない" },
-      { id: "volitional", labelTr: "…elim (niyet)", labelEn: "Volitional", pattern: "〜(よ)う", build: (c) => c.volitional },
-      { id: "mashou", labelTr: "…elim (kibar)", labelEn: "Polite volitional", pattern: "〜ましょう", build: (c) => c.stemI + "ましょう" },
+      { id: "tai", labelTr: "…mek istemek", labelEn: "Want to", pattern: "〜たい", build: (c) => c.stemI + "たい",
+        exJa: "早く〇です。", exTr: "Bir an önce 〜mek istiyorum.", exEn: "I want to 〜 soon." },
+      { id: "takunai", labelTr: "…mek istememek", labelEn: "Not want to", pattern: "〜たくない", build: (c) => c.stemI + "たくない",
+        exJa: "全然〇です。", exTr: "Hiç 〜mek istemiyorum.", exEn: "I don't want to 〜 at all." },
+      { id: "volitional", labelTr: "…elim (düz niyet)", labelEn: "Volitional (plain)", pattern: "〜(よ)う", build: (c) => c.volitional,
+        exJa: "一緒に〇！", exTr: "Hadi birlikte 〜elim!", exEn: "Let's 〜 together!" },
+      { id: "mashou", labelTr: "…elim (kibar)", labelEn: "Volitional (polite)", pattern: "〜ましょう", build: (c) => c.stemI + "ましょう",
+        exJa: "一緒に〇！", exTr: "Hadi birlikte 〜elim!", exEn: "Let's 〜 together!" },
+      { id: "tsumori", labelTr: "…me niyetinde olmak", labelEn: "Intend to", pattern: "〜つもり", build: (c) => c.dict + "つもり",
+        exJa: "来年、〇です。", exTr: "Seneye 〜 niyetindeyim.", exEn: "Next year, I intend to 〜." },
+      { id: "deshou", labelTr: "…se gerek (tahmin)", labelEn: "Probably", pattern: "〜でしょう", build: (c) => c.dict + "でしょう",
+        exJa: "明日〇。", exTr: "Yarın muhtemelen 〜.", exEn: "Tomorrow, probably 〜." },
     ],
   },
   {
@@ -249,21 +287,31 @@ const VERB_GROUPS: GroupDef[] = [
     labelTr: "Çatı",
     labelEn: "Voice",
     forms: [
-      { id: "potential", labelTr: "Yeterlik (…ebilmek)", labelEn: "Potential", pattern: "〜(ら)れる", build: (c) => c.potential },
-      { id: "passive", labelTr: "Edilgen", labelEn: "Passive", pattern: "〜(ら)れる", build: (c) => c.passive },
-      { id: "causative", labelTr: "Ettirgen", labelEn: "Causative", pattern: "〜(さ)せる", build: (c) => c.causative },
-      { id: "causative-passive", labelTr: "Ettirgen edilgen", labelEn: "Causative-passive", pattern: "〜(さ)せられる", build: (c) => c.causativePassive },
+      { id: "potential", labelTr: "Yeterlik (…ebilmek)", labelEn: "Potential", pattern: "〜(ら)れる", build: (c) => c.potential,
+        exJa: "ここで〇。", exTr: "Burada 〜ebilirim.", exEn: "I can 〜 here." },
+      { id: "passive", labelTr: "Edilgen", labelEn: "Passive", pattern: "〜(ら)れる", build: (c) => c.passive,
+        exJa: "先生に〇。", exTr: "Öğretmen tarafından 〜.", exEn: "〜 by the teacher." },
+      { id: "causative", labelTr: "Ettirgen", labelEn: "Causative", pattern: "〜(さ)せる", build: (c) => c.causative,
+        exJa: "子供に〇。", exTr: "Çocuğa 〜tiririm.", exEn: "I make the child 〜." },
+      { id: "causative-passive", labelTr: "Ettirgen edilgen (zorla)", labelEn: "Causative-passive", pattern: "〜(さ)せられる", build: (c) => c.causativePassive,
+        exJa: "母に〇。", exTr: "Annem zorla 〜tirdi.", exEn: "I was made to 〜 by my mother." },
     ],
   },
   {
     id: "command",
-    labelTr: "Emir & rica",
-    labelEn: "Command & request",
+    labelTr: "Emir, rica & tavsiye",
+    labelEn: "Command, request & advice",
     forms: [
-      { id: "imperative", labelTr: "Emir (kaba)", labelEn: "Imperative (blunt)", pattern: "〜ろ / 〜e", build: (c) => c.imperative },
-      { id: "prohibitive", labelTr: "Yasak (…me!)", labelEn: "Prohibitive", pattern: "〜るな", build: (c) => c.dict + "な" },
-      { id: "tekudasai", labelTr: "Lütfen …in", labelEn: "Please do", pattern: "〜てください", build: (c) => c.te + "ください" },
-      { id: "naidekudasai", labelTr: "Lütfen …meyin", labelEn: "Please don't", pattern: "〜ないでください", build: (c) => c.nai + "でください" },
+      { id: "imperative", labelTr: "Emir (kaba)", labelEn: "Imperative (blunt)", pattern: "〜ろ / e-kökü", build: (c) => c.imperative,
+        exJa: "早く〇！", exTr: "Çabuk 〜!", exEn: "〜, quick!" },
+      { id: "prohibitive", labelTr: "Yasak (…me!)", labelEn: "Prohibitive", pattern: "〜るな", build: (c) => c.dict + "な",
+        exJa: "ここで〇！", exTr: "Burada 〜me!", exEn: "Don't 〜 here!" },
+      { id: "tekudasai", labelTr: "Lütfen …in", labelEn: "Please do", pattern: "〜てください", build: (c) => c.te + "ください",
+        exJa: "どうぞ、〇。", exTr: "Buyurun, lütfen 〜.", exEn: "Please, go ahead and 〜." },
+      { id: "naidekudasai", labelTr: "Lütfen …meyin", labelEn: "Please don't", pattern: "〜ないでください", build: (c) => c.nai + "でください",
+        exJa: "ここでは〇。", exTr: "Burada lütfen 〜meyin.", exEn: "Please don't 〜 here." },
+      { id: "tahougaii", labelTr: "…se iyi olur (tavsiye)", labelEn: "Had better", pattern: "〜たほうがいい", build: (c) => c.ta + "ほうがいい",
+        exJa: "早く〇ですよ。", exTr: "Erkenden 〜sen iyi olur.", exEn: "You'd better 〜 soon." },
     ],
   },
   {
@@ -271,10 +319,14 @@ const VERB_GROUPS: GroupDef[] = [
     labelTr: "Diğer",
     labelEn: "Other",
     forms: [
-      { id: "sou", labelTr: "…ecek gibi görünüyor", labelEn: "Looks about to", pattern: "〜そう", build: (c) => c.stemI + "そう" },
-      { id: "sugiru", labelTr: "Fazla …mek", labelEn: "Too much", pattern: "〜すぎる", build: (c) => c.stemI + "すぎる" },
-      { id: "yasui", labelTr: "…mesi kolay", labelEn: "Easy to", pattern: "〜やすい", build: (c) => c.stemI + "やすい" },
-      { id: "nikui", labelTr: "…mesi zor", labelEn: "Hard to", pattern: "〜にくい", build: (c) => c.stemI + "にくい" },
+      { id: "sou", labelTr: "…ecek gibi görünmek", labelEn: "Looks about to", pattern: "〜そう", build: (c) => c.stemI + "そう",
+        exJa: "今にも〇です。", exTr: "Neredeyse 〜ecek gibi.", exEn: "Looks about to 〜 any moment." },
+      { id: "sugiru", labelTr: "Fazla …mek", labelEn: "Too much", pattern: "〜すぎる", build: (c) => c.stemI + "すぎる",
+        exJa: "最近、〇。", exTr: "Son zamanlarda fazla 〜.", exEn: "Lately, 〜 too much." },
+      { id: "yasui", labelTr: "…mesi kolay", labelEn: "Easy to", pattern: "〜やすい", build: (c) => c.stemI + "やすい",
+        exJa: "これは〇です。", exTr: "Bunun 〜mesi kolay.", exEn: "This is easy to 〜." },
+      { id: "nikui", labelTr: "…mesi zor", labelEn: "Hard to", pattern: "〜にくい", build: (c) => c.stemI + "にくい",
+        exJa: "これは〇です。", exTr: "Bunun 〜mesi zor.", exEn: "This is hard to 〜." },
     ],
   },
 ];
@@ -291,44 +343,76 @@ interface AdjFormDef {
   labelEn: string;
   pattern: string;
   build: (base: string) => string;
+  exJa?: string;
+  exTr?: string;
+  exEn?: string;
 }
 
 const iStem = (base: string) =>
   base.endsWith("いい") ? base.slice(0, -2) + "よ" : base.slice(0, -1);
 
 const I_ADJ_FORMS: AdjFormDef[] = [
-  { id: "dict", labelTr: "Sözlük", labelEn: "Dictionary", pattern: "〜い", build: (b) => b },
-  { id: "desu", labelTr: "Kibar", labelEn: "Polite", pattern: "〜いです", build: (b) => b + "です" },
-  { id: "kunai", labelTr: "Olumsuz", labelEn: "Negative", pattern: "〜くない", build: (b) => iStem(b) + "くない" },
-  { id: "kunaidesu", labelTr: "Kibar olumsuz", labelEn: "Polite negative", pattern: "〜くないです", build: (b) => iStem(b) + "くないです" },
-  { id: "katta", labelTr: "Geçmiş", labelEn: "Past", pattern: "〜かった", build: (b) => iStem(b) + "かった" },
-  { id: "kattadesu", labelTr: "Kibar geçmiş", labelEn: "Polite past", pattern: "〜かったです", build: (b) => iStem(b) + "かったです" },
-  { id: "kunakatta", labelTr: "Olumsuz geçmiş", labelEn: "Negative past", pattern: "〜くなかった", build: (b) => iStem(b) + "くなかった" },
-  { id: "kute", labelTr: "Te-formu (bağlama)", labelEn: "Te-form", pattern: "〜くて", build: (b) => iStem(b) + "くて" },
-  { id: "kunakute", labelTr: "Olumsuz te", labelEn: "Negative te", pattern: "〜くなくて", build: (b) => iStem(b) + "くなくて" },
-  { id: "kereba", labelTr: "…ysa (ba)", labelEn: "If (ba)", pattern: "〜ければ", build: (b) => iStem(b) + "ければ" },
-  { id: "kunakereba", labelTr: "…değilse", labelEn: "If not", pattern: "〜くなければ", build: (b) => iStem(b) + "くなければ" },
-  { id: "kattara", labelTr: "…ysa (tara)", labelEn: "If/when (tara)", pattern: "〜かったら", build: (b) => iStem(b) + "かったら" },
-  { id: "ku", labelTr: "Zarf (…şekilde)", labelEn: "Adverb", pattern: "〜く", build: (b) => iStem(b) + "く" },
-  { id: "sa", labelTr: "İsimleşme (…lik)", labelEn: "Noun (-ness)", pattern: "〜さ", build: (b) => iStem(b) + "さ" },
-  { id: "sou", labelTr: "…görünümlü", labelEn: "Looks", pattern: "〜そう", build: (b) => (b.endsWith("いい") ? iStem(b) + "さそう" : iStem(b) + "そう") },
+  { id: "dict", labelTr: "Sözlük", labelEn: "Dictionary", pattern: "〜い", build: (b) => b,
+    exJa: "この店は〇。", exTr: "Bu dükkân 〜.", exEn: "This shop is 〜." },
+  { id: "desu", labelTr: "Kibar", labelEn: "Polite", pattern: "〜いです", build: (b) => b + "です",
+    exJa: "この店は〇。", exTr: "Bu dükkân 〜. (kibar)", exEn: "This shop is 〜. (polite)" },
+  { id: "kunai", labelTr: "Olumsuz", labelEn: "Negative", pattern: "〜くない", build: (b) => iStem(b) + "くない",
+    exJa: "あまり〇。", exTr: "Pek 〜 değil.", exEn: "Not very 〜." },
+  { id: "kunaidesu", labelTr: "Kibar olumsuz", labelEn: "Polite negative", pattern: "〜くないです", build: (b) => iStem(b) + "くないです",
+    exJa: "あまり〇。", exTr: "Pek 〜 değil. (kibar)", exEn: "Not very 〜. (polite)" },
+  { id: "katta", labelTr: "Geçmiş", labelEn: "Past", pattern: "〜かった", build: (b) => iStem(b) + "かった",
+    exJa: "昨日は〇。", exTr: "Dün 〜ydi.", exEn: "Yesterday it was 〜." },
+  { id: "kattadesu", labelTr: "Kibar geçmiş", labelEn: "Polite past", pattern: "〜かったです", build: (b) => iStem(b) + "かったです",
+    exJa: "昨日は〇。", exTr: "Dün 〜ydi. (kibar)", exEn: "Yesterday it was 〜. (polite)" },
+  { id: "kunakatta", labelTr: "Olumsuz geçmiş", labelEn: "Negative past", pattern: "〜くなかった", build: (b) => iStem(b) + "くなかった",
+    exJa: "全然〇。", exTr: "Hiç 〜 değildi.", exEn: "It was not 〜 at all." },
+  { id: "kute", labelTr: "Te-formu (bağlama)", labelEn: "Te-form", pattern: "〜くて", build: (b) => iStem(b) + "くて",
+    exJa: "〇、有名です。", exTr: "Hem 〜 hem ünlü.", exEn: "〜 and famous." },
+  { id: "kunakute", labelTr: "Olumsuz te", labelEn: "Negative te", pattern: "〜くなくて", build: (b) => iStem(b) + "くなくて",
+    exJa: "〇、安心した。", exTr: "〜 olmayınca rahatladım.", exEn: "Not being 〜, I was relieved." },
+  { id: "kereba", labelTr: "…ysa (ba)", labelEn: "If (ba)", pattern: "〜ければ", build: (b) => iStem(b) + "ければ",
+    exJa: "〇、買います。", exTr: "〜ysa alırım.", exEn: "If 〜, I will buy it." },
+  { id: "kunakereba", labelTr: "…değilse", labelEn: "If not", pattern: "〜くなければ", build: (b) => iStem(b) + "くなければ",
+    exJa: "〇、買いません。", exTr: "〜 değilse almam.", exEn: "If not 〜, I will not buy it." },
+  { id: "kattara", labelTr: "…ysa (tara)", labelEn: "If/when (tara)", pattern: "〜かったら", build: (b) => iStem(b) + "かったら",
+    exJa: "〇、やめましょう。", exTr: "〜ysa vazgeçelim.", exEn: "If 〜, let us not." },
+  { id: "ku", labelTr: "Zarf (…şekilde)", labelEn: "Adverb", pattern: "〜く", build: (b) => iStem(b) + "く",
+    exJa: "〇なります。", exTr: "〜 hale gelir (〜laşır).", exEn: "It becomes 〜." },
+  { id: "sa", labelTr: "İsimleşme (…lik)", labelEn: "Noun (-ness)", pattern: "〜さ", build: (b) => iStem(b) + "さ",
+    exJa: "〇はどのくらい？", exTr: "〜liği ne kadar?", exEn: "How much is its 〜ness?" },
+  { id: "sou", labelTr: "…görünümlü", labelEn: "Looks", pattern: "〜そう", build: (b) => (b.endsWith("いい") ? iStem(b) + "さそう" : iStem(b) + "そう"),
+    exJa: "〇ですね。", exTr: "〜 görünüyor.", exEn: "It looks 〜." },
 ];
 
 const NA_ADJ_FORMS: AdjFormDef[] = [
-  { id: "da", labelTr: "Düz (…dır)", labelEn: "Plain copula", pattern: "〜だ", build: (b) => b + "だ" },
-  { id: "desu", labelTr: "Kibar", labelEn: "Polite", pattern: "〜です", build: (b) => b + "です" },
-  { id: "janai", labelTr: "Olumsuz", labelEn: "Negative", pattern: "〜じゃない", build: (b) => b + "じゃない" },
-  { id: "dewaarimasen", labelTr: "Kibar olumsuz", labelEn: "Polite negative", pattern: "〜ではありません", build: (b) => b + "ではありません" },
-  { id: "datta", labelTr: "Geçmiş", labelEn: "Past", pattern: "〜だった", build: (b) => b + "だった" },
-  { id: "deshita", labelTr: "Kibar geçmiş", labelEn: "Polite past", pattern: "〜でした", build: (b) => b + "でした" },
-  { id: "janakatta", labelTr: "Olumsuz geçmiş", labelEn: "Negative past", pattern: "〜じゃなかった", build: (b) => b + "じゃなかった" },
-  { id: "de", labelTr: "Te-formu (bağlama)", labelEn: "Te-form", pattern: "〜で", build: (b) => b + "で" },
-  { id: "nara", labelTr: "…ysa", labelEn: "If", pattern: "〜なら", build: (b) => b + "なら" },
-  { id: "dattara", labelTr: "…ysa (tara)", labelEn: "If/when (tara)", pattern: "〜だったら", build: (b) => b + "だったら" },
-  { id: "na", labelTr: "Niteleme (…olan)", labelEn: "Attributive", pattern: "〜な", build: (b) => b + "な" },
-  { id: "ni", labelTr: "Zarf (…şekilde)", labelEn: "Adverb", pattern: "〜に", build: (b) => b + "に" },
-  { id: "sa", labelTr: "İsimleşme (…lik)", labelEn: "Noun (-ness)", pattern: "〜さ", build: (b) => b + "さ" },
-  { id: "sou", labelTr: "…görünümlü", labelEn: "Looks", pattern: "〜そう", build: (b) => b + "そう" },
+  { id: "da", labelTr: "Düz (…dır)", labelEn: "Plain copula", pattern: "〜だ", build: (b) => b + "だ",
+    exJa: "この町は〇。", exTr: "Bu şehir 〜.", exEn: "This town is 〜." },
+  { id: "desu", labelTr: "Kibar", labelEn: "Polite", pattern: "〜です", build: (b) => b + "です",
+    exJa: "この町は〇。", exTr: "Bu şehir 〜. (kibar)", exEn: "This town is 〜. (polite)" },
+  { id: "janai", labelTr: "Olumsuz", labelEn: "Negative", pattern: "〜じゃない", build: (b) => b + "じゃない",
+    exJa: "あまり〇。", exTr: "Pek 〜 değil.", exEn: "Not very 〜." },
+  { id: "dewaarimasen", labelTr: "Kibar olumsuz", labelEn: "Polite negative", pattern: "〜ではありません", build: (b) => b + "ではありません",
+    exJa: "あまり〇。", exTr: "Pek 〜 değil. (kibar)", exEn: "Not very 〜. (polite)" },
+  { id: "datta", labelTr: "Geçmiş", labelEn: "Past", pattern: "〜だった", build: (b) => b + "だった",
+    exJa: "昔は〇。", exTr: "Eskiden 〜ydi.", exEn: "It used to be 〜." },
+  { id: "deshita", labelTr: "Kibar geçmiş", labelEn: "Polite past", pattern: "〜でした", build: (b) => b + "でした",
+    exJa: "昔は〇。", exTr: "Eskiden 〜ydi. (kibar)", exEn: "It used to be 〜. (polite)" },
+  { id: "janakatta", labelTr: "Olumsuz geçmiş", labelEn: "Negative past", pattern: "〜じゃなかった", build: (b) => b + "じゃなかった",
+    exJa: "全然〇。", exTr: "Hiç 〜 değildi.", exEn: "It was not 〜 at all." },
+  { id: "de", labelTr: "Te-formu (bağlama)", labelEn: "Te-form", pattern: "〜で", build: (b) => b + "で",
+    exJa: "〇、きれいです。", exTr: "Hem 〜 hem güzel.", exEn: "〜 and beautiful." },
+  { id: "nara", labelTr: "…ysa", labelEn: "If", pattern: "〜なら", build: (b) => b + "なら",
+    exJa: "〇、行きます。", exTr: "〜ysa giderim.", exEn: "If it is 〜, I will go." },
+  { id: "dattara", labelTr: "…ysa (tara)", labelEn: "If/when (tara)", pattern: "〜だったら", build: (b) => b + "だったら",
+    exJa: "〇、行きましょう。", exTr: "〜ysa gidelim.", exEn: "If it is 〜, let us go." },
+  { id: "na", labelTr: "Niteleme (…olan)", labelEn: "Attributive", pattern: "〜な", build: (b) => b + "な",
+    exJa: "〇ところが好きです。", exTr: "〜 yerleri severim.", exEn: "I like 〜 places." },
+  { id: "ni", labelTr: "Zarf (…şekilde)", labelEn: "Adverb", pattern: "〜に", build: (b) => b + "に",
+    exJa: "〇してください。", exTr: "Lütfen 〜 yapın (〜leştirin).", exEn: "Please make it 〜." },
+  { id: "sa", labelTr: "İsimleşme (…lik)", labelEn: "Noun (-ness)", pattern: "〜さ", build: (b) => b + "さ",
+    exJa: "〇はどのくらい？", exTr: "〜liği ne kadar?", exEn: "How much is its 〜ness?" },
+  { id: "sou", labelTr: "…görünümlü", labelEn: "Looks", pattern: "〜そう", build: (b) => b + "そう",
+    exJa: "〇ですね。", exTr: "〜 görünüyor.", exEn: "It looks 〜." },
 ];
 
 // ---------------------------------------------------------------------------
@@ -413,19 +497,37 @@ export function conjugateJa(input: ConjInput): ConjResult {
   const notes: { tr: string; en: string }[] = [];
 
   const toForm = (
-    def: { id: string; labelTr: string; labelEn: string; pattern: string },
+    def: {
+      id: string;
+      labelTr: string;
+      labelEn: string;
+      pattern: string;
+      exJa?: string;
+      exTr?: string;
+      exEn?: string;
+    },
     surfaceForm: string,
     kanaForm: string | null
-  ): ConjForm => ({
-    id: def.id,
-    labelTr: def.labelTr,
-    labelEn: def.labelEn,
-    pattern: def.pattern,
-    surface: surfaceForm,
-    kana: kanaForm,
-    romaji: kanaForm ? toRomajiReading(kanaForm) : null,
-    furigana: deriveFuriganaJa(surfaceForm, kanaForm),
-  });
+  ): ConjForm => {
+    const furigana = deriveFuriganaJa(surfaceForm, kanaForm);
+    return {
+      id: def.id,
+      labelTr: def.labelTr,
+      labelEn: def.labelEn,
+      pattern: def.pattern,
+      surface: surfaceForm,
+      kana: kanaForm,
+      romaji: kanaForm ? toRomajiReading(kanaForm) : null,
+      furigana,
+      example: def.exJa
+        ? {
+            ja: def.exJa.replace("〇", furigana),
+            tr: def.exTr ?? "",
+            en: def.exEn ?? "",
+          }
+        : null,
+    };
+  };
 
   if (wordClass === "i-adjective" || wordClass === "na-adjective") {
     const base =
@@ -472,6 +574,10 @@ export function conjugateJa(input: ConjInput): ConjResult {
     ),
   }));
 
+  notes.push({
+    tr: "Japoncada ayrı bir gelecek zaman eki yok: sözlük/ます formu bağlama göre şimdiki VE gelecek zamanı karşılar (明日行く = yarın gideceğim).",
+    en: "Japanese has no separate future tense: the dictionary/ます form covers both present and future depending on context (明日行く = I will go tomorrow).",
+  });
   if (wordClass === "suru") {
     notes.push({
       tr: "Yeterlik biçiminde する yerine できる gelir: 勉強する → 勉強できる.",
