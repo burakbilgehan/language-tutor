@@ -87,7 +87,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/map", label: "lessons", match: ["/lesson", "/quest"] },
   { href: "/grammar", label: "grammar" },
-  { href: "/kana", label: "kana", jaOnly: true },
   { href: "/pinyin", label: "pinyin", langs: ["zh"] },
   { href: "/stroke", label: "stroke", jaOnly: true },
   // ja: conjugator, zh: aspect chart, nl: conjugator — all languages covered.

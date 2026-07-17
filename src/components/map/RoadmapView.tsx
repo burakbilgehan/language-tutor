@@ -131,6 +131,23 @@ export function RoadmapView() {
     return () => clearTimeout(t);
   }, [openLessonId]);
 
+  // The map renders empty while /api/roadmap loads, so the browser lands at
+  // scroll 0 on every visit. Persist the position and restore it once the
+  // first data arrives.
+  useEffect(() => {
+    const onScroll = () =>
+      sessionStorage.setItem("map-scroll", String(window.scrollY));
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    if (!data) return;
+    const saved = sessionStorage.getItem("map-scroll");
+    if (saved) window.scrollTo(0, Number(saved));
+    // only on the null→loaded transition, not on every poll refresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data == null]);
+
   const loadRoadmap = () =>
     fetch("/api/roadmap")
       .then(async (r) => {
