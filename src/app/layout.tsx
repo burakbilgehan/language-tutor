@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Nunito_Sans } from "next/font/google";
 import { SelectionTooltip } from "@/components/shared/SelectionTooltip";
+import { FloatingOverview } from "@/components/shared/FloatingOverview";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -37,6 +38,7 @@ export default function RootLayout({
       >
         {children}
         <SelectionTooltip />
+        <FloatingOverview />
       </body>
     </html>
   );
