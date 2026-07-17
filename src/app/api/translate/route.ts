@@ -10,7 +10,13 @@ import { stripFurigana } from "@/lib/jp";
 
 export const runtime = "nodejs";
 
-const BodySchema = z.object({ text: z.string().min(1).max(200) });
+const BodySchema = z.object({
+  text: z.string().min(1).max(200),
+  // cachedOnly: answer from the translations cache without ever calling the
+  // LLM — lets the selection tooltip show known per-char meanings instantly
+  // and for free (translation: null when the cache misses).
+  cachedOnly: z.boolean().optional(),
+});
 
 /**
  * Translate a selected snippet to Turkish. Cached per (language, text) in the
@@ -41,6 +47,9 @@ export async function POST(req: Request) {
     .sync();
   if (cached) {
     return NextResponse.json({ translation: cached.translationTr });
+  }
+  if (parsed.data.cachedOnly) {
+    return NextResponse.json({ translation: null });
   }
 
   // Cache note: translations are keyed on (targetLanguage, sourceText) only;

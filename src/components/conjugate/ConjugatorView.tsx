@@ -3,6 +3,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toHiragana } from "wanakana";
 import { conjugatorFor, type JaWordClass } from "@/lib/conjugation";
+import { JA_CHART_GROUPS } from "@/lib/conjugation/ja-charts";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { Furigana } from "@/components/shared/Furigana";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
@@ -301,6 +303,50 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
           </div>
         </>
       )}
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-bold">
+          {en ? "Reference charts" : "Cetveller"}
+        </h2>
+        {JA_CHART_GROUPS.map((g) => (
+          <div key={g.id} className="overflow-x-auto rounded-cozy bg-surface p-2 shadow-cozy sm:p-4">
+            <div className="mb-1 px-1 font-display text-sm font-bold">
+              {en ? g.labelEn : g.labelTr}
+            </div>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  {(en ? g.headersEn : g.headersTr).map((h) => (
+                    <th key={h} className="border border-ink/10 bg-background px-2 py-1.5 text-left text-xs font-semibold tracking-wider text-accent">
+                      {h.toUpperCase()}
+                    </th>
+                  ))}
+                  <th className="border border-ink/10 bg-background px-2 py-1.5 text-left text-xs font-semibold tracking-wider text-accent">
+                    {en ? "NOTE" : "NOT"}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.rows.map((r, ri) => (
+                  <tr key={ri} className="align-top">
+                    {r.cells.map((c, ci) => (
+                      <td key={ci} className="border border-ink/10 px-2 py-1.5 font-display">
+                        <Furigana text={c} />
+                        {g.id !== "kosoado" && ci === r.cells.length - 1 && (
+                          <SpeakButton text={c} lang="ja-JP" />
+                        )}
+                      </td>
+                    ))}
+                    <td className="border border-ink/10 px-2 py-1.5 text-xs text-ink-soft">
+                      {en ? r.noteEn : r.noteTr}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
