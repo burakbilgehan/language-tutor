@@ -201,29 +201,38 @@ export function regenerateLessonJob(nodeId: string): string {
 }
 
 /**
- * Fire lesson generation for the node(s) whose prereq is `nodeId`. Called when
- * a lesson is OPENED, so the successor generates while the learner works
- * through the current one (~minutes of head start) instead of only in the
- * completion→open gap. No extra LLM spend: the successor's lesson would be
- * generated anyway; this only moves it earlier. Errored lessons are skipped —
- * retries stay user-driven (opening the node itself), not poll-driven.
+ * Fire lesson generation for the successor chain of `nodeId`, `depth` links
+ * deep (default 3). Called when a lesson is OPENED: with a single-successor
+ * lookahead the learner could finish a lesson faster than the next one
+ * generates, so a 2-3 lesson buffer stays warm ahead of the unlock frontier
+ * (open 20 → 21, 22, 23 queued). No extra LLM spend: these lessons would be
+ * generated anyway; this only moves them earlier. Errored lessons are
+ * skipped — retries stay user-driven (opening the node itself), not
+ * poll-driven.
  */
-export function prefetchSuccessorLessons(nodeId: string) {
-  const successors = db.query.nodes
-    .findMany({
-      where: and(
-        eq(tables.nodes.prereqNodeId, nodeId),
-        eq(tables.nodes.nodeType, "main")
-      ),
-      columns: { id: true },
-    })
-    .sync();
-  for (const s of successors) {
-    const lesson = db.query.lessons
-      .findFirst({ where: eq(tables.lessons.nodeId, s.id) })
-      .sync();
-    if (lesson?.status === "error") continue;
-    ensureLessonJob(s.id);
+export function prefetchSuccessorLessons(nodeId: string, depth = 3) {
+  let frontier = [nodeId];
+  for (let d = 0; d < depth && frontier.length > 0; d++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      const successors = db.query.nodes
+        .findMany({
+          where: and(
+            eq(tables.nodes.prereqNodeId, id),
+            eq(tables.nodes.nodeType, "main")
+          ),
+          columns: { id: true },
+        })
+        .sync();
+      for (const s of successors) {
+        const lesson = db.query.lessons
+          .findFirst({ where: eq(tables.lessons.nodeId, s.id) })
+          .sync();
+        if (lesson?.status !== "error") ensureLessonJob(s.id);
+        next.push(s.id);
+      }
+    }
+    frontier = next;
   }
 }
 
