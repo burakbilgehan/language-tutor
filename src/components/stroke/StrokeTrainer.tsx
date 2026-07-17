@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import HanziWriter from "hanzi-writer";
 import { CozyButton } from "@/components/shared/CozyButton";
-import { STROKE_KANA, type KanaCell } from "@/lib/kana";
+import { GOJUON, DAKUTEN, GOJUON_HEADERS, STROKE_KANA, type KanaCell } from "@/lib/kana";
 import type { KanjiContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
 
@@ -291,25 +291,59 @@ export function StrokeTrainer() {
         </div>
 
         {tab !== "kanji" ? (
-          <div className="grid grid-cols-8 gap-1.5 sm:grid-cols-10 lg:grid-cols-8">
-            {kanaCells.map((k) => {
-              const ch = tab === "hira" ? k.hira : k.kata;
-              return (
-                <button
-                  key={ch}
-                  lang="ja"
-                  onClick={() => pick(tab, ch)}
-                  title={k.romaji}
-                  className={`aspect-square rounded-xl text-lg transition-colors ${
-                    selected === ch
-                      ? "bg-accent-soft font-semibold"
-                      : "bg-surface shadow-cozy hover:bg-surface-2"
-                  }`}
-                >
-                  {ch}
-                </button>
-              );
-            })}
+          <div className="flex flex-col gap-3">
+            {[
+              ["Gojūon", GOJUON],
+              ["Dakuten ゛゜", DAKUTEN],
+            ].map(([title, rows]) => (
+              <div key={title as string} className="rounded-cozy bg-surface p-2 shadow-cozy">
+                <div className="mb-1 px-1 text-xs font-semibold tracking-wider text-accent">
+                  {(title as string).toUpperCase()}
+                </div>
+                <table className="w-full border-separate border-spacing-0.5">
+                  <thead>
+                    <tr>
+                      <th className="w-5" />
+                      {GOJUON_HEADERS.map((h) => (
+                        <th key={h} className="pb-0.5 text-center text-[0.6rem] font-semibold text-accent">
+                          {h.toUpperCase()}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(rows as typeof GOJUON).map((row, ri) => (
+                      <tr key={ri}>
+                        <td className="pr-1 text-right text-[0.6rem] font-semibold text-accent">
+                          {row.label.toUpperCase()}
+                        </td>
+                        {row.cells.map((cell, ci) => {
+                          if (!cell) return <td key={ci} />;
+                          const ch = tab === "hira" ? cell.hira : cell.kata;
+                          return (
+                            <td key={ci} className="p-0">
+                              <button
+                                lang="ja"
+                                onClick={() => pick(tab, ch)}
+                                title={cell.romaji}
+                                className={`flex w-full flex-col items-center rounded-lg py-0.5 leading-tight transition-colors ${
+                                  selected === ch
+                                    ? "bg-accent-soft font-semibold"
+                                    : "bg-background hover:bg-surface-2"
+                                }`}
+                              >
+                                <span className="text-base">{ch}</span>
+                                <span className="text-[0.55rem] text-ink-soft">{cell.romaji}</span>
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
         ) : kanjiList === null ? (
           <p className="p-4 text-center text-sm text-ink-soft">{t.loading}</p>

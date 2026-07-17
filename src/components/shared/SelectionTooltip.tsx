@@ -36,6 +36,7 @@ interface TipState {
   romaji: string | null;
   x: number;
   y: number;
+  below: boolean;
   kanji: KanjiInfo[];
   /** Whole-selection dictionary entry (compound reading + gloss), if any. */
   word: WordInfo | null;
@@ -57,13 +58,16 @@ export function SelectionTooltip() {
   // Monotonic token so a stale lookup/translation can't clobber a newer tip.
   const seq = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Japanese-only: romaji conversion (wanakana) and /api/kanji/lookup are
-  // meaningless for other languages — hanzi would match hasJapanese and
-  // produce garbage readings for a Chinese profile.
-  const isJa = useProfileMeta()?.targetLanguage === "ja";
+  // ja: romaji via wanakana + kanji dictionary lookup. zh: the reading comes
+  // straight from the pinyin ruby (wanakana would garble hanzi), and
+  // per-character meanings arrive with the translate click. Other languages
+  // have no CJK selection to annotate.
+  const lang = useProfileMeta()?.targetLanguage;
+  const isJa = lang === "ja";
+  const isCjk = isJa || lang === "zh";
 
   useEffect(() => {
-    if (!isJa) return;
+    if (!isCjk) return;
     const update = () => {
       const sel = window.getSelection();
       const raw = sel?.toString().trim() ?? "";
@@ -94,7 +98,8 @@ export function SelectionTooltip() {
       } catch {
         /* keep raw */
       }
-      const converted = toRomajiReading(phonetic);
+      // ja: kana→romaji. zh: the ruby-substituted string IS the pinyin.
+      const converted = isJa ? toRomajiReading(phonetic) : phonetic;
       const romaji = converted !== source ? converted : null;
       const hasKanji = KANJI_RE.test(source);
       if (!romaji && !hasKanji) {
@@ -104,16 +109,22 @@ export function SelectionTooltip() {
       }
       const rect = sel.getRangeAt(0).getBoundingClientRect();
       const token = ++seq.current;
+      // Clamp into the viewport; flip below the selection when the top is
+      // too close to the screen edge (tooltip is anchored bottom-up).
+      const x = Math.min(Math.max(rect.left + rect.width / 2, 170), window.innerWidth - 170);
+      const flipBelow = rect.top < 150;
       setTip({
         source,
         romaji,
-        x: rect.left + rect.width / 2,
-        y: rect.top,
+        x,
+        y: flipBelow ? rect.bottom + 8 : rect.top,
+        below: flipBelow,
         kanji: [],
         word: null,
         translation: null,
         translating: false,
       });
+      if (!isJa) return; // zh: per-char meanings come with the translate click
       fetch(`/api/kanji/lookup?text=${encodeURIComponent(source)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then(
@@ -152,12 +163,42 @@ export function SelectionTooltip() {
       document.removeEventListener("selectionchange", onSelectionChange);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [isJa]);
+  }, [isCjk, isJa]);
 
   const translate = () => {
     if (!tip || tip.translating || tip.translation) return;
     const token = seq.current;
     setTip((t) => (t ? { ...t, translating: true } : t));
+    // zh: alongside the whole-selection translation, fetch each distinct
+    // hanzi's own meaning (translations table caches per char — each char
+    // costs one LLM call ever). Compounds vs characters differ, so both
+    // views matter.
+    if (!isJa && tip.source.length > 1) {
+      const chars = [...new Set(tip.source.match(/[一-鿿]/g) ?? [])].slice(0, 6);
+      chars.forEach((ch) => {
+        fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: ch }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d: { translation: string } | null) => {
+            if (!d || seq.current !== token) return;
+            setTip((t) =>
+              t
+                ? {
+                    ...t,
+                    kanji: [
+                      ...t.kanji.filter((k) => k.char !== ch),
+                      { char: ch, reading: "", meaning: d.translation },
+                    ],
+                  }
+                : t
+            );
+          })
+          .catch(() => {});
+      });
+    }
     fetch("/api/translate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -189,8 +230,10 @@ export function SelectionTooltip() {
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none fixed z-50 max-w-xs -translate-x-1/2 -translate-y-full rounded-lg bg-ink px-3 py-1.5 text-sm text-background shadow-cozy"
-      style={{ left: tip.x, top: tip.y - 6 }}
+      className={`pointer-events-none fixed z-50 max-w-xs -translate-x-1/2 rounded-lg bg-ink px-3 py-1.5 text-sm text-background shadow-cozy ${
+        tip.below ? "" : "-translate-y-full"
+      }`}
+      style={{ left: tip.x, top: tip.below ? tip.y : tip.y - 6 }}
     >
       {tip.romaji && <div className="font-medium">{tip.romaji}</div>}
       {tip.word && (
