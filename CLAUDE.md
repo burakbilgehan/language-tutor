@@ -37,3 +37,9 @@ Next.js 15 (App Router, `src/`) + TS + Tailwind 4 + SQLite (Drizzle + better-sql
 
 ## Style
 Cozy warm palette (cream/terracotta/moss, tokens in `globals.css` `@theme`), Fraunces + Nunito Sans. UI copy via the i18n string tables (tr canonical). No purple gradients, no dashboard aesthetic.
+
+## Backlog
+İş takibi `tickets/` dizininde: dosya başına bir ticket (frontmatter:
+status/priority/effort/confidence/depends + bağlam), `tickets/INDEX.md`
+özet tablo. Ticket açarken/kapatırken index'i senkron tut; boş kalınca
+iş buradan çekilir. Yarım bırakılan her konuşma konusu ticket'a dönüşmeli.
