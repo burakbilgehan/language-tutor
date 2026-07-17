@@ -107,6 +107,10 @@ async function messages(opts: {
     .join("");
   if (!out) throw new LlmError("Anthropic yanıtında metin yok", text);
 
+  const secs = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(
+    `[llm] provider=anthropic-api host=${new URL(baseUrl).host} model=${model} tier=${opts.tier} purpose=${opts.purpose} ${secs}s`
+  );
   recordCall({
     purpose: opts.purpose,
     model,
