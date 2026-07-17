@@ -5,6 +5,7 @@ import HanziWriter from "hanzi-writer";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { GOJUON, DAKUTEN, GOJUON_HEADERS, STROKE_KANA, type KanaCell } from "@/lib/kana";
 import type { KanjiContent } from "@/lib/llm/schemas";
+import { withBase } from "@/lib/base-path";
 import { useStrings } from "@/lib/i18n/use-strings";
 import {
   kanjiList as kanjiList$,
@@ -127,7 +128,7 @@ export function StrokeTrainer() {
       drawingWidth: 18,
       showHintAfterMisses: 2,
       charDataLoader: (char: string) =>
-        fetch(`/strokes-data/${encodeURIComponent(char)}.json`).then((r) => {
+        fetch(withBase(`/strokes-data/${encodeURIComponent(char)}.json`)).then((r) => {
           if (!r.ok) throw new Error("stroke data missing");
           return r.json();
         }),
