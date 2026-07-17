@@ -7,7 +7,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
 import { answersMatch, stripFurigana } from "@/lib/jp";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { completeNodeApi } from "@/lib/client-api";
+import { completeNodeApi, questStart } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -66,16 +66,8 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
   useEffect(() => {
     if (startedRef.current) return; // guard double-invoke in dev StrictMode
     startedRef.current = true;
-    fetch(`/api/quests/${nodeId}/start`, { method: "POST" })
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json();
-          // 503 llm_unconfigured carries a human-readable message.
-          throw new Error(body.message ?? body.error ?? t.startFailed);
-        }
-        return r.json();
-      })
-      .then(setData)
+    questStart(nodeId)
+      .then((d) => setData(d as QuestData))
       .catch((e) => setError(e.message));
   }, [nodeId, t]);
 

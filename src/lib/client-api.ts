@@ -130,6 +130,315 @@ export async function stats(): Promise<ReturnType<typeof import("@/core/stats").
   return core.getStats(db);
 }
 
+/** Statikte henüz LLM yok: üretim gerektiren aksiyonlar bu mesajla düşer.
+ * Tarayıcı LLM katmanı (localStorage config + köprü/API) gelince kalkacak. */
+function staticLlmGate(): never {
+  throw new Error(
+    "Bu işlem LLM ister — statik modda tarayıcı LLM katmanı henüz bağlanmadı."
+  );
+}
+
+// ------------------------------------------------------------------ Kanji / Sözlük
+
+export async function kanjiList(): Promise<{
+  entries: { char: string; level: string; status: string; meaningsEn: string[] }[];
+}> {
+  if (!IS_STATIC) return fetchJson("/api/kanji");
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreK = await import("@/core/kanji");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const entries = coreK.listKanji(db, profile.targetLanguage);
+  persistSoon(); // seed yeni satır eklemiş olabilir
+  return { entries };
+}
+
+export async function kanjiDetail(char: string): Promise<{
+  char: string;
+  level: string;
+  onyomi: string[];
+  kunyomi: string[];
+  meaningsEn: string[];
+  status: string;
+  content: unknown | null;
+}> {
+  if (!IS_STATIC) return fetchJson(`/api/kanji/${encodeURIComponent(char)}`);
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreK = await import("@/core/kanji");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const entry = coreK.findKanji(db, profile.targetLanguage, char);
+  if (!entry) throw new Error("Kanji bulunamadı");
+  return {
+    char: entry.char,
+    level: entry.level,
+    onyomi: entry.onyomi,
+    kunyomi: entry.kunyomi,
+    meaningsEn: entry.meaningsEn,
+    status: entry.status,
+    content: entry.status === "ready" ? entry.content : null,
+  };
+}
+
+export type KanjiLookupResult = ReturnType<
+  typeof import("@/core/kanji").kanjiLookup
+>;
+
+export async function kanjiLookupApi(text: string): Promise<KanjiLookupResult> {
+  if (!IS_STATIC)
+    return fetchJson(`/api/kanji/lookup?text=${encodeURIComponent(text)}`);
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreK = await import("@/core/kanji");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  return coreK.kanjiLookup(db, profile.targetLanguage, text);
+}
+
+// ------------------------------------------------------------------ Overview / Chat / Çeviri
+
+export async function overview(): Promise<
+  ReturnType<typeof import("@/core/overview").getOverview>
+> {
+  if (!IS_STATIC) return fetchJson("/api/overview");
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreO = await import("@/core/overview");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  return coreO.getOverview(db, profile);
+}
+
+export async function chatHistoryApi(): Promise<{
+  sessionId: string | null;
+  messages: { role: string; content: string }[];
+}> {
+  if (!IS_STATIC) return fetchJson("/api/chat");
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreC = await import("@/core/chat");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) return { sessionId: null, messages: [] };
+  return coreC.chatHistory(db, profile.id);
+}
+
+export async function chatSend(body: {
+  sessionId: string | null;
+  message: string;
+}): Promise<{ sessionId: string; reply: string }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+  staticLlmGate();
+}
+
+export async function translateText(
+  text: string,
+  cachedOnly?: boolean
+): Promise<{ translation: string | null }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cachedOnly ? { text, cachedOnly: true } : { text }),
+    });
+  }
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreT = await import("@/core/translate");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) return { translation: null };
+  const normalized = coreT.normalizeTranslateText(text);
+  const cached = normalized
+    ? coreT.cachedTranslation(db, profile.targetLanguage, normalized)
+    : null;
+  if (cached || cachedOnly) return { translation: cached };
+  staticLlmGate(); // taze çeviri LLM ister
+}
+
+// ------------------------------------------------------------------ Quest
+
+export async function questStart(nodeId: string): Promise<{
+  node: { id: string; titleTr: string; xpReward: number };
+  quest: unknown;
+}> {
+  if (!IS_STATIC) {
+    return fetchJson(`/api/quests/${nodeId}/start`, { method: "POST" });
+  }
+  const { db } = await browserDb();
+  const coreQ = await import("@/core/quest");
+  const cached = coreQ.getQuestCached(db, nodeId);
+  if (cached.status === "notFound") throw new Error("Yan görev bulunamadı");
+  if (cached.status === "ready")
+    return { node: cached.node, quest: cached.quest };
+  staticLlmGate(); // taze görev üretimi LLM ister
+}
+
+// ------------------------------------------------------------------ Save (statik: tarayıcı imajı)
+
+export async function saveExportApi(): Promise<void> {
+  if (!IS_STATIC) {
+    window.location.href = "/api/save/export";
+    return;
+  }
+  const handle = await browserDb();
+  await handle.persistNow();
+  const bytes = handle.exportBytes();
+  const stamp = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([bytes.buffer as ArrayBuffer], {
+    type: "application/octet-stream",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `language-tutor-save-${stamp}.db`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function saveImportApi(file: File): Promise<void> {
+  if (!IS_STATIC) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/save/import", { method: "POST", body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? "Yüklenemedi");
+    return;
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Sunucu import'uyla aynı kontroller: SQLite başlığı + şema sürümü.
+  const header = new TextDecoder().decode(bytes.slice(0, 15));
+  if (header !== "SQLite format 3") {
+    throw new Error("Geçersiz kayıt dosyası (SQLite değil)");
+  }
+  const { SAVE_SCHEMA_VERSION } = await import("@/lib/save/version");
+  const initSqlJs = (await import("sql.js")).default;
+  const SQL = await initSqlJs({ locateFile: (f: string) => `/${f}` });
+  const probe = new SQL.Database(bytes);
+  try {
+    const res = probe.exec(
+      "SELECT value FROM save_meta WHERE key='schemaVersion'"
+    );
+    const version = Number(res[0]?.values?.[0]?.[0]);
+    if (version !== SAVE_SCHEMA_VERSION) {
+      throw new Error(
+        `Kayıt sürümü uyumsuz (dosya: v${version || "?"}, uygulama: v${SAVE_SCHEMA_VERSION})`
+      );
+    }
+  } finally {
+    probe.close();
+  }
+  const handle = await browserDb();
+  await handle.importBytes(bytes);
+}
+
+// ------------------------------------------------------------------ LLM gerektiren aksiyonlar (statik gate)
+
+export async function regenerateLesson(nodeId: string): Promise<void> {
+  if (!IS_STATIC) {
+    const res = await fetch(`/api/nodes/${nodeId}/regenerate`, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message ?? body.error ?? "Yenilenemedi");
+    }
+    return;
+  }
+  staticLlmGate();
+}
+
+export async function curriculumExtend(profileId: string): Promise<{ jobId?: string }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/curriculum/extend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId }),
+    });
+  }
+  staticLlmGate();
+}
+
+export async function grammarGenerate(slug: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch(`/api/grammar/${slug}`, { method: "POST" });
+    return;
+  }
+  staticLlmGate();
+}
+
+export async function grammarGenerateBatch(level?: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch("/api/grammar/generate-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level }),
+    });
+    return;
+  }
+  staticLlmGate();
+}
+
+export async function kanjiGenerate(char: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch(`/api/kanji/${encodeURIComponent(char)}`, { method: "POST" });
+    return;
+  }
+  staticLlmGate();
+}
+
+export async function kanjiGenerateBatch(level: string): Promise<{ queued: number }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/kanji/generate-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level }),
+    });
+  }
+  staticLlmGate();
+}
+
+
+export async function createProfileApi(
+  input: Record<string, unknown>
+): Promise<{ profile: import("@/core/profile").Profile | null }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  }
+  const handle = await browserDb();
+  const core = await import("@/core/profile");
+  if (core.findProfileByLanguage(handle.db, String(input.targetLanguage))) {
+    throw new Error(
+      "Bu dil için zaten bir profil var. Ayarlardan geçiş yapabilirsin."
+    );
+  }
+  const profile = core.createProfile(
+    handle.db,
+    input as Parameters<typeof core.createProfile>[1]
+  );
+  await handle.persistNow();
+  return { profile };
+}
+
+export async function curriculumGenerate(profileId: string): Promise<{ jobId?: string }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/curriculum/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId }),
+    });
+  }
+  staticLlmGate();
+}
+
 // ------------------------------------------------------------------ Gramer
 
 export interface GrammarTopicSummary {

@@ -6,6 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import { GeneratingScreen } from "./GeneratingScreen";
 import { pick } from "@/lib/i18n";
+import { profileData, createProfileApi, curriculumGenerate } from "@/lib/client-api";
 import {
   GOAL_OPTIONS,
   INTEREST_OPTIONS,
@@ -170,24 +171,14 @@ export function OnboardingWizard() {
     setError(null);
     const t = pick(S, draft.uiLanguage);
     try {
-      const profileRes = await fetch("/api/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      if (!profileRes.ok) {
-        const body = await profileRes.json().catch(() => null);
-        throw new Error(body?.error ?? t.profileSaveFailed);
-      }
-      const { profile } = await profileRes.json();
+      const { profile } = await createProfileApi(
+        draft as unknown as Record<string, unknown>
+      );
+      if (!profile) throw new Error(t.profileSaveFailed);
 
-      const genRes = await fetch("/api/curriculum/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId: profile.id }),
-      });
-      if (!genRes.ok) throw new Error(t.curriculumStartFailed);
-      const { jobId } = await genRes.json();
+      const gen = await curriculumGenerate(profile.id);
+      const jobId = gen.jobId;
+      if (!jobId) throw new Error(t.curriculumStartFailed);
       localStorage.setItem("curriculumJobId", jobId);
       setJobId(jobId);
     } catch (err) {

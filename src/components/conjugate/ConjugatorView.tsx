@@ -7,6 +7,7 @@ import { JA_CHART_GROUPS } from "@/lib/conjugation/ja-charts";
 import { SpeakButton } from "@/components/shared/SpeakButton";
 import { Furigana } from "@/components/shared/Furigana";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { kanjiLookupApi } from "@/lib/client-api";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 
 const S = {
@@ -71,8 +72,7 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
     if (!hasKanji || readingTouched || !surface || surface === lookedUpFor.current) return;
     const timer = setTimeout(() => {
       lookedUpFor.current = surface;
-      fetch(`/api/kanji/lookup?text=${encodeURIComponent(surface)}`)
-        .then((r) => (r.ok ? r.json() : null))
+      kanjiLookupApi(surface)
         .then((data) => {
           if (data?.word?.reading && !readingTouched) {
             setReading(data.word.reading);

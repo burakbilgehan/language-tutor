@@ -7,6 +7,7 @@ import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { chatPrompt } from "@/lib/llm/prompts/chat";
 import { requireLlm } from "@/lib/llm/require-llm";
+import { chatHistory } from "@/core/chat";
 
 export const runtime = "nodejs";
 
@@ -20,21 +21,7 @@ export async function GET() {
   // Latest session's history, so the chat page can restore it.
   const profile = getActiveProfile();
   if (!profile) return NextResponse.json({ sessionId: null, messages: [] });
-  const session = db.query.chatSessions
-    .findFirst({
-      where: eq(tables.chatSessions.profileId, profile.id),
-      orderBy: [asc(tables.chatSessions.createdAt)],
-    })
-    .sync();
-  if (!session) return NextResponse.json({ sessionId: null, messages: [] });
-  const messages = db.query.chatMessages
-    .findMany({
-      where: eq(tables.chatMessages.sessionId, session.id),
-      orderBy: [asc(tables.chatMessages.createdAt)],
-    })
-    .sync()
-    .map((m) => ({ role: m.role, content: m.content }));
-  return NextResponse.json({ sessionId: session.id, messages });
+  return NextResponse.json(chatHistory(db, profile.id));
 }
 
 export async function POST(req: Request) {

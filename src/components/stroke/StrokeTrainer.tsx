@@ -6,6 +6,12 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { GOJUON, DAKUTEN, GOJUON_HEADERS, STROKE_KANA, type KanaCell } from "@/lib/kana";
 import type { KanjiContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
+import {
+  kanjiList as kanjiList$,
+  kanjiDetail,
+  kanjiGenerate,
+  kanjiGenerateBatch,
+} from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -121,7 +127,7 @@ export function StrokeTrainer() {
       drawingWidth: 18,
       showHintAfterMisses: 2,
       charDataLoader: (char: string) =>
-        fetch(`/api/strokes/${encodeURIComponent(char)}`).then((r) => {
+        fetch(`/strokes-data/${encodeURIComponent(char)}.json`).then((r) => {
           if (!r.ok) throw new Error("stroke data missing");
           return r.json();
         }),
@@ -159,9 +165,8 @@ export function StrokeTrainer() {
 
   useEffect(() => {
     if (tab !== "kanji" || kanjiList) return;
-    fetch("/api/kanji")
-      .then((r) => r.json())
-      .then((d) => setKanjiList(d.entries ?? []))
+    kanjiList$()
+      .then((d) => setKanjiList((d.entries ?? []) as KanjiListItem[]))
       .catch(() => setKanjiList([]));
   }, [tab, kanjiList]);
 
@@ -171,20 +176,15 @@ export function StrokeTrainer() {
     if (tab !== "kanji" || !kanjiList?.some((k) => k.status === "generating"))
       return;
     const t = setTimeout(() => {
-      fetch("/api/kanji")
-        .then((r) => r.json())
-        .then((d) => setKanjiList(d.entries ?? []))
+      kanjiList$()
+        .then((d) => setKanjiList((d.entries ?? []) as KanjiListItem[]))
         .catch(() => {});
     }, 5000);
     return () => clearTimeout(t);
   }, [tab, kanjiList]);
 
   const generateLevel = async (level: string) => {
-    await fetch("/api/kanji/generate-batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level }),
-    });
+    await kanjiGenerateBatch(level).catch(() => {});
     setKanjiList(
       (list) =>
         list?.map((k) =>
@@ -199,9 +199,7 @@ export function StrokeTrainer() {
 
   const loadDetail = useCallback(async (char: string) => {
     try {
-      const res = await fetch(`/api/kanji/${encodeURIComponent(char)}`);
-      if (!res.ok) return;
-      const d: KanjiDetail = await res.json();
+      const d = (await kanjiDetail(char)) as KanjiDetail;
       setDetail(d);
       if (d.status === "generating") {
         pollRef.current = setTimeout(() => loadDetail(char), 3000);
@@ -221,9 +219,7 @@ export function StrokeTrainer() {
   }, [selected, isKanji, loadDetail]);
 
   const generate = async () => {
-    await fetch(`/api/kanji/${encodeURIComponent(selected)}`, {
-      method: "POST",
-    });
+    await kanjiGenerate(selected).catch(() => {});
     setDetail((d) => (d ? { ...d, status: "generating" } : d));
     setKanjiList(
       (list) =>

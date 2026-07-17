@@ -7,7 +7,7 @@ import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
 import { requireLlm } from "@/lib/llm/require-llm";
-import { stripFurigana } from "@/lib/jp";
+import { cachedTranslation, normalizeTranslateText } from "@/core/translate";
 
 export const runtime = "nodejs";
 
@@ -33,21 +33,14 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Geçersiz istek" }, { status: 400 });
   }
-  const text = stripFurigana(parsed.data.text).replace(/\s+/g, " ").trim();
+  const text = normalizeTranslateText(parsed.data.text);
   if (!text) {
     return NextResponse.json({ error: "Boş metin" }, { status: 400 });
   }
 
-  const cached = db.query.translations
-    .findFirst({
-      where: and(
-        eq(tables.translations.targetLanguage, profile.targetLanguage),
-        eq(tables.translations.sourceText, text)
-      ),
-    })
-    .sync();
+  const cached = cachedTranslation(db, profile.targetLanguage, text);
   if (cached) {
-    return NextResponse.json({ translation: cached.translationTr });
+    return NextResponse.json({ translation: cached });
   }
   if (parsed.data.cachedOnly) {
     return NextResponse.json({ translation: null });

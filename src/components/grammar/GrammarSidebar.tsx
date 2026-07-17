@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLlmStatus } from "@/lib/llm-status";
-import { grammarTopics } from "@/lib/client-api";
+import { grammarTopics, grammarGenerate, grammarGenerateBatch } from "@/lib/client-api";
 
 interface TopicDto {
   slug: string;
@@ -182,7 +182,7 @@ export function GrammarSidebar() {
           )
         : prev
     );
-    await fetch(`/api/grammar/${t.slug}`, { method: "POST" });
+    await grammarGenerate(t.slug).catch(() => {});
     if (pollRef.current) clearTimeout(pollRef.current);
     pollRef.current = setTimeout(load, 3000);
   };
@@ -190,11 +190,7 @@ export function GrammarSidebar() {
   const generateAll = async (level?: string) => {
     setBatchBusy(true);
     try {
-      await fetch("/api/grammar/generate-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level }),
-      });
+      await grammarGenerateBatch(level).catch(() => {});
       await load();
     } finally {
       setBatchBusy(false);
