@@ -142,12 +142,62 @@ async function browserGen() {
   return gen;
 }
 
-/** Statikte henüz LLM yok: üretim gerektiren aksiyonlar bu mesajla düşer.
- * Tarayıcı LLM katmanı (localStorage config + köprü/API) gelince kalkacak. */
-function staticLlmGate(): never {
-  throw new Error(
-    "Bu işlem LLM ister — statik modda tarayıcı LLM katmanı henüz bağlanmadı."
-  );
+/** Statikte ders üretimi tekilleştirme (sunucudaki ensureLessonJob muadili):
+ * prefetch + kullanıcının dersi açması aynı anda gelirse tek üretime iner. */
+const lessonGenInFlight = new Map<string, Promise<void>>();
+function ensureLessonGen(nodeId: string): Promise<void> {
+  const existing = lessonGenInFlight.get(nodeId);
+  if (existing) return existing;
+  const p = (async () => {
+    const gen = await browserGen();
+    const { db, persistSoon } = await browserDb();
+    const coreG = await import("@/core/llm-gen");
+    await coreG.generateLessonContent(db, gen, nodeId);
+    persistSoon();
+  })().finally(() => lessonGenInFlight.delete(nodeId));
+  lessonGenInFlight.set(nodeId, p);
+  return p;
+}
+
+/** Statik auto-extend (sunucudaki maybeAutoExtend muadili): zincirin kuyruğu
+ * temizlendiyse sıradaki seviyeyi arkaplanda üretir; üretilen seviyeyi döner. */
+let chapterGenInFlight = false;
+async function maybeAutoExtendStatic(
+  nodeId: string,
+  profileId: string,
+  targetLanguage: string
+): Promise<string | null> {
+  if (chapterGenInFlight) return null;
+  const handle = await browserDb();
+  const coreR = await import("@/core/roadmap");
+  if (!coreR.isCurriculumTail(handle.db, nodeId)) return null;
+  const { eq } = await import("drizzle-orm");
+  const tables = await import("@/db/schema");
+  const curriculum = handle.db
+    .select()
+    .from(tables.curricula)
+    .where(eq(tables.curricula.profileId, profileId))
+    .limit(1)
+    .get();
+  if (!curriculum) return null;
+  const coreC = await import("@/core/curriculum-gen");
+  const { nextLevelFor } = await import("@/lib/curriculum/levels");
+  const top = coreC.topChapterLevel(handle.db, curriculum.id, targetLanguage);
+  const next = top ? nextLevelFor(targetLanguage, top) : null;
+  if (!next) return null;
+  chapterGenInFlight = true;
+  void (async () => {
+    try {
+      const gen = await browserGen();
+      await coreC.generateChapter(handle.db, gen, profileId, next);
+      await handle.persistNow();
+    } catch (err) {
+      console.warn("[auto-extend] bölüm üretimi hata:", err);
+    } finally {
+      chapterGenInFlight = false;
+    }
+  })();
+  return next;
 }
 
 // ------------------------------------------------------------------ Kanji / Sözlük
@@ -407,7 +457,28 @@ export async function curriculumExtend(profileId: string): Promise<{ jobId?: str
       body: JSON.stringify({ profileId }),
     });
   }
-  staticLlmGate();
+  const gen = await browserGen();
+  const handle = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreC = await import("@/core/curriculum-gen");
+  const { nextLevelFor } = await import("@/lib/curriculum/levels");
+  const { eq } = await import("drizzle-orm");
+  const tables = await import("@/db/schema");
+  const profile = coreP.getActiveProfile(handle.db);
+  if (!profile || profile.id !== profileId) throw new Error("Profil uyuşmadı");
+  const curriculum = handle.db
+    .select()
+    .from(tables.curricula)
+    .where(eq(tables.curricula.profileId, profileId))
+    .limit(1)
+    .get();
+  if (!curriculum) throw new Error("Müfredat yok");
+  const top = coreC.topChapterLevel(handle.db, curriculum.id, profile.targetLanguage);
+  const next = top ? nextLevelFor(profile.targetLanguage, top) : null;
+  if (!next) throw new Error("Uzatılacak seviye kalmadı");
+  await coreC.generateChapter(handle.db, gen, profileId, next);
+  await handle.persistNow();
+  return {};
 }
 
 export async function grammarGenerate(slug: string): Promise<void> {
@@ -437,7 +508,35 @@ export async function grammarGenerateBatch(level?: string): Promise<void> {
     });
     return;
   }
-  staticLlmGate();
+  // Statik: sıralı inline üretim (sekme açık kaldıkça sürer; UI zaten
+  // durum rozetlerini poll'luyor).
+  const gen = await browserGen();
+  const handle = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreG = await import("@/core/llm-gen");
+  const { eq, and, inArray } = await import("drizzle-orm");
+  const tables = await import("@/db/schema");
+  const profile = coreP.getActiveProfile(handle.db);
+  if (!profile) throw new Error("Profil yok");
+  const topics = handle.db
+    .select()
+    .from(tables.grammarTopics)
+    .where(
+      and(
+        eq(tables.grammarTopics.targetLanguage, profile.targetLanguage),
+        inArray(tables.grammarTopics.status, ["pending", "error"])
+      )
+    )
+    .all()
+    .filter((t) => !level || t.level === level);
+  for (const t of topics) {
+    try {
+      await coreG.generateGrammarContent(handle.db, gen, t.id);
+    } catch (err) {
+      console.warn("[batch] gramer üretimi hata:", t.slug, err);
+    }
+    handle.persistSoon();
+  }
 }
 
 export async function kanjiGenerate(char: string): Promise<void> {
@@ -466,7 +565,36 @@ export async function kanjiGenerateBatch(level: string): Promise<{ queued: numbe
       body: JSON.stringify({ level }),
     });
   }
-  staticLlmGate();
+  const gen = await browserGen();
+  const handle = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreG = await import("@/core/llm-gen");
+  const { eq, and, inArray } = await import("drizzle-orm");
+  const tables = await import("@/db/schema");
+  const profile = coreP.getActiveProfile(handle.db);
+  if (!profile) throw new Error("Profil yok");
+  const entries = handle.db
+    .select()
+    .from(tables.kanjiEntries)
+    .where(
+      and(
+        eq(tables.kanjiEntries.targetLanguage, profile.targetLanguage),
+        eq(tables.kanjiEntries.level, level),
+        inArray(tables.kanjiEntries.status, ["pending", "error"])
+      )
+    )
+    .all();
+  void (async () => {
+    for (const e of entries) {
+      try {
+        await coreG.generateKanjiContent(handle.db, gen, e.id);
+      } catch (err) {
+        console.warn("[batch] kanji üretimi hata:", e.char, err);
+      }
+      handle.persistSoon();
+    }
+  })();
+  return { queued: entries.length };
 }
 
 
@@ -503,7 +631,14 @@ export async function curriculumGenerate(profileId: string): Promise<{ jobId?: s
       body: JSON.stringify({ profileId }),
     });
   }
-  staticLlmGate();
+  // Statik: job kuyruğu yok — üretim inline (2-5 dk sürebilir; çağıran
+  // bekleme ekranını kendisi gösterir). jobId dönmez.
+  const gen = await browserGen();
+  const handle = await browserDb();
+  const coreC = await import("@/core/curriculum-gen");
+  await coreC.generateChapter(handle.db, gen, profileId, null);
+  await handle.persistNow();
+  return {};
 }
 
 // ------------------------------------------------------------------ Gramer
@@ -568,12 +703,9 @@ export async function openNodeApi(nodeId: string): Promise<
   if (result.status === "locked") throw new Error("Bu ders henüz kilitli");
   if (result.status === "needsGeneration") {
     // Tarayıcı LLM'iyle inline üret (1-3 dk sürebilir; UI hazırlanıyor
-    // ekranını gösterir), sonra cache'ten servis et.
-    const gen = await browserGen();
-    const coreG = await import("@/core/llm-gen");
-    const { persistSoon } = await browserDb();
-    await coreG.generateLessonContent(db, gen, nodeId);
-    persistSoon();
+    // ekranını gösterir), sonra cache'ten servis et. Prefetch aynı dersi
+    // üretiyorsa ensureLessonGen aynı promise'i paylaşır.
+    await ensureLessonGen(nodeId);
     const after = core.openNode(db, nodeId);
     if (after.status !== "ready") throw new Error("Ders üretimi tamamlanamadı");
     return after;
@@ -595,10 +727,38 @@ export async function completeNodeApi(nodeId: string): Promise<{
   const coreL = await import("@/core/lesson");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
+  const { eq } = await import("drizzle-orm");
+  const tables = await import("@/db/schema");
+  const node = db
+    .select()
+    .from(tables.nodes)
+    .where(eq(tables.nodes.id, nodeId))
+    .limit(1)
+    .get();
+  const wasCompleted = node?.status === "completed";
   const flow = coreL.completeNodeFlow(db, nodeId, profile.id);
   persistSoon();
   if (!flow) throw new Error("Ders bulunamadı");
-  return { ...flow, extendingLevel: null }; // auto-extend LLM katmanıyla gelecek
+
+  // LLM bağlıysa: açılan dersleri arkaplanda önden üret, kuyruk
+  // temizlendiyse sıradaki seviyeyi ekle (sunucudaki akışın muadili).
+  const { getBrowserGen } = await import("@/lib/llm/browser-provider");
+  let extendingLevel: string | null = null;
+  if (getBrowserGen()) {
+    for (const unlockedId of flow.unlockedNodeIds) {
+      void ensureLessonGen(unlockedId).catch((err) =>
+        console.warn("[prefetch] ders üretimi hata:", unlockedId, err)
+      );
+    }
+    if (!wasCompleted && node?.nodeType === "main") {
+      extendingLevel = await maybeAutoExtendStatic(
+        nodeId,
+        profile.id,
+        profile.targetLanguage
+      );
+    }
+  }
+  return { ...flow, extendingLevel };
 }
 
 export async function attemptApi(

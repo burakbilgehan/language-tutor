@@ -177,10 +177,13 @@ export function OnboardingWizard() {
       if (!profile) throw new Error(t.profileSaveFailed);
 
       const gen = await curriculumGenerate(profile.id);
-      const jobId = gen.jobId;
-      if (!jobId) throw new Error(t.curriculumStartFailed);
-      localStorage.setItem("curriculumJobId", jobId);
-      setJobId(jobId);
+      if (!gen.jobId) {
+        // Statik mod: üretim inline tamamlandı — direkt haritaya.
+        router.push("/map");
+        return;
+      }
+      localStorage.setItem("curriculumJobId", gen.jobId);
+      setJobId(gen.jobId);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.genericError);
     } finally {
