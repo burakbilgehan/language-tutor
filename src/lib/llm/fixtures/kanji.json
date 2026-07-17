@@ -1,0 +1,9 @@
+{
+  "meanings_tr": ["yemek", "yiyecek", "yemek yemek"],
+  "note_tr": "Tek başına isim olarak しょく (onyomi) okunur; fiil olarak 食べる（たべる） en yaygın kullanımdır.",
+  "examples": [
+    { "word": "食べる", "reading": "たべる", "meaning_tr": "yemek yemek" },
+    { "word": "食事", "reading": "しょくじ", "meaning_tr": "öğün, yemek" },
+    { "word": "食堂", "reading": "しょくどう", "meaning_tr": "yemekhane, lokanta" }
+  ]
+}
