@@ -62,7 +62,10 @@ export function SrsSession() {
   useEffect(() => {
     srsDue()
       .then((d) => setCards(d.cards ?? []))
-      .catch(() => setCards([]));
+      .catch((err) => {
+        console.error("[srs] due yüklenemedi:", err);
+        setCards([]);
+      });
   }, []);
 
   const rate = async (rating: 0 | 1 | 2 | 3) => {
