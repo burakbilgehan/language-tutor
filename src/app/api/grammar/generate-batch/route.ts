@@ -25,10 +25,15 @@ export async function POST(req: Request) {
     })
     .sync();
 
-  for (const topic of topics) {
-    const jobId = createJob("grammar", topic.id);
-    void runJob(jobId);
-  }
+  // Drive sequentially (like queueKanjiLevel): firing every job at once
+  // marks them all 'running' while they wait behind the CLI queue, and any
+  // process restart then turns the whole batch into stale-sweep casualties.
+  const jobIds = topics.map((t) => createJob("grammar", t.id));
+  void (async () => {
+    for (const id of jobIds) {
+      await runJob(id); // no-op for deduped ids already run elsewhere
+    }
+  })();
 
   return NextResponse.json({ count: topics.length });
 }
