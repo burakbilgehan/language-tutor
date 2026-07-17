@@ -15,6 +15,7 @@ const S = {
       stroke: "Yazım",
       conjugate: "Çekim",
       pinyin: "Pinyin",
+      exam: "Sınav",
       review: "Tekrar",
       chat: "Sohbet",
     },
@@ -31,6 +32,7 @@ const S = {
       stroke: "Writing",
       conjugate: "Conjugate",
       pinyin: "Pinyin",
+      exam: "Exams",
       review: "Review",
       chat: "Chat",
     },
@@ -91,6 +93,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/stroke", label: "stroke", jaOnly: true },
   // ja: conjugator, zh: aspect chart, nl: conjugator — all languages covered.
   { href: "/conjugate", label: "conjugate" },
+  { href: "/exam", label: "exam", langs: ["nl"] },
   { href: "/review", label: "review" },
   { href: "/chat", label: "chat" },
 ];
