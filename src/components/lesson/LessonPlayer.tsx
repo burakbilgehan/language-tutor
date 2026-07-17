@@ -44,6 +44,13 @@ const S = {
     wrong: "Olmadı 🍂",
     next: "Sıradaki →",
     finishLesson: "Dersi bitir 🎉",
+    selfCheckTitle: "Kendin değerlendir",
+    selfCheckHint:
+      "LLM bağlı değil — beklenen cevapla karşılaştır ve kendini puanla.",
+    selfCheckExpected: "Beklenen cevap",
+    selfCheckAlso: "Kabul edilen diğerleri",
+    selfCorrectBtn: "Doğru saydım ✓",
+    selfWrongBtn: "Yanlıştı ✗",
   },
   en: {
     openFailed: "Could not open",
@@ -78,6 +85,13 @@ const S = {
     wrong: "Not quite 🍂",
     next: "Next →",
     finishLesson: "Finish lesson 🎉",
+    selfCheckTitle: "Check it yourself",
+    selfCheckHint:
+      "No LLM connected — compare with the expected answer and grade yourself.",
+    selfCheckExpected: "Expected answer",
+    selfCheckAlso: "Also accepted",
+    selfCorrectBtn: "I got it right ✓",
+    selfWrongBtn: "I was wrong ✗",
   },
 };
 
@@ -162,7 +176,11 @@ export function LessonPlayer({
   const open = useCallback(async () => {
     try {
       const res = await fetch(`/api/nodes/${nodeId}/open`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? t.openFailed);
+      if (!res.ok) {
+        const body = await res.json();
+        // 503 llm_unconfigured carries a human-readable message.
+        throw new Error(body.message ?? body.error ?? t.openFailed);
+      }
       const body: OpenResponse = await res.json();
       if (stopped.current) return;
       setData(body);
@@ -389,21 +407,36 @@ function ExerciseCard({
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [grading, setGrading] = useState(false);
   const [gradeError, setGradeError] = useState<string | null>(null);
+  // LLM'siz mod: sunucu needsSelfCheck dönerse beklenen cevap gösterilir,
+  // kullanıcı kendini puanlar (ikinci POST selfVerdict ile).
+  const [selfCheck, setSelfCheck] = useState<{
+    answer: string;
+    acceptAlso: string[];
+  } | null>(null);
   const targetLanguage = useProfileMeta()?.targetLanguage;
 
-  const submit = async (value: string) => {
+  const submit = async (value: string, selfVerdict?: boolean) => {
     setGrading(true);
     setGradeError(null);
     try {
       const res = await fetch(`/api/exercises/${exercise.id}/attempt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ response: value }),
+        body: JSON.stringify(
+          selfVerdict === undefined
+            ? { response: value }
+            : { response: value, selfVerdict }
+        ),
       });
       const body = await res.json();
       if (!res.ok) {
-        throw new Error(body?.error ?? t.gradeFailed);
+        throw new Error(body?.message ?? body?.error ?? t.gradeFailed);
       }
+      if (body.needsSelfCheck) {
+        setSelfCheck(body.expected);
+        return;
+      }
+      setSelfCheck(null);
       setResult(body);
     } catch (e) {
       setGradeError(
@@ -507,7 +540,45 @@ function ExerciseCard({
         )}
       </div>
 
-      {gradeError && !result && (
+      {selfCheck && !result && (
+        <div className="mt-4 rounded-xl bg-surface-2 px-4 py-3">
+          <div className="font-semibold">{t.selfCheckTitle}</div>
+          <p className="mt-1 text-xs text-ink-soft">{t.selfCheckHint}</p>
+          <div className="mt-3 rounded-lg bg-background p-3">
+            <div className="text-xs font-semibold text-ink-soft">
+              {t.selfCheckExpected}
+            </div>
+            <div className="mt-1 text-lg">
+              <Furigana text={selfCheck.answer} />
+            </div>
+            {selfCheck.acceptAlso.length > 0 && (
+              <div className="mt-2 text-sm text-ink-soft">
+                {t.selfCheckAlso}: {selfCheck.acceptAlso.join(" ・ ")}
+              </div>
+            )}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <CozyButton
+              variant="soft"
+              className="px-4 py-2 text-sm"
+              disabled={grading}
+              onClick={() => submit(response, true)}
+            >
+              {t.selfCorrectBtn}
+            </CozyButton>
+            <CozyButton
+              variant="ghost"
+              className="px-4 py-2 text-sm"
+              disabled={grading}
+              onClick={() => submit(response, false)}
+            >
+              {t.selfWrongBtn}
+            </CozyButton>
+          </div>
+        </div>
+      )}
+
+      {gradeError && !result && !selfCheck && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-danger/10 px-4 py-3">
           <p className="text-sm">🍂 {gradeError}</p>
           <div className="flex gap-2">

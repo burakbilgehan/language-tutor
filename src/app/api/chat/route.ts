@@ -6,6 +6,7 @@ import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { chatPrompt } from "@/lib/llm/prompts/chat";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const gate = requireLlm();
+  if (gate) return gate;
   const parsed = Input.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "message gerekli" }, { status: 400 });

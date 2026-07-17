@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getProvider, LlmAuthError } from "@/lib/llm/provider";
+import { llmConfigured, effectiveMode, cliAllowed } from "@/lib/llm/config";
 
 export const runtime = "nodejs";
+
+/** Cheap availability probe — no LLM call. Drives client UI gating. */
+export function GET() {
+  return NextResponse.json({
+    configured: llmConfigured(),
+    mode: effectiveMode(),
+    cliAllowed: cliAllowed(),
+  });
+}
 
 export async function POST() {
   const started = Date.now();

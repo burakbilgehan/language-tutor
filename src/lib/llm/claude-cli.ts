@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
-import { z } from "zod";
 import {
   type LlmProvider,
   type GenerateJsonOptions,
@@ -9,13 +8,16 @@ import {
   type ModelTier,
   LlmError,
   LlmAuthError,
-  LlmParseError,
   LlmTimeoutError,
   modelForTier,
 } from "./provider";
 import { enqueue } from "./queue";
-
-const DEFAULT_TIMEOUT_MS = 120_000;
+import {
+  DEFAULT_TIMEOUT_MS,
+  recordCall,
+  runJsonWithRetry,
+  schemaToJsonSchema,
+} from "./shared";
 
 interface CliEnvelope {
   type?: string;
@@ -23,26 +25,6 @@ interface CliEnvelope {
   result?: string;
   total_cost_usd?: number;
   usage?: { input_tokens?: number; output_tokens?: number };
-}
-
-function recordCall(row: {
-  purpose: string;
-  model: string;
-  tier: ModelTier;
-  durationMs: number;
-  costUsd: number;
-  inputTokens?: number;
-  outputTokens?: number;
-}) {
-  // Lazy import: keeps the provider usable from plain tsx scripts too.
-  import("@/db")
-    .then(({ db, tables }) =>
-      db
-        .insert(tables.llmCalls)
-        .values({ id: crypto.randomUUID(), ...row })
-        .run()
-    )
-    .catch((err) => console.warn("[llm] usage kaydedilemedi:", err));
 }
 
 function workdir(): string {
@@ -161,60 +143,26 @@ function runCli(opts: {
   });
 }
 
-/** Strip markdown fences / surrounding prose, keep the first JSON value. */
-function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const body = fenced ? fenced[1] : text;
-  const start = body.search(/[{[]/);
-  if (start === -1) return body.trim();
-  const open = body[start];
-  const close = open === "{" ? "}" : "]";
-  const end = body.lastIndexOf(close);
-  return end > start ? body.slice(start, end + 1) : body.slice(start);
-}
-
 export class ClaudeCliProvider implements LlmProvider {
   async generateJson<T>(opts: GenerateJsonOptions<T>): Promise<T> {
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     // CLI's validator doesn't accept the draft-2020-12 $schema marker.
-    const jsonSchema = z.toJSONSchema(opts.schema as z.ZodType<T>, {
-      target: "draft-7",
-    }) as Record<string, unknown>;
-    delete jsonSchema.$schema;
+    const jsonSchema = schemaToJsonSchema(opts.schema);
 
-    return enqueue(async () => {
-      let raw = await runCli({
-        prompt: opts.prompt,
-        system: opts.system,
-        tier: opts.tier,
-        purpose: opts.fixtureKey,
-        jsonSchema,
-        timeoutMs,
-      });
-
-      for (let attempt = 0; ; attempt++) {
-        const parsed = opts.schema.safeParse(
-          tryJsonParse(extractJson(raw))
-        );
-        if (parsed.success) return parsed.data;
-        if (attempt >= 1) {
-          throw new LlmParseError(
-            `LLM çıktısı şemaya uymadı: ${parsed.error.message}`,
-            raw
-          );
-        }
-        raw = await runCli({
-          prompt:
-            opts.prompt +
-            `\n\nÖnceki çıktın şemaya uymadı. Hatalar: ${parsed.error.message}\nSADECE geçerli JSON döndür, başka hiçbir şey yazma.`,
-          system: opts.system,
-          tier: opts.tier,
-          purpose: `${opts.fixtureKey}-retry`,
-          jsonSchema,
-          timeoutMs,
-        });
-      }
-    }, { urgent: opts.urgent });
+    return enqueue(
+      () =>
+        runJsonWithRetry(opts, (prompt, isRetry) =>
+          runCli({
+            prompt,
+            system: opts.system,
+            tier: opts.tier,
+            purpose: isRetry ? `${opts.fixtureKey}-retry` : opts.fixtureKey,
+            jsonSchema,
+            timeoutMs,
+          })
+        ),
+      { urgent: opts.urgent }
+    );
   }
 
   async generateText(opts: GenerateTextOptions): Promise<string> {
@@ -230,13 +178,5 @@ export class ClaudeCliProvider implements LlmProvider {
         }),
       { urgent: opts.urgent }
     );
-  }
-}
-
-function tryJsonParse(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
   }
 }

@@ -6,6 +6,7 @@ import {
   prefetchSuccessorLessons,
   recoverStaleJobs,
 } from "@/lib/jobs";
+import { llmConfigured } from "@/lib/llm/config";
 
 export const runtime = "nodejs";
 
@@ -70,8 +71,20 @@ export async function POST(
     });
   }
 
-  // Not ready → ensure a generation job is running (deduped centrally in
-  // createJob) and tell the client to poll.
+  // Not ready → without an LLM the generation job can't run; return an
+  // explicit state instead of an eternal "generating" poll.
+  if (!llmConfigured()) {
+    return NextResponse.json(
+      {
+        error: "llm_unconfigured",
+        message:
+          "Bu ders henüz üretilmemiş ve LLM sağlayıcısı yapılandırılmamış. Ayarlar → LLM Sağlayıcı bölümüne bak.",
+      },
+      { status: 503 }
+    );
+  }
+  // Ensure a generation job is running (deduped centrally in createJob) and
+  // tell the client to poll.
   const jobId = ensureLessonJob(nodeId);
   return NextResponse.json({ status: "generating", jobId });
 }

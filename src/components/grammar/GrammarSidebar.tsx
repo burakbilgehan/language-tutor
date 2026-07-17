@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLlmStatus } from "@/lib/llm-status";
 
 interface TopicDto {
   slug: string;
@@ -141,6 +142,7 @@ const CATEGORY_ORDER = [
 
 export function GrammarSidebar() {
   const s = useStrings(S);
+  const llm = useLlmStatus();
   const pathname = usePathname();
   const activeSlug = pathname.startsWith("/grammar/")
     ? decodeURIComponent(pathname.slice("/grammar/".length))
@@ -171,6 +173,7 @@ export function GrammarSidebar() {
   const generateOne = async (e: React.MouseEvent, t: TopicDto) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!llm.configured) return; // LLM'siz: hazırlama tetiklenmez
     if (t.status === "ready" || t.status === "generating") return;
     setTopics((prev) =>
       prev
@@ -274,7 +277,7 @@ export function GrammarSidebar() {
               <span className="text-xs font-normal text-ink-soft">
                 {readyCount}/{all.length}
               </span>
-              {pendingCount > 0 && (
+              {pendingCount > 0 && llm.configured && (
                 <button
                   disabled={batchBusy}
                   onClick={(e) => {
@@ -329,7 +332,8 @@ export function GrammarSidebar() {
         );
       })}
 
-      {topics.some((t) => t.status === "pending" || t.status === "error") && (
+      {topics.some((t) => t.status === "pending" || t.status === "error") &&
+        llm.configured && (
         <button
           disabled={batchBusy}
           onClick={() => generateAll(levelFilter ?? undefined)}

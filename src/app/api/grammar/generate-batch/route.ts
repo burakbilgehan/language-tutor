@@ -3,11 +3,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
 /** Enqueue generation for every pending/errored topic (optionally scoped to one level). */
 export async function POST(req: Request) {
+  const gate = requireLlm();
+  if (gate) return gate;
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {

@@ -10,6 +10,7 @@ import {
   ensureChaptersBackfilled,
 } from "@/lib/jobs";
 import { nextLevelFor } from "@/lib/curriculum/levels";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,8 @@ export const runtime = "nodejs";
  * so we never fire several 2-5 min opus jobs at once.
  */
 export async function POST(req: Request) {
+  const gate = requireLlm();
+  if (gate) return gate;
   recoverStaleJobs();
   const parsed = z
     .object({ profileId: z.string() })

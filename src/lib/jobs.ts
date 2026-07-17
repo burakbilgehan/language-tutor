@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getProvider, LlmError } from "@/lib/llm/provider";
+import { llmConfigured } from "@/lib/llm/config";
 import {
   CurriculumSchema,
   GrammarTopicSchema,
@@ -173,6 +174,9 @@ export function ensureLessonJob(nodeId: string): string | null {
     .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
     .sync();
   if (lesson?.status === "ready" && lesson.content) return null;
+  // No LLM configured → don't enqueue jobs that would only error. Callers
+  // (open route) surface an explicit "LLM gerekli" state instead.
+  if (!llmConfigured()) return null;
 
   const jobId = createJob("lesson", nodeId);
   void runJob(jobId); // no-op if the returned job is already running
@@ -211,6 +215,7 @@ export function regenerateLessonJob(nodeId: string): string {
  * poll-driven.
  */
 export function prefetchSuccessorLessons(nodeId: string, depth = 3) {
+  if (!llmConfigured()) return; // no LLM → no background error-job spam
   let frontier = [nodeId];
   for (let d = 0; d < depth && frontier.length > 0; d++) {
     const next: string[] = [];
@@ -250,6 +255,7 @@ export function queueKanjiLevel(
   level: string,
   includeErrors: boolean
 ): number {
+  if (!llmConfigured()) return 0;
   const statuses = includeErrors ? ["pending", "error"] : ["pending"];
   const entries = db.query.kanjiEntries
     .findMany({
@@ -282,6 +288,7 @@ export function queueKanjiLevel(
  * dead ones. Returns how many jobs were queued.
  */
 export function queueMissingLessons(profileId: string): number {
+  if (!llmConfigured()) return 0;
   const curriculum = db.query.curricula
     .findFirst({ where: eq(tables.curricula.profileId, profileId) })
     .sync();

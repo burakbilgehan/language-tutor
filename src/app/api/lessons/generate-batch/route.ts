@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { queueMissingLessons, recoverStaleJobs } from "@/lib/jobs";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,8 @@ export const runtime = "nodejs";
  * active profile, so any language's lessons can be prepared without switching.
  */
 export async function POST(req: Request) {
+  const gate = requireLlm();
+  if (gate) return gate;
   recoverStaleJobs();
   const parsed = z
     .object({ profileId: z.string() })

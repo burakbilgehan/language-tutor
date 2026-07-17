@@ -165,7 +165,9 @@ export const attempts = sqliteTable("attempts", {
   isCorrect: integer("is_correct", { mode: "boolean" }),
   score: integer("score"),
   feedbackTr: text("feedback_tr"),
-  gradedBy: text("graded_by", { enum: ["deterministic", "llm"] }).notNull(),
+  // "self" = LLM'siz self-check: beklenen cevap gösterildi, kullanıcı kendini
+  // puanladı. Enum TS-seviyesi (SQLite CHECK üretmez) — DB şekli değişmez.
+  gradedBy: text("graded_by", { enum: ["deterministic", "llm", "self"] }).notNull(),
   createdAt: createdAt(),
 });
 

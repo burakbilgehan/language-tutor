@@ -67,7 +67,11 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
     startedRef.current = true;
     fetch(`/api/quests/${nodeId}/start`, { method: "POST" })
       .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json()).error ?? t.startFailed);
+        if (!r.ok) {
+          const body = await r.json();
+          // 503 llm_unconfigured carries a human-readable message.
+          throw new Error(body.message ?? body.error ?? t.startFailed);
+        }
         return r.json();
       })
       .then(setData)
