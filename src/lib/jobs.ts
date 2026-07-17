@@ -259,6 +259,47 @@ export function queueKanjiLevel(
   return jobIds.length;
 }
 
+/**
+ * Queue lesson generation for every main node of a profile that doesn't have
+ * a ready lesson yet. Same sequential driving as queueKanjiLevel so the stale
+ * sweep doesn't kill the tail of the batch. Explicit user action, so errored
+ * lessons ARE retried (unlike prefetch). Nodes stuck in "generating" with no
+ * in-flight job are recovered too: createJob dedupes live jobs and re-enqueues
+ * dead ones. Returns how many jobs were queued.
+ */
+export function queueMissingLessons(profileId: string): number {
+  const curriculum = db.query.curricula
+    .findFirst({ where: eq(tables.curricula.profileId, profileId) })
+    .sync();
+  if (!curriculum) return 0;
+
+  const rows = db
+    .select({ nodeId: tables.nodes.id, lessonStatus: tables.lessons.status })
+    .from(tables.nodes)
+    .innerJoin(tables.units, eq(tables.nodes.unitId, tables.units.id))
+    .leftJoin(tables.lessons, eq(tables.lessons.nodeId, tables.nodes.id))
+    .where(
+      and(
+        eq(tables.units.curriculumId, curriculum.id),
+        eq(tables.nodes.nodeType, "main")
+      )
+    )
+    .orderBy(asc(tables.units.position), asc(tables.nodes.position))
+    .all();
+
+  const jobIds = rows
+    .filter((r) => r.lessonStatus !== "ready")
+    .map((r) => createJob("lesson", r.nodeId));
+  if (jobIds.length === 0) return 0;
+
+  void (async () => {
+    for (const id of jobIds) {
+      await runJob(id); // no-op for deduped ids already run elsewhere
+    }
+  })();
+  return jobIds.length;
+}
+
 export function getJob(id: string) {
   return db.query.generationJobs
     .findFirst({ where: eq(tables.generationJobs.id, id) })
