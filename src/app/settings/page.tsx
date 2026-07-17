@@ -3,18 +3,90 @@
 import { useEffect, useRef, useState } from "react";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
+import { ProfileSection } from "@/components/settings/ProfileSection";
+import { useStrings } from "@/lib/i18n/use-strings";
 
-interface ProfileDto {
-  displayName: string;
-  targetLanguage: string;
-  selfLevel: string;
-  minutesPerWeek: number;
-  goals: string[];
-  interests: string[];
-}
+const S = {
+  tr: {
+    title: "Ayarlar",
+    appearance: "Görünüm",
+    lightTheme: "☀️ Açık tema",
+    darkTheme: "🌙 Koyu tema",
+    llmSpend: "LLM Harcaması",
+    today: "Bugün",
+    total: "Toplam",
+    callsParen: (n: number) => `(${n} çağrı)`,
+    noCalls: "Henüz kayıtlı çağrı yok.",
+    callBreakdown: "Çağrı dağılımı",
+    callsCount: (n: number) => `${n} çağrı`,
+    billingNote:
+      "Max aboneliği kullanıldığı için bu tutar faturalandırılmaz — API ile yapılsaydı ne tutacağını gösterir (CLI'ın raporladığı değer).",
+    llmConnection: "LLM Bağlantısı",
+    connBefore:
+      "Claude CLI üzerinden Max aboneliğinle çalışır. Sorun yaşarsan terminalde",
+    connAfter: "çalıştırıp giriş yaptığından emin ol.",
+    checking: "Kontrol ediliyor...",
+    testConnection: "Bağlantıyı test et",
+    healthOk: (s: string) => `✅ Bağlantı sağlıklı (${s}s)`,
+    connectionIssue: "Bağlantı sorunu",
+    serverUnreachable: "❌ Sunucuya ulaşılamadı",
+    saveTitle: "Kayıt ve Yedekleme",
+    saveDesc:
+      "Tüm ilerlemeni tek dosyaya indir, başka bir bilgisayarda yükleyip kaldığın yerden devam et. Dosyayı Drive veya USB ile taşıyabilirsin.",
+    download: "⬇️ Kaydı indir",
+    upload: "⬆️ Kaydı yükle",
+    uploading: "Yükleniyor...",
+    importConfirm:
+      "Bu, bu makinedeki tüm ilerlemeyi silip yüklenen kayıtla değiştirir. Emin misin?",
+    importFailed: "Yüklenemedi",
+    saveImportFailed: "Kayıt yüklenemedi",
+    importWarnBefore: "Yükleme, bu makinedeki mevcut ilerlemeyi",
+    importWarnStrong: "siler",
+    importWarnAfter:
+      "ve yüklenen kayıtla değiştirir. İki makinede de uygulamanın aynı sürümü kurulu olmalı.",
+  },
+  en: {
+    title: "Settings",
+    appearance: "Appearance",
+    lightTheme: "☀️ Light theme",
+    darkTheme: "🌙 Dark theme",
+    llmSpend: "LLM Spend",
+    today: "Today",
+    total: "Total",
+    callsParen: (n: number) => `(${n} calls)`,
+    noCalls: "No recorded calls yet.",
+    callBreakdown: "Call breakdown",
+    callsCount: (n: number) => `${n} calls`,
+    billingNote:
+      "Since the Max subscription is used, this amount is not billed — it shows what it would cost via the API (as reported by the CLI).",
+    llmConnection: "LLM Connection",
+    connBefore:
+      "Runs through the Claude CLI with your Max subscription. If you run into issues, run",
+    connAfter: "in a terminal and make sure you're logged in.",
+    checking: "Checking...",
+    testConnection: "Test connection",
+    healthOk: (s: string) => `✅ Connection healthy (${s}s)`,
+    connectionIssue: "Connection problem",
+    serverUnreachable: "❌ Could not reach the server",
+    saveTitle: "Save & Backup",
+    saveDesc:
+      "Download all your progress as a single file, load it on another computer, and pick up where you left off. You can move the file via Drive or USB.",
+    download: "⬇️ Download save",
+    upload: "⬆️ Load save",
+    uploading: "Loading...",
+    importConfirm:
+      "This will erase all progress on this machine and replace it with the loaded save. Are you sure?",
+    importFailed: "Could not load",
+    saveImportFailed: "Could not load the save",
+    importWarnBefore: "Loading",
+    importWarnStrong: "erases",
+    importWarnAfter:
+      "the current progress on this machine and replaces it with the loaded save. Both machines must have the same version of the app installed.",
+  },
+};
 
 export default function SettingsPage() {
-  const [profile, setProfile] = useState<ProfileDto | null>(null);
+  const t = useStrings(S);
   const [health, setHealth] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [dark, setDark] = useState(false);
@@ -27,9 +99,6 @@ export default function SettingsPage() {
   } | null>(null);
 
   useEffect(() => {
-    fetch("/api/profile")
-      .then((r) => r.json())
-      .then((d) => setProfile(d.profile));
     fetch("/api/stats")
       .then((r) => r.json())
       .then((d) => setLlm(d.llm))
@@ -53,9 +122,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file later
     if (!file) return;
-    const ok = window.confirm(
-      "Bu, bu makinedeki tüm ilerlemeyi silip yüklenen kayıtla değiştirir. Emin misin?"
-    );
+    const ok = window.confirm(t.importConfirm);
     if (!ok) return;
 
     setImporting(true);
@@ -65,11 +132,11 @@ export default function SettingsPage() {
       fd.append("file", file);
       const res = await fetch("/api/save/import", { method: "POST", body: fd });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Yüklenemedi");
+      if (!res.ok) throw new Error(body.error ?? t.importFailed);
       window.location.href = "/map"; // full reload → fresh server reads
     } catch (err) {
       setSaveMsg(
-        `❌ ${err instanceof Error ? err.message : "Kayıt yüklenemedi"}`
+        `❌ ${err instanceof Error ? err.message : t.saveImportFailed}`
       );
       setImporting(false);
     }
@@ -83,11 +150,11 @@ export default function SettingsPage() {
       const body = await res.json();
       setHealth(
         body.ok
-          ? `✅ Bağlantı sağlıklı (${(body.ms / 1000).toFixed(1)}s)`
-          : `❌ ${body.error ?? "Bağlantı sorunu"}`
+          ? t.healthOk((body.ms / 1000).toFixed(1))
+          : `❌ ${body.error ?? t.connectionIssue}`
       );
     } catch {
-      setHealth("❌ Sunucuya ulaşılamadı");
+      setHealth(t.serverUnreachable);
     } finally {
       setChecking(false);
     }
@@ -95,64 +162,50 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-dvh pb-16">
-      <StatsHeader title="Ayarlar" backHref="/map" />
+      <StatsHeader title={t.title} />
       <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8">
-        {profile && (
-          <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-            <h2 className="mb-3 font-semibold">Profil</h2>
-            <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-ink-soft">İsim</dt>
-              <dd>{profile.displayName}</dd>
-              <dt className="text-ink-soft">Hedef dil</dt>
-              <dd>{profile.targetLanguage === "ja" ? "🇯🇵 Japonca" : "🇳🇱 Hollandaca"}</dd>
-              <dt className="text-ink-soft">Seviye</dt>
-              <dd>{profile.selfLevel}</dd>
-              <dt className="text-ink-soft">Haftalık süre</dt>
-              <dd>{profile.minutesPerWeek} dk</dd>
-              <dt className="text-ink-soft">Hedefler</dt>
-              <dd>{profile.goals.join(", ")}</dd>
-              <dt className="text-ink-soft">İlgi alanları</dt>
-              <dd>{profile.interests.join(", ")}</dd>
-            </dl>
-          </section>
-        )}
+        <ProfileSection />
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-          <h2 className="mb-3 font-semibold">Görünüm</h2>
+          <h2 className="mb-3 font-semibold">{t.appearance}</h2>
           <CozyButton variant="soft" onClick={toggleDark}>
-            {dark ? "☀️ Açık tema" : "🌙 Koyu tema"}
+            {dark ? t.lightTheme : t.darkTheme}
           </CozyButton>
         </section>
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-          <h2 className="mb-3 font-semibold">LLM Harcaması</h2>
+          <h2 className="mb-3 font-semibold">{t.llmSpend}</h2>
           {llm ? (
             <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-ink-soft">Bugün</dt>
+              <dt className="text-ink-soft">{t.today}</dt>
               <dd>
                 ${llm.todayUsd.toFixed(2)}{" "}
-                <span className="text-ink-soft">({llm.todayCalls} çağrı)</span>
+                <span className="text-ink-soft">
+                  {t.callsParen(llm.todayCalls)}
+                </span>
               </dd>
-              <dt className="text-ink-soft">Toplam</dt>
+              <dt className="text-ink-soft">{t.total}</dt>
               <dd>
                 ${llm.totalUsd.toFixed(2)}{" "}
-                <span className="text-ink-soft">({llm.totalCalls} çağrı)</span>
+                <span className="text-ink-soft">
+                  {t.callsParen(llm.totalCalls)}
+                </span>
               </dd>
             </dl>
           ) : (
-            <p className="text-sm text-ink-soft">Henüz kayıtlı çağrı yok.</p>
+            <p className="text-sm text-ink-soft">{t.noCalls}</p>
           )}
           {llm?.byPurpose && llm.byPurpose.length > 0 && (
             <div className="mt-4 border-t border-surface-2 pt-3">
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-soft">
-                Çağrı dağılımı
+                {t.callBreakdown}
               </h3>
               <dl className="grid grid-cols-2 gap-y-1 text-sm">
                 {llm.byPurpose.map((p) => (
                   <div key={p.purpose} className="contents">
                     <dt className="text-ink-soft">{p.purpose}</dt>
                     <dd>
-                      {p.calls} çağrı{" "}
+                      {t.callsCount(p.calls)}{" "}
                       <span className="text-ink-soft">
                         (${p.usd.toFixed(2)})
                       </span>
@@ -162,31 +215,25 @@ export default function SettingsPage() {
               </dl>
             </div>
           )}
-          <p className="mt-3 text-xs text-ink-soft">
-            Max aboneliği kullanıldığı için bu tutar faturalandırılmaz — API ile
-            yapılsaydı ne tutacağını gösterir (CLI&apos;ın raporladığı değer).
-          </p>
+          <p className="mt-3 text-xs text-ink-soft">{t.billingNote}</p>
         </section>
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-          <h2 className="mb-1 font-semibold">LLM Bağlantısı</h2>
+          <h2 className="mb-1 font-semibold">{t.llmConnection}</h2>
           <p className="mb-3 text-sm text-ink-soft">
-            Claude CLI üzerinden Max aboneliğinle çalışır. Sorun yaşarsan
-            terminalde <code className="rounded bg-surface-2 px-1.5">claude</code>{" "}
-            çalıştırıp giriş yaptığından emin ol.
+            {t.connBefore}{" "}
+            <code className="rounded bg-surface-2 px-1.5">claude</code>{" "}
+            {t.connAfter}
           </p>
           <CozyButton variant="soft" onClick={checkLlm} disabled={checking}>
-            {checking ? "Kontrol ediliyor..." : "Bağlantıyı test et"}
+            {checking ? t.checking : t.testConnection}
           </CozyButton>
           {health && <p className="mt-3 text-sm">{health}</p>}
         </section>
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-          <h2 className="mb-1 font-semibold">Kayıt ve Yedekleme</h2>
-          <p className="mb-3 text-sm text-ink-soft">
-            Tüm ilerlemeni tek dosyaya indir, başka bir bilgisayarda yükleyip
-            kaldığın yerden devam et. Dosyayı Drive veya USB ile taşıyabilirsin.
-          </p>
+          <h2 className="mb-1 font-semibold">{t.saveTitle}</h2>
+          <p className="mb-3 text-sm text-ink-soft">{t.saveDesc}</p>
           <div className="flex flex-wrap gap-3">
             <CozyButton
               variant="soft"
@@ -194,14 +241,14 @@ export default function SettingsPage() {
                 window.location.href = "/api/save/export";
               }}
             >
-              ⬇️ Kaydı indir
+              {t.download}
             </CozyButton>
             <CozyButton
               variant="soft"
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
             >
-              {importing ? "Yükleniyor..." : "⬆️ Kaydı yükle"}
+              {importing ? t.uploading : t.upload}
             </CozyButton>
             <input
               ref={fileInputRef}
@@ -212,9 +259,8 @@ export default function SettingsPage() {
             />
           </div>
           <p className="mt-3 text-xs text-ink-soft">
-            Yükleme, bu makinedeki mevcut ilerlemeyi <strong>siler</strong> ve
-            yüklenen kayıtla değiştirir. İki makinede de uygulamanın aynı sürümü
-            kurulu olmalı.
+            {t.importWarnBefore} <strong>{t.importWarnStrong}</strong>{" "}
+            {t.importWarnAfter}
           </p>
           {saveMsg && <p className="mt-3 text-sm">{saveMsg}</p>}
         </section>

@@ -3,63 +3,110 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CozyButton } from "@/components/shared/CozyButton";
+import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import { GeneratingScreen } from "./GeneratingScreen";
-
-type Level = "zero" | "beginner" | "elementary" | "intermediate";
+import { pick } from "@/lib/i18n";
+import {
+  GOAL_OPTIONS,
+  INTEREST_OPTIONS,
+  LANGUAGES,
+  languageLabel,
+  levelsFor,
+  minuteOptionsFor,
+  NATIVE_LANGUAGES,
+  optionLabel,
+  type LanguageCode,
+  type NativeLanguageCode,
+  type SelfLevel,
+} from "@/lib/profile-options";
 
 interface Draft {
-  targetLanguage: "ja" | "nl";
+  targetLanguage: LanguageCode;
+  nativeLanguage: NativeLanguageCode;
+  uiLanguage: NativeLanguageCode;
   displayName: string;
   goals: string[];
-  selfLevel: Level;
+  selfLevel: SelfLevel;
   minutesPerWeek: number;
   interests: string[];
   motivation: string;
 }
 
-const GOAL_OPTIONS = [
-  "Günlük konuşma",
-  "Seyahat",
-  "Anime / dizi / film anlamak",
-  "Kitap ve manga okumak",
-  "İş / kariyer",
-  "Sınav (JLPT vb.)",
-  "Kültürü tanımak",
-];
-
-const INTEREST_OPTIONS = [
-  "Anime & Manga",
-  "Yemek",
-  "Teknoloji",
-  "Müzik",
-  "Oyunlar",
-  "Tarih",
-  "Seyahat",
-  "Spor",
-  "Sanat",
-  "Doğa",
-];
-
-const LEVELS: { value: Level; label: string; desc: string }[] = [
-  { value: "zero", label: "Sıfır", desc: "Hiç bilmiyorum, tamamen yeniyim" },
-  { value: "beginner", label: "Çaylak", desc: "Birkaç kelime ve selamlaşma biliyorum" },
-  { value: "elementary", label: "Temel", desc: "Basit cümleler kurabiliyorum" },
-  { value: "intermediate", label: "Orta", desc: "Günlük konuşmaları takip edebiliyorum" },
-];
-
-const MINUTE_OPTIONS = [
-  { value: 60, label: "Haftada ~1 saat", desc: "Sakin tempo" },
-  { value: 150, label: "Haftada 2-3 saat", desc: "Dengeli tempo" },
-  { value: 300, label: "Haftada 5+ saat", desc: "Kararlıyım!" },
-];
-
 const TOTAL_STEPS = 6;
+
+// No profile exists yet during onboarding, so the copy follows the native
+// language the user picks in step 0 (draft.uiLanguage) live, via pick().
+const S = {
+  tr: {
+    profileSaveFailed: "Profil kaydedilemedi",
+    curriculumStartFailed: "Müfredat üretimi başlatılamadı",
+    genericError: "Bir şeyler ters gitti",
+    step0Title: "Merhaba! 🌸",
+    step0Subtitle:
+      "Ben Kumo. Sana özel bir dil yolculuğu hazırlayacağım. Önce tanışalım — adın ne, hangi dili öğreniyoruz?",
+    namePlaceholder: "Adın",
+    alreadyUsedDesc: "Zaten mevcut — ayarlardan geç",
+    spokenLanguageLabel: "Konuştuğun dil (dersler ve arayüz bu dilde olur):",
+    step1Title: "Hedefin ne?",
+    step1Subtitle:
+      "Birden fazla seçebilirsin — müfredatını buna göre şekillendireceğim.",
+    step2Title: "Şu an neredesin?",
+    step2Subtitle: "Dürüst ol, buna göre başlangıç noktanı seçeceğim.",
+    step3Title: "Haftada ne kadar vakit ayırabilirsin?",
+    step3Subtitle: "Gerçekçi bir tempo, sürdürülebilir bir yolculuk demek.",
+    step4Title: "Nelerden hoşlanırsın?",
+    step4Subtitle:
+      "Ders örneklerini ilgi alanlarından seçeceğim — öğrenmek böyle daha tatlı.",
+    step5Title: "Son soru: neden bu dil?",
+    step5Subtitle:
+      "Kendi cümlelerinle anlat — motivasyonunu bilmek yolculuğu kişiselleştirir. (İstersen boş bırak.)",
+    motivationPlaceholder:
+      "Örn: Çocukluğumdan beri Japonya'ya taşınmayı hayal ediyorum...",
+    back: "Geri",
+    next: "Devam",
+    preparing: "Hazırlanıyor...",
+    start: "Yolculuğu Başlat ✨",
+  },
+  en: {
+    profileSaveFailed: "Could not save the profile",
+    curriculumStartFailed: "Could not start curriculum generation",
+    genericError: "Something went wrong",
+    step0Title: "Hello! 🌸",
+    step0Subtitle:
+      "I'm Kumo. I'll craft a language journey just for you. First, let's meet — what's your name, and which language are we learning?",
+    namePlaceholder: "Your name",
+    alreadyUsedDesc: "Already exists — switch from settings",
+    spokenLanguageLabel:
+      "Your language (lessons and the interface will use it):",
+    step1Title: "What's your goal?",
+    step1Subtitle:
+      "You can pick more than one — I'll shape your curriculum around it.",
+    step2Title: "Where are you right now?",
+    step2Subtitle: "Be honest — I'll pick your starting point based on this.",
+    step3Title: "How much time can you spare each week?",
+    step3Subtitle: "A realistic pace means a sustainable journey.",
+    step4Title: "What do you enjoy?",
+    step4Subtitle:
+      "I'll pick lesson examples from your interests — learning is sweeter that way.",
+    step5Title: "Last question: why this language?",
+    step5Subtitle:
+      "Tell me in your own words — knowing your motivation personalizes the journey. (Feel free to leave it blank.)",
+    motivationPlaceholder:
+      "E.g. I've dreamed of moving to Japan since childhood...",
+    back: "Back",
+    next: "Continue",
+    preparing: "Preparing...",
+    start: "Start the Journey ✨",
+  },
+};
 
 export function OnboardingWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>({
     targetLanguage: "ja",
+    nativeLanguage: "tr",
+    uiLanguage: "tr",
     displayName: "",
     goals: [],
     selfLevel: "zero",
@@ -71,10 +118,43 @@ export function OnboardingWizard() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const t = pick(S, draft.uiLanguage);
+
+  // Languages that already have a profile — "adding a language" mode: those
+  // are switched from settings, not re-onboarded.
+  const [usedLanguages, setUsedLanguages] = useState<string[]>([]);
+
+  // Detect the visitor's spoken language from the browser locale and
+  // preselect it — they can still override in step 0.
+  useEffect(() => {
+    const browser = (navigator.language || "").toLowerCase();
+    const detected = NATIVE_LANGUAGES.find((l) =>
+      browser.startsWith(l.code)
+    )?.code;
+    if (detected) {
+      setDraft((d) => ({ ...d, nativeLanguage: detected, uiLanguage: detected }));
+    }
+  }, []);
+
   // Refresh-safety: resume polling an in-flight generation.
   useEffect(() => {
     const saved = localStorage.getItem("curriculumJobId");
     if (saved) setJobId(saved);
+    fetch("/api/profile")
+      .then((r) => r.json())
+      .then((d) => {
+        const used: string[] = (d.profiles ?? []).map(
+          (p: { targetLanguage: string }) => p.targetLanguage
+        );
+        setUsedLanguages(used);
+        const free = LANGUAGES.find((l) => !used.includes(l.code));
+        setDraft((prev) => ({
+          ...prev,
+          targetLanguage: free?.code ?? prev.targetLanguage,
+          displayName: prev.displayName || (d.profile?.displayName ?? ""),
+        }));
+      })
+      .catch(() => {});
   }, []);
 
   const toggle = (key: "goals" | "interests", value: string) =>
@@ -88,13 +168,17 @@ export function OnboardingWizard() {
   const submit = useCallback(async () => {
     setSubmitting(true);
     setError(null);
+    const t = pick(S, draft.uiLanguage);
     try {
       const profileRes = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      if (!profileRes.ok) throw new Error("Profil kaydedilemedi");
+      if (!profileRes.ok) {
+        const body = await profileRes.json().catch(() => null);
+        throw new Error(body?.error ?? t.profileSaveFailed);
+      }
       const { profile } = await profileRes.json();
 
       const genRes = await fetch("/api/curriculum/generate", {
@@ -102,12 +186,12 @@ export function OnboardingWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profileId: profile.id }),
       });
-      if (!genRes.ok) throw new Error("Müfredat üretimi başlatılamadı");
+      if (!genRes.ok) throw new Error(t.curriculumStartFailed);
       const { jobId } = await genRes.json();
       localStorage.setItem("curriculumJobId", jobId);
       setJobId(jobId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Bir şeyler ters gitti");
+      setError(err instanceof Error ? err.message : t.genericError);
     } finally {
       setSubmitting(false);
     }
@@ -117,6 +201,7 @@ export function OnboardingWizard() {
     return (
       <GeneratingScreen
         jobId={jobId}
+        uiLanguage={draft.uiLanguage}
         onDone={() => {
           localStorage.removeItem("curriculumJobId");
           router.push("/map");
@@ -130,13 +215,26 @@ export function OnboardingWizard() {
   }
 
   const canNext = [
-    draft.displayName.trim().length > 0,
+    draft.displayName.trim().length > 0 &&
+      !usedLanguages.includes(draft.targetLanguage),
     draft.goals.length > 0,
     true, // level always has a value
     true, // minutes always has a value
     draft.interests.length > 0,
     true, // motivation optional
   ][step];
+
+  // ChipGrid works on plain strings, so translated labels are shown while the
+  // stored VALUES stay the canonical Turkish strings (DB/prompt contract).
+  const chipProps = (key: "goals" | "interests", options: string[]) => ({
+    options: options.map((v) => optionLabel(v, draft.uiLanguage)),
+    selected: draft[key].map((v) => optionLabel(v, draft.uiLanguage)),
+    onToggle: (label: string) =>
+      toggle(
+        key,
+        options.find((v) => optionLabel(v, draft.uiLanguage) === label) ?? label
+      ),
+  });
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
@@ -153,31 +251,47 @@ export function OnboardingWizard() {
 
       <div className="rounded-cozy bg-surface p-8 shadow-cozy">
         {step === 0 && (
-          <StepShell
-            title="Merhaba! 🌸"
-            subtitle="Ben Kumo. Sana özel bir dil yolculuğu hazırlayacağım. Önce tanışalım — adın ne, hangi dili öğreniyoruz?"
-          >
+          <StepShell title={t.step0Title} subtitle={t.step0Subtitle}>
             <input
               autoFocus
               value={draft.displayName}
               onChange={(e) =>
                 setDraft((d) => ({ ...d, displayName: e.target.value }))
               }
-              placeholder="Adın"
+              placeholder={t.namePlaceholder}
               className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
             />
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {(
-                [
-                  { code: "ja", flag: "🇯🇵", name: "Japonca" },
-                  { code: "nl", flag: "🇳🇱", name: "Hollandaca" },
-                ] as const
-              ).map((l) => (
+              {LANGUAGES.map((l) => {
+                const used = usedLanguages.includes(l.code);
+                return (
+                  <ChoiceCard
+                    key={l.code}
+                    selected={draft.targetLanguage === l.code}
+                    disabled={used}
+                    onClick={() =>
+                      setDraft((d) => ({ ...d, targetLanguage: l.code }))
+                    }
+                    title={languageLabel(l.code, draft.uiLanguage)}
+                    desc={used ? t.alreadyUsedDesc : undefined}
+                  />
+                );
+              })}
+            </div>
+            <p className="mt-6 mb-2 text-sm font-semibold text-ink-soft">
+              {t.spokenLanguageLabel}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {NATIVE_LANGUAGES.map((l) => (
                 <ChoiceCard
                   key={l.code}
-                  selected={draft.targetLanguage === l.code}
+                  selected={draft.nativeLanguage === l.code}
                   onClick={() =>
-                    setDraft((d) => ({ ...d, targetLanguage: l.code }))
+                    setDraft((d) => ({
+                      ...d,
+                      nativeLanguage: l.code,
+                      uiLanguage: l.code,
+                    }))
                   }
                   title={`${l.flag} ${l.name}`}
                 />
@@ -187,25 +301,15 @@ export function OnboardingWizard() {
         )}
 
         {step === 1 && (
-          <StepShell
-            title="Hedefin ne?"
-            subtitle="Birden fazla seçebilirsin — müfredatını buna göre şekillendireceğim."
-          >
-            <ChipGrid
-              options={GOAL_OPTIONS}
-              selected={draft.goals}
-              onToggle={(v) => toggle("goals", v)}
-            />
+          <StepShell title={t.step1Title} subtitle={t.step1Subtitle}>
+            <ChipGrid {...chipProps("goals", GOAL_OPTIONS)} />
           </StepShell>
         )}
 
         {step === 2 && (
-          <StepShell
-            title="Şu an neredesin?"
-            subtitle="Dürüst ol, buna göre başlangıç noktanı seçeceğim."
-          >
+          <StepShell title={t.step2Title} subtitle={t.step2Subtitle}>
             <div className="flex flex-col gap-3">
-              {LEVELS.map((l) => (
+              {levelsFor(draft.uiLanguage).map((l) => (
                 <ChoiceCard
                   key={l.value}
                   selected={draft.selfLevel === l.value}
@@ -219,12 +323,9 @@ export function OnboardingWizard() {
         )}
 
         {step === 3 && (
-          <StepShell
-            title="Haftada ne kadar vakit ayırabilirsin?"
-            subtitle="Gerçekçi bir tempo, sürdürülebilir bir yolculuk demek."
-          >
+          <StepShell title={t.step3Title} subtitle={t.step3Subtitle}>
             <div className="flex flex-col gap-3">
-              {MINUTE_OPTIONS.map((m) => (
+              {minuteOptionsFor(draft.uiLanguage).map((m) => (
                 <ChoiceCard
                   key={m.value}
                   selected={draft.minutesPerWeek === m.value}
@@ -240,30 +341,20 @@ export function OnboardingWizard() {
         )}
 
         {step === 4 && (
-          <StepShell
-            title="Nelerden hoşlanırsın?"
-            subtitle="Ders örneklerini ilgi alanlarından seçeceğim — öğrenmek böyle daha tatlı."
-          >
-            <ChipGrid
-              options={INTEREST_OPTIONS}
-              selected={draft.interests}
-              onToggle={(v) => toggle("interests", v)}
-            />
+          <StepShell title={t.step4Title} subtitle={t.step4Subtitle}>
+            <ChipGrid {...chipProps("interests", INTEREST_OPTIONS)} />
           </StepShell>
         )}
 
         {step === 5 && (
-          <StepShell
-            title="Son soru: neden bu dil?"
-            subtitle="Kendi cümlelerinle anlat — motivasyonunu bilmek yolculuğu kişiselleştirir. (İstersen boş bırak.)"
-          >
+          <StepShell title={t.step5Title} subtitle={t.step5Subtitle}>
             <textarea
               value={draft.motivation}
               onChange={(e) =>
                 setDraft((d) => ({ ...d, motivation: e.target.value }))
               }
               rows={4}
-              placeholder="Örn: Çocukluğumdan beri Japonya'ya taşınmayı hayal ediyorum..."
+              placeholder={t.motivationPlaceholder}
               className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
             />
           </StepShell>
@@ -281,15 +372,15 @@ export function OnboardingWizard() {
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0 || submitting}
           >
-            Geri
+            {t.back}
           </CozyButton>
           {step < TOTAL_STEPS - 1 ? (
             <CozyButton onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
-              Devam
+              {t.next}
             </CozyButton>
           ) : (
             <CozyButton onClick={submit} disabled={submitting}>
-              {submitting ? "Hazırlanıyor..." : "Yolculuğu Başlat ✨"}
+              {submitting ? t.preparing : t.start}
             </CozyButton>
           )}
         </div>
@@ -313,62 +404,5 @@ function StepShell({
       <p className="mt-2 mb-6 text-ink-soft">{subtitle}</p>
       {children}
     </div>
-  );
-}
-
-function ChipGrid({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: string[];
-  selected: string[];
-  onToggle: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => {
-        const on = selected.includes(o);
-        return (
-          <button
-            key={o}
-            onClick={() => onToggle(o)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 cursor-pointer ${
-              on
-                ? "bg-accent text-surface shadow-cozy"
-                : "bg-surface-2 text-ink hover:bg-accent-soft"
-            }`}
-          >
-            {o}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function ChoiceCard({
-  selected,
-  onClick,
-  title,
-  desc,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  title: string;
-  desc?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-xl border-2 px-4 py-3 text-left transition-all active:scale-[0.98] cursor-pointer ${
-        selected
-          ? "border-accent bg-accent-soft/40"
-          : "border-surface-2 bg-background hover:border-accent-soft"
-      }`}
-    >
-      <div className="font-semibold">{title}</div>
-      {desc && <div className="text-sm text-ink-soft">{desc}</div>}
-    </button>
   );
 }
