@@ -7,7 +7,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { grammarTopic } from "@/lib/client-api";
+import { grammarTopic, grammarGenerate } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -75,7 +75,7 @@ export default function GrammarTopicPage({
   }, [load]);
 
   const generate = async () => {
-    await fetch(`/api/grammar/${slug}`, { method: "POST" });
+    await grammarGenerate(slug).catch(() => {});
     setTopic((t) => (t ? { ...t, status: "generating" } : t));
     setTimeout(load, 3000);
   };

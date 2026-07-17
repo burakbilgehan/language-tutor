@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { roadmap, profileData } from "@/lib/client-api";
+import { roadmap, profileData, curriculumExtend } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -182,14 +182,8 @@ export function RoadmapView() {
     if (!profileId) return;
     setExtendError(null);
     try {
-      const r = await fetch("/api/curriculum/extend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? t.startFailed);
-      setExtendJobId(j.jobId);
+      const j = await curriculumExtend(profileId);
+      setExtendJobId(j.jobId ?? null);
     } catch (e) {
       setExtendError(e instanceof Error ? e.message : t.startFailed);
     }

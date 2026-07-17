@@ -6,7 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { stats } from "@/lib/client-api";
+import { stats, saveExportApi, saveImportApi } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -127,12 +127,8 @@ export default function SettingsPage() {
     setImporting(true);
     setSaveMsg(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/save/import", { method: "POST", body: fd });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? t.importFailed);
-      window.location.href = "/map"; // full reload → fresh server reads
+      await saveImportApi(file);
+      window.location.href = "/map"; // full reload → fresh reads
     } catch (err) {
       setSaveMsg(
         `❌ ${err instanceof Error ? err.message : t.saveImportFailed}`
@@ -207,9 +203,7 @@ export default function SettingsPage() {
           <div className="flex flex-wrap gap-3">
             <CozyButton
               variant="soft"
-              onClick={() => {
-                window.location.href = "/api/save/export";
-              }}
+              onClick={() => void saveExportApi()}
             >
               {t.download}
             </CozyButton>

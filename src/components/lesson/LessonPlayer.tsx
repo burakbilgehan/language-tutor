@@ -9,7 +9,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { openNodeApi, completeNodeApi, attemptApi } from "@/lib/client-api";
+import { openNodeApi, completeNodeApi, attemptApi, regenerateLesson } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -204,10 +204,7 @@ export function LessonPlayer({
     setExIdx(0);
     setCorrectCount(0);
     try {
-      const res = await fetch(`/api/nodes/${nodeId}/regenerate`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? t.regenFailed);
+      await regenerateLesson(nodeId);
       open();
     } catch (e) {
       if (!stopped.current)

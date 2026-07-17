@@ -25,6 +25,12 @@ let inflight: Promise<LlmStatus> | null = null;
 
 async function fetchStatus(): Promise<LlmStatus> {
   if (cached) return cached;
+  // Statik mod: sunucu yok — tarayıcı LLM katmanı gelene kadar "LLM yok"
+  // kabul et (UI üretim aksiyonlarını gizler, cache'li her şey çalışır).
+  if (process.env.NEXT_PUBLIC_STATIC_BUILD === "1") {
+    cached = { configured: false, mode: "none", cliAllowed: false };
+    return cached;
+  }
   if (!inflight) {
     inflight = fetch("/api/health/llm")
       .then(async (res) => {

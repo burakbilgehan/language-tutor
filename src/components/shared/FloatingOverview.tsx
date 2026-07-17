@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { overview } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -66,9 +67,8 @@ export function FloatingOverview() {
 
   useEffect(() => {
     if (!open || data) return;
-    fetch("/api/overview")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setData)
+    overview()
+      .then((d) => setData(d as Overview))
       .catch(() => {});
   }, [open, data]);
 

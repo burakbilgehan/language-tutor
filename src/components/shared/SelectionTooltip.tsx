@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { hasJapanese, toRomajiReading } from "@/lib/jp";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { translateText, kanjiLookupApi } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -129,12 +130,9 @@ export function SelectionTooltip() {
         // for free; uncached chars arrive with the translate click.
         const chars = [...new Set(source.match(/[一-鿿]/g) ?? [])].slice(0, 6);
         chars.forEach((ch) => {
-          fetch("/api/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: ch, cachedOnly: true }),
-          })
-            .then((r) => (r.ok ? r.json() : null))
+          translateText(ch, true)
+            .then((d) => d)
+            .catch(() => null)
             .then((d: { translation: string | null } | null) => {
               if (!d?.translation || seq.current !== token) return;
               setTip((t) =>
@@ -153,8 +151,9 @@ export function SelectionTooltip() {
         });
         return;
       }
-      fetch(`/api/kanji/lookup?text=${encodeURIComponent(source)}`)
-        .then((r) => (r.ok ? r.json() : null))
+      kanjiLookupApi(source)
+        .then((d) => d)
+        .catch(() => null)
         .then(
           (data: { kanji: KanjiInfo[]; word: WordInfo | null } | null) => {
             if (!data || seq.current !== token) return;
@@ -204,21 +203,18 @@ export function SelectionTooltip() {
     if (!isJa && tip.source.length > 1) {
       const chars = [...new Set(tip.source.match(/[一-鿿]/g) ?? [])].slice(0, 6);
       chars.forEach((ch) => {
-        fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: ch }),
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d: { translation: string } | null) => {
-            if (!d || seq.current !== token) return;
+        translateText(ch)
+          .then((d) => d)
+          .catch(() => null)
+          .then((d: { translation: string | null } | null) => {
+            if (!d?.translation || seq.current !== token) return;
             setTip((t) =>
               t
                 ? {
                     ...t,
                     kanji: [
                       ...t.kanji.filter((k) => k.char !== ch),
-                      { char: ch, reading: "", meaning: d.translation },
+                      { char: ch, reading: "", meaning: d.translation! },
                     ],
                   }
                 : t
@@ -227,13 +223,10 @@ export function SelectionTooltip() {
           .catch(() => {});
       });
     }
-    fetch("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: tip.source }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { translation: string } | null) => {
+    translateText(tip.source)
+      .then((d) => d)
+      .catch(() => null)
+      .then((data: { translation: string | null } | null) => {
         if (seq.current !== token) return;
         setTip((t) =>
           t

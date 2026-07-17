@@ -118,6 +118,43 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   } else check("nl profili yok", false);
 }
 
+
+// 8. Süpürme: overview/kanji/chat/lookup/quest-cached/translate-cached
+{
+  const { getOverview } = await import("@/core/overview");
+  const { listKanji, kanjiLookup } = await import("@/core/kanji");
+  const { chatHistory } = await import("@/core/chat");
+  const { getQuestCached } = await import("@/core/quest");
+  const { cachedTranslation } = await import("@/core/translate");
+  const { setActiveProfile: sap } = await import("@/core/profile");
+  const schema = await import("@/db/schema");
+  sap(db as never, profile!.id); // ja'ya dön
+
+  const ov = getOverview(db as never, profile!);
+  check("getOverview (raw SQL → sql tag)", ov.nodes.total > 0, `→ ${ov.nodes.completed}/${ov.nodes.total} node, srs due=${ov.srs.due}`);
+
+  const kl = listKanji(db as never, "ja");
+  check("listKanji", kl.length > 100, `→ ${kl.length} kanji`);
+
+  const look = kanjiLookup(db as never, "ja", "日本");
+  check("kanjiLookup", look.kanji.length > 0, `→ ${look.kanji.map(k=>k.char).join("")}, word=${!!look.word}`);
+
+  const ch = chatHistory(db as never, profile!.id);
+  check("chatHistory", Array.isArray(ch.messages), `→ ${ch.messages.length} mesaj`);
+
+  const questRow = db.select().from(schema.nodes).all().find((n) => n.nodeType === "side_quest" && n.sideQuestPayload);
+  if (questRow) {
+    const q = getQuestCached(db as never, questRow.id);
+    check("quest cached", q.status === "ready");
+  }
+
+  const tr = db.select().from(schema.translations).limit(1).get();
+  if (tr) {
+    const hit = cachedTranslation(db as never, tr.targetLanguage, tr.sourceText);
+    check("cachedTranslation", hit === tr.translationTr);
+  }
+}
+
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);
 process.exit(fail ? 1 : 0);
 

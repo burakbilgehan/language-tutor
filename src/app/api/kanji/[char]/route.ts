@@ -4,6 +4,7 @@ import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
+import { findKanji } from "@/core/kanji";
 
 export const runtime = "nodejs";
 
@@ -11,17 +12,7 @@ function findEntry(rawChar: string) {
   const profile = getActiveProfile();
   if (!profile) return null;
   // Kanji arrives percent-encoded in the path.
-  const char = decodeURIComponent(rawChar);
-  return (
-    db.query.kanjiEntries
-      .findFirst({
-        where: and(
-          eq(tables.kanjiEntries.targetLanguage, profile.targetLanguage),
-          eq(tables.kanjiEntries.char, char)
-        ),
-      })
-      .sync() ?? null
-  );
+  return findKanji(db, profile.targetLanguage, decodeURIComponent(rawChar));
 }
 
 export async function GET(

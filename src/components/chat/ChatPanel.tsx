@@ -5,6 +5,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLlmStatus } from "@/lib/llm-status";
+import { chatHistoryApi, chatSend } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -46,12 +47,12 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/chat")
-      .then((r) => r.json())
+    chatHistoryApi()
       .then((d) => {
         setSessionId(d.sessionId);
-        setMessages(d.messages ?? []);
-      });
+        setMessages(d.messages as Msg[] ?? []);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -65,13 +66,7 @@ export function ChatPanel() {
     setMessages((m) => [...m, { role: "user", content: message }]);
     setBusy(true);
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, message }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? body.error ?? t.replyFailed);
+      const body = await chatSend({ sessionId, message });
       setSessionId(body.sessionId);
       setMessages((m) => [...m, { role: "assistant", content: body.reply }]);
     } catch (e) {
