@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { conjugateNl, NL_PRESETS } from "@/lib/conjugation/nl";
+import { conjugateNl, NL_PRESETS, NL_PATTERN_GROUPS } from "@/lib/conjugation/nl";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 
@@ -148,6 +149,7 @@ export function NlConjugatorView() {
                           {f.exNl && (
                             <>
                               <span lang="nl">{f.exNl}</span>
+                              <SpeakButton text={f.exNl} lang="nl-NL" />
                               <div className="text-xs text-ink-soft">
                                 {en ? f.exEn : f.exTr}
                               </div>
@@ -163,6 +165,48 @@ export function NlConjugatorView() {
           </div>
         </>
       )}
+
+      <section className="flex flex-col gap-2">
+        <h2 className="font-display text-lg font-bold">
+          {en ? "Patterns" : "Kalıplar"}
+        </h2>
+        <div className="overflow-x-auto rounded-cozy bg-surface p-2 shadow-cozy sm:p-4">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                {[en ? "Marker" : "İşaret", en ? "Meaning" : "Anlam", en ? "Pattern" : "Kalıp", en ? "Example" : "Örnek"].map((h) => (
+                  <th key={h} className="border border-ink/10 bg-background px-2 py-1.5 text-left text-xs font-semibold tracking-wider text-accent">
+                    {h.toUpperCase()}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {NL_PATTERN_GROUPS.map((g) => (
+                <Fragment key={g.id}>
+                  <tr>
+                    <td colSpan={4} className="border border-ink/10 bg-accent/10 px-2 py-1.5 font-display text-sm font-bold">
+                      {en ? g.labelEn : g.labelTr}
+                    </td>
+                  </tr>
+                  {g.rows.map((r) => (
+                    <tr key={r.id} className="align-top">
+                      <td className="whitespace-nowrap border border-ink/10 px-2 py-1.5 font-display" lang="nl">{r.marker}</td>
+                      <td className="border border-ink/10 px-2 py-1.5">{en ? r.labelEn : r.labelTr}</td>
+                      <td className="border border-ink/10 px-2 py-1.5 text-ink-soft" lang="nl">{r.pattern}</td>
+                      <td className="border border-ink/10 px-2 py-1.5">
+                        <span lang="nl">{r.exNl}</span>
+                        <SpeakButton text={r.exNl} lang="nl-NL" />
+                        <div className="text-xs text-ink-soft">{en ? r.exEn : r.exTr}</div>
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

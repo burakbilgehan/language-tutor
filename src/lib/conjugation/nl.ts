@@ -121,6 +121,17 @@ const STRONG: Record<string, Parts> = {
   wegen: ["woog", "wogen", "gewogen", "h"],
   zwemmen: ["zwom", "zwommen", "gezwommen", "hz"],
   bidden: ["bad", "baden", "gebeden", "h"],
+  blijken: ["bleek", "bleken", "gebleken", "z"],
+  bieden: ["bood", "boden", "geboden", "h"],
+  wijzen: ["wees", "wezen", "gewezen", "h"],
+  schijnen: ["scheen", "schenen", "geschenen", "h"],
+  lachen: ["lachte", "lachten", "gelachen", "h"],
+  wassen: ["waste", "wasten", "gewassen", "h"],
+  genieten: ["genoot", "genoten", "genoten", "h"],
+  schenken: ["schonk", "schonken", "geschonken", "h"],
+  gelden: ["gold", "golden", "gegolden", "h"],
+  zwijgen: ["zweeg", "zwegen", "gezwegen", "h"],
+  grijpen: ["greep", "grepen", "gegrepen", "h"],
 };
 
 // Irregular PRESENT stems ([ik, jij, hij]) — the weak stem rule breaks for
@@ -222,7 +233,20 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
 
   const notes: { tr: string; en: string }[] = [];
   const [sepPrefix, base] = splitSeparable(inf);
-  const strong = STRONG[base] ?? null;
+  let strong = STRONG[base] ?? null;
+  // Inseparable prefix over a strong base: vertrekken = ver+trekken →
+  // vertrok / vertrokken (participle keeps no ge-). Direct entries
+  // (vergeten, verliezen…) win above; this catches the rest.
+  if (!strong && !sepPrefix) {
+    for (const pfx of INSEP) {
+      const rest = STRONG[inf.slice(pfx.length)];
+      if (inf.startsWith(pfx) && rest) {
+        const part = rest[2].startsWith("ge") ? rest[2].slice(2) : rest[2];
+        strong = [pfx + rest[0], pfx + rest[1], pfx + part, rest[3]];
+        break;
+      }
+    }
+  }
 
   // Weak path sanity: a real infinitive ends in -en/-aan and leaves a stem
   // with a vowel. "ben" (stem "b") is a conjugated form, not an infinitive.
@@ -376,4 +400,110 @@ export const NL_PRESETS: { infinitive: string; hintTr: string; hintEn: string }[
   { infinitive: "gaan", hintTr: "düzensiz (zijn ile)", hintEn: "irregular (with zijn)" },
   { infinitive: "opstaan", hintTr: "ayrılabilir", hintEn: "separable" },
   { infinitive: "vergeten", hintTr: "ge- almaz", hintEn: "no ge-" },
+];
+
+// ---------------------------------------------------------------------------
+// Static pattern chart (the "kalıplar" half of the cheatsheet): connector,
+// infinitive and er-constructions that don't hang off a single verb form.
+// Rendered below the conjugator on /conjugate for nl.
+// ---------------------------------------------------------------------------
+export interface NlPatternRow {
+  id: string;
+  marker: string;
+  labelTr: string;
+  labelEn: string;
+  pattern: string;
+  exNl: string;
+  exTr: string;
+  exEn: string;
+}
+
+export interface NlPatternGroup {
+  id: string;
+  labelTr: string;
+  labelEn: string;
+  rows: NlPatternRow[];
+}
+
+export const NL_PATTERN_GROUPS: NlPatternGroup[] = [
+  {
+    id: "connectors",
+    labelTr: "Bağlaç kalıpları",
+    labelEn: "Connector patterns",
+    rows: [
+      { id: "omdat", marker: "omdat", labelTr: "…olduğundan/çünkü (fiil sona)", labelEn: "because (verb-final)", pattern: "…, omdat + özne … + fiil",
+        exNl: "Ik blijf thuis, omdat het regent.", exTr: "Yağmur yağdığından evde kalıyorum.", exEn: "I'm staying home because it's raining." },
+      { id: "want", marker: "want", labelTr: "çünkü (dizilişi bozmaz)", labelEn: "because (main-clause order)", pattern: "…, want + normal cümle",
+        exNl: "Ik blijf thuis, want het regent.", exTr: "Evde kalıyorum, çünkü yağmur yağıyor.", exEn: "I'm staying home, for it's raining." },
+      { id: "hoewel", marker: "hoewel", labelTr: "…e rağmen", labelEn: "although", pattern: "hoewel + … + fiil",
+        exNl: "Hoewel het laat was, kwam hij nog.", exTr: "Geç olmasına rağmen yine geldi.", exEn: "Although it was late, he still came." },
+      { id: "toen", marker: "toen", labelTr: "…dığında (geçmiş, tek sefer)", labelEn: "when (past, once)", pattern: "toen + geçmiş cümle",
+        exNl: "Toen ik jong was, woonde ik daar.", exTr: "Gençken orada oturuyordum.", exEn: "When I was young, I lived there." },
+      { id: "als-cond", marker: "als", labelTr: "eğer …se / …dığında (tekrarlı)", labelEn: "if / whenever", pattern: "als + … + fiil",
+        exNl: "Als je komt, bel me even.", exTr: "Gelirsen bana haber ver.", exEn: "If you come, give me a call." },
+      { id: "terwijl", marker: "terwijl", labelTr: "…iyorken", labelEn: "while", pattern: "terwijl + … + fiil",
+        exNl: "Hij belde terwijl ik kookte.", exTr: "Ben yemek yaparken aradı.", exEn: "He called while I was cooking." },
+      { id: "nadat", marker: "nadat", labelTr: "…dikten sonra", labelEn: "after", pattern: "nadat + … + fiil",
+        exNl: "Nadat we gegeten hadden, gingen we weg.", exTr: "Yemek yedikten sonra çıktık.", exEn: "After we had eaten, we left." },
+      { id: "voordat", marker: "voordat", labelTr: "…meden önce", labelEn: "before", pattern: "voordat + … + fiil",
+        exNl: "Bel me voordat je vertrekt.", exTr: "Yola çıkmadan önce beni ara.", exEn: "Call me before you leave." },
+    ],
+  },
+  {
+    id: "infinitive",
+    labelTr: "Mastar kalıpları",
+    labelEn: "Infinitive patterns",
+    rows: [
+      { id: "om-te", marker: "om … te", labelTr: "…mek için", labelEn: "in order to", pattern: "om + … + te + mastar",
+        exNl: "Ik leer Nederlands om daar te werken.", exTr: "Orada çalışmak için Felemenkçe öğreniyorum.", exEn: "I'm learning Dutch in order to work there." },
+      { id: "zonder-te", marker: "zonder te", labelTr: "…meden", labelEn: "without doing", pattern: "zonder + te + mastar",
+        exNl: "Hij vertrok zonder iets te zeggen.", exTr: "Bir şey demeden gitti.", exEn: "He left without saying anything." },
+      { id: "door-te", marker: "door te", labelTr: "…erek (yolu/yöntemi)", labelEn: "by doing", pattern: "door + te + mastar",
+        exNl: "Je leert door veel te oefenen.", exTr: "Çok alıştırma yaparak öğrenirsin.", exEn: "You learn by practicing a lot." },
+      { id: "proberen-te", marker: "proberen te", labelTr: "…meyi denemek", labelEn: "try to", pattern: "proberen + te + mastar",
+        exNl: "Ik probeer vroeg op te staan.", exTr: "Erken kalkmayı deniyorum.", exEn: "I try to get up early." },
+      { id: "hoeven-niet", marker: "hoeven niet te", labelTr: "…mek zorunda değil", labelEn: "don't have to", pattern: "hoeven + niet + te + mastar",
+        exNl: "Je hoeft niet te komen.", exTr: "Gelmek zorunda değilsin.", exEn: "You don't have to come." },
+      { id: "aan-het", marker: "aan het", labelTr: "…mekte (şu an)", labelEn: "in the middle of", pattern: "zijn + aan het + mastar",
+        exNl: "Ik ben aan het koken.", exTr: "Şu an yemek yapıyorum.", exEn: "I am (busy) cooking." },
+      { id: "zitten-te", marker: "zitten te", labelTr: "oturup …mek (sürerlik)", labelEn: "sit doing", pattern: "zitten/staan/liggen + te + mastar",
+        exNl: "Hij zit te lezen.", exTr: "Oturmuş okuyor.", exEn: "He is (sitting) reading." },
+      { id: "laten-we", marker: "laten we", labelTr: "hadi …elim", labelEn: "let's", pattern: "laten we + mastar",
+        exNl: "Laten we gaan!", exTr: "Hadi gidelim!", exEn: "Let's go!" },
+    ],
+  },
+  {
+    id: "er",
+    labelTr: "er kalıpları",
+    labelEn: "er patterns",
+    rows: [
+      { id: "er-is", marker: "er is/zijn", labelTr: "var (belirsiz özne)", labelEn: "there is/are", pattern: "er + is/zijn + belirsiz isim",
+        exNl: "Er is een probleem.", exTr: "Bir sorun var.", exEn: "There is a problem." },
+      { id: "er-place", marker: "er", labelTr: "orada (yer zamiri)", labelEn: "there (place)", pattern: "özne + fiil + er",
+        exNl: "Ik woon er al vijf jaar.", exTr: "Beş yıldır orada oturuyorum.", exEn: "I've lived there for five years." },
+      { id: "er-prep", marker: "er + edat", labelTr: "ona/onunla (cansız)", labelEn: "pronominal adverb", pattern: "er + aan/op/mee…",
+        exNl: "Ik denk er vaak aan.", exTr: "Onu sık sık düşünüyorum.", exEn: "I often think about it." },
+      { id: "er-partitive", marker: "er … [sayı]", labelTr: "ondan [sayı] tane", labelEn: "partitive er", pattern: "er + fiil + sayı",
+        exNl: "Ik heb er twee.", exTr: "Ondan iki tane var bende.", exEn: "I have two (of them)." },
+    ],
+  },
+  {
+    id: "order",
+    labelTr: "Söz dizimi kalıpları",
+    labelEn: "Word-order patterns",
+    rows: [
+      { id: "v2", marker: "V2", labelTr: "Çekimli fiil hep 2. sırada", labelEn: "Verb-second", pattern: "[öğe] + fiil + özne + …",
+        exNl: "Morgen ga ik naar Amsterdam.", exTr: "Yarın Amsterdam'a gidiyorum (fiil 2. sırada).", exEn: "Tomorrow I'm going to Amsterdam." },
+      { id: "brackets", marker: "tang", labelTr: "Fiil kıskacı: 2. + son", labelEn: "Verbal brackets", pattern: "fiil₁ … [gerisi] … fiil₂",
+        exNl: "Ik heb gisteren een boek gekocht.", exTr: "Dün bir kitap aldım (heb…gekocht kıskacı).", exEn: "I bought a book yesterday." },
+      { id: "subclause-final", marker: "yan cümle", labelTr: "Yan cümlede fiil(ler) sona", labelEn: "Sub-clause verb-final", pattern: "dat/omdat + … + fiil(ler)",
+        exNl: "Ik weet dat hij morgen komt.", exTr: "Yarın geleceğini biliyorum.", exEn: "I know that he's coming tomorrow." },
+      { id: "inversion-q", marker: "soru", labelTr: "Soru: fiil başa", labelEn: "Question inversion", pattern: "fiil + özne + …?",
+        exNl: "Kom je morgen?", exTr: "Yarın geliyor musun?", exEn: "Are you coming tomorrow?" },
+      { id: "hoe-hoe", marker: "hoe … hoe", labelTr: "ne kadar … o kadar …", labelEn: "the more … the more", pattern: "hoe + karş., hoe + karş.",
+        exNl: "Hoe meer je oefent, hoe beter je wordt.", exTr: "Ne kadar çalışırsan o kadar iyileşirsin.", exEn: "The more you practice, the better you get." },
+      { id: "zou-graag", marker: "zou graag", labelTr: "…meyi çok isterdim (kibar)", labelEn: "would love to", pattern: "zou + graag + … + mastar",
+        exNl: "Ik zou graag een koffie willen.", exTr: "Bir kahve rica edeyim.", exEn: "I would like a coffee." },
+    ],
+  },
 ];

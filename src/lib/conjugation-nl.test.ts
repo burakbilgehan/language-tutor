@@ -87,3 +87,13 @@ test("non-infinitive input is rejected", () => {
     assert.ok(!r.ok, `${w} should be rejected`);
   }
 });
+
+test("inseparable prefix over strong base", () => {
+  assert.equal(val("vertrekken", "past-sg"), "vertrok");
+  assert.equal(val("vertrekken", "participle"), "vertrokken");
+  assert.equal(val("begrijpen", "past-sg"), "begreep");
+  assert.equal(val("begrijpen", "participle"), "begrepen");
+  assert.equal(val("ontvangen", "participle"), "ontvangen");
+  assert.equal(val("lachen", "participle"), "gelachen");
+  assert.equal(val("wassen", "past-sg"), "waste");
+});
