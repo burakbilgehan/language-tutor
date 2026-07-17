@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLlmStatus } from "@/lib/llm-status";
 
 const S = {
   tr: {
@@ -14,6 +15,8 @@ const S = {
       "Merhaba! İstediğin dilde yaz — Türkçe sor, Japonca pratik yap, ya da ikisini karıştır.",
     placeholder: "Bir şeyler yaz...",
     send: "Gönder",
+    noLlm:
+      "Sohbet için bir LLM sağlayıcısı gerekli. Ayarlar → LLM Sağlayıcı bölümünden bağlayabilirsin.",
   },
   en: {
     title: "Chat with Kumo ☁️",
@@ -23,6 +26,8 @@ const S = {
       "Hi! Write in any language — ask in Turkish, practice Japanese, or mix the two.",
     placeholder: "Type something...",
     send: "Send",
+    noLlm:
+      "Chat needs an LLM provider. You can connect one in Settings → LLM Provider.",
   },
 };
 
@@ -33,6 +38,7 @@ interface Msg {
 
 export function ChatPanel() {
   const t = useStrings(S);
+  const llm = useLlmStatus();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -65,7 +71,7 @@ export function ChatPanel() {
         body: JSON.stringify({ sessionId, message }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? t.replyFailed);
+      if (!res.ok) throw new Error(body.message ?? body.error ?? t.replyFailed);
       setSessionId(body.sessionId);
       setMessages((m) => [...m, { role: "assistant", content: body.reply }]);
     } catch (e) {
@@ -118,6 +124,11 @@ export function ChatPanel() {
           <div ref={bottomRef} />
         </div>
 
+        {!llm.configured && (
+          <div className="mt-4 rounded-xl bg-surface-2 px-4 py-3 text-sm text-ink-soft">
+            ☁️ {t.noLlm}
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -129,9 +140,13 @@ export function ChatPanel() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.placeholder}
-            className="flex-1 rounded-full border-2 border-surface-2 bg-surface px-5 py-3 shadow-cozy outline-none focus:border-accent"
+            disabled={!llm.configured}
+            className="flex-1 rounded-full border-2 border-surface-2 bg-surface px-5 py-3 shadow-cozy outline-none focus:border-accent disabled:opacity-60"
           />
-          <CozyButton type="submit" disabled={busy || !input.trim()}>
+          <CozyButton
+            type="submit"
+            disabled={busy || !input.trim() || !llm.configured}
+          >
             {t.send}
           </CozyButton>
         </form>

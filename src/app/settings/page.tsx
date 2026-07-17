@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
+import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { useStrings } from "@/lib/i18n/use-strings";
 
 const S = {
@@ -87,8 +88,6 @@ const S = {
 
 export default function SettingsPage() {
   const t = useStrings(S);
-  const [health, setHealth] = useState<string | null>(null);
-  const [checking, setChecking] = useState(false);
   const [dark, setDark] = useState(false);
   const [llm, setLlm] = useState<{
     todayUsd: number;
@@ -139,24 +138,6 @@ export default function SettingsPage() {
         `❌ ${err instanceof Error ? err.message : t.saveImportFailed}`
       );
       setImporting(false);
-    }
-  };
-
-  const checkLlm = async () => {
-    setChecking(true);
-    setHealth(null);
-    try {
-      const res = await fetch("/api/health/llm", { method: "POST" });
-      const body = await res.json();
-      setHealth(
-        body.ok
-          ? t.healthOk((body.ms / 1000).toFixed(1))
-          : `❌ ${body.error ?? t.connectionIssue}`
-      );
-    } catch {
-      setHealth(t.serverUnreachable);
-    } finally {
-      setChecking(false);
     }
   };
 
@@ -218,18 +199,7 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-ink-soft">{t.billingNote}</p>
         </section>
 
-        <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-          <h2 className="mb-1 font-semibold">{t.llmConnection}</h2>
-          <p className="mb-3 text-sm text-ink-soft">
-            {t.connBefore}{" "}
-            <code className="rounded bg-surface-2 px-1.5">claude</code>{" "}
-            {t.connAfter}
-          </p>
-          <CozyButton variant="soft" onClick={checkLlm} disabled={checking}>
-            {checking ? t.checking : t.testConnection}
-          </CozyButton>
-          {health && <p className="mt-3 text-sm">{health}</p>}
-        </section>
+        <LlmProviderSection />
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">
           <h2 className="mb-1 font-semibold">{t.saveTitle}</h2>

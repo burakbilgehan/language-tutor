@@ -11,6 +11,7 @@ import { awardXp } from "@/lib/xp";
 import { stripFurigana } from "@/lib/jp";
 import { answersMatchFor } from "@/lib/answers";
 import { pick } from "@/lib/i18n";
+import { llmConfigured } from "@/lib/llm/config";
 
 export const runtime = "nodejs";
 
@@ -20,10 +21,14 @@ const S = {
   tr: {
     correct: "Doğru! 🌸",
     correctAnswer: (a: string) => `Doğru cevap: ${a}`,
+    selfCorrect: "Kendi değerlendirmen: doğru 🌸",
+    selfWrong: (a: string) => `Kendi değerlendirmen: yanlış. Doğru cevap: ${a}`,
   },
   en: {
     correct: "Correct! 🌸",
     correctAnswer: (a: string) => `Correct answer: ${a}`,
+    selfCorrect: "Self-check: correct 🌸",
+    selfWrong: (a: string) => `Self-check: wrong. Correct answer: ${a}`,
   },
 };
 
@@ -33,12 +38,17 @@ export async function POST(
 ) {
   const { id } = await params;
   const parsed = z
-    .object({ response: z.string().min(1) })
+    .object({
+      response: z.string().min(1),
+      // LLM'siz self-check ikinci adımı: kullanıcının kendi verdiği hüküm.
+      selfVerdict: z.boolean().optional(),
+    })
     .safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "response gerekli" }, { status: 400 });
   }
   const userResponse = parsed.data.response;
+  const selfVerdict = parsed.data.selfVerdict;
 
   const exercise = db.query.exercises
     .findFirst({ where: eq(tables.exercises.id, id) })
@@ -65,7 +75,7 @@ export async function POST(
     isCorrect: boolean;
     score: number;
     feedbackTr: string;
-    gradedBy: "deterministic" | "llm";
+    gradedBy: "deterministic" | "llm" | "self";
   };
 
   if (exercise.grading === "deterministic" || isExactMatch) {
@@ -106,6 +116,25 @@ export async function POST(
         score: priorSame.score ?? (priorSame.isCorrect ? 100 : 0),
         feedbackTr: priorSame.feedbackTr ?? "",
         gradedBy: "llm",
+      };
+    } else if (!llmConfigured()) {
+      // LLM'siz self-check: ilk POST beklenen cevabı döner (kayıt yok);
+      // ikinci POST selfVerdict ile gelir, "self" olarak kaydedilir.
+      if (typeof selfVerdict !== "boolean") {
+        return NextResponse.json({
+          needsSelfCheck: true,
+          expected: {
+            answer: exercise.answer,
+            acceptAlso: exercise.acceptAlso ?? [],
+          },
+        });
+      }
+      const t = pick(S, profile.uiLanguage);
+      result = {
+        isCorrect: selfVerdict,
+        score: selfVerdict ? 100 : 0,
+        feedbackTr: selfVerdict ? t.selfCorrect : t.selfWrong(exercise.answer),
+        gradedBy: "self",
       };
     } else {
       const { system, prompt } = gradingPrompt({

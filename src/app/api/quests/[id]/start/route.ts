@@ -5,6 +5,7 @@ import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { SideQuestPayloadSchema } from "@/lib/llm/schemas";
 import { sideQuestPrompt } from "@/lib/llm/prompts/side-quest";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,10 @@ export async function POST(
       quest: node.sideQuestPayload,
     });
   }
+
+  // Past the cached-payload path: a fresh run needs the LLM.
+  const gate = requireLlm();
+  if (gate) return gate;
 
   const recentVocab = db.query.srsCards
     .findMany({

@@ -1,9 +1,20 @@
-// Serializes CLI calls: Max usage limits are shared with interactive Claude
-// Code sessions, so at most LLM_CONCURRENCY (default 1) subprocess at a time.
+// Serializes LLM calls: with the local CLI, Max usage limits are shared with
+// interactive Claude Code sessions, so at most `limit()` subprocess at a time.
 // Interactive calls (exercise grading) can jump the queue with urgent: true —
 // they must not sit behind minutes-long background generations.
+//
+// The limit is resolved per call (not frozen at module load) so a config change
+// via /api/llm-config takes effect without a restart. Precedence:
+// config.concurrency → LLM_CONCURRENCY env → 1.
 
-const limit = Math.max(1, Number(process.env.LLM_CONCURRENCY) || 1);
+import { readLlmConfig } from "./config";
+
+function limit(): number {
+  const config = readLlmConfig();
+  const fromConfig = config?.concurrency;
+  const fromEnv = Number(process.env.LLM_CONCURRENCY);
+  return Math.max(1, fromConfig || fromEnv || 1);
+}
 
 let active = 0;
 const waiters: Array<{ resolve: () => void; urgent: boolean }> = [];
@@ -18,7 +29,7 @@ export async function enqueue<T>(
   fn: () => Promise<T>,
   opts?: { urgent?: boolean }
 ): Promise<T> {
-  if (active >= limit) {
+  if (active >= limit()) {
     await new Promise<void>((resolve) =>
       waiters.push({ resolve, urgent: opts?.urgent ?? false })
     );

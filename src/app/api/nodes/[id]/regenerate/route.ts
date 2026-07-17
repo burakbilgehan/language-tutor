@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { recoverStaleJobs, regenerateLessonJob } from "@/lib/jobs";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,8 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = requireLlm();
+  if (gate) return gate;
   recoverStaleJobs();
   const { id: nodeId } = await params;
 

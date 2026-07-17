@@ -6,6 +6,7 @@ import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
+import { requireLlm } from "@/lib/llm/require-llm";
 import { stripFurigana } from "@/lib/jp";
 
 export const runtime = "nodejs";
@@ -51,6 +52,9 @@ export async function POST(req: Request) {
   if (parsed.data.cachedOnly) {
     return NextResponse.json({ translation: null });
   }
+  // Cache hits above stay free without an LLM; only a fresh translation needs one.
+  const gate = requireLlm();
+  if (gate) return gate;
 
   // Cache note: translations are keyed on (targetLanguage, sourceText) only;
   // a profile's nativeLanguage effectively never changes, so stale-language

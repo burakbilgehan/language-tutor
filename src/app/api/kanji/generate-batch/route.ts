@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getActiveProfile } from "@/lib/profile";
 import { queueKanjiLevel, recoverStaleJobs } from "@/lib/jobs";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,8 @@ const Input = z.object({ level: z.string().min(1).max(8) });
  * the automatic current-level fill).
  */
 export async function POST(req: Request) {
+  const gate = requireLlm();
+  if (gate) return gate;
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {

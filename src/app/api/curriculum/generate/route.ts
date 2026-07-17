@@ -4,10 +4,13 @@ import { eq } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { firstLevel } from "@/lib/curriculum/levels";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const gate = requireLlm();
+  if (gate) return gate;
   recoverStaleJobs();
   const parsed = z
     .object({ profileId: z.string() })

@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
+import { requireLlm } from "@/lib/llm/require-llm";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,8 @@ export async function POST(
   if (entry.status === "ready") {
     return NextResponse.json({ status: "ready" });
   }
+  const gate = requireLlm();
+  if (gate) return gate;
   const inflight = db.query.generationJobs
     .findFirst({
       where: and(

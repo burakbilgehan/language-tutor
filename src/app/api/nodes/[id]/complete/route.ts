@@ -12,6 +12,7 @@ import {
   topChapterLevel,
 } from "@/lib/jobs";
 import { nextLevelFor } from "@/lib/curriculum/levels";
+import { llmConfigured } from "@/lib/llm/config";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,7 @@ function maybeAutoExtend(
   targetLanguage: string,
   nodeId: string
 ): string | null {
+  if (!llmConfigured()) return null; // no LLM → don't enqueue a doomed chapter job
   if (!isCurriculumTail(nodeId)) return null;
   const curriculum = db.query.curricula
     .findFirst({ where: eq(tables.curricula.profileId, profileId) })
