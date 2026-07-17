@@ -19,6 +19,11 @@ import {
 } from "@/lib/profile-options";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
+import {
+  profileData,
+  patchProfile,
+  switchProfile as switchProfile$,
+} from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -109,12 +114,12 @@ export function ProfileSection() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/profile")
-      .then((r) => r.json())
+    profileData()
       .then((d) => {
-        setProfile(d.profile);
-        setProfiles(d.profiles ?? []);
-      });
+        setProfile(d.profile as unknown as ProfileDto);
+        setProfiles((d.profiles ?? []) as ProfileSummary[]);
+      })
+      .catch(() => {});
   }, []);
 
   const toggle = (key: "goals" | "interests", value: string) =>
@@ -134,23 +139,17 @@ export function ProfileSection() {
     setSaving(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          displayName: draft.displayName,
-          nativeLanguage: draft.nativeLanguage,
-          uiLanguage: draft.uiLanguage,
-          goals: draft.goals,
-          selfLevel: draft.selfLevel,
-          minutesPerWeek: draft.minutesPerWeek,
-          interests: draft.interests,
-          motivation: draft.motivation,
-        }),
+      const body = await patchProfile({
+        displayName: draft.displayName,
+        nativeLanguage: draft.nativeLanguage,
+        uiLanguage: draft.uiLanguage,
+        goals: draft.goals,
+        selfLevel: draft.selfLevel,
+        minutesPerWeek: draft.minutesPerWeek,
+        interests: draft.interests,
+        motivation: draft.motivation,
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? t.saveFailed);
-      setProfile(body.profile);
+      setProfile(body.profile as unknown as ProfileDto);
       setProfiles((ps) =>
         ps.map((p) =>
           p.id === body.profile.id
@@ -174,12 +173,7 @@ export function ProfileSection() {
   const switchProfile = async (profileId: string) => {
     setSwitching(true);
     try {
-      const res = await fetch("/api/profile/switch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId }),
-      });
-      if (!res.ok) throw new Error(t.switchFailed);
+      await switchProfile$(profileId);
       window.location.href = "/map"; // full reload → fresh server reads
     } catch (err) {
       setMsg(`❌ ${err instanceof Error ? err.message : t.switchFailed}`);

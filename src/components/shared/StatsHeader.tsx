@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { stats as stats$ } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -54,8 +55,7 @@ function CostBadge() {
   const [stats, setStats] = useState<LlmStats | null>(null);
 
   useEffect(() => {
-    fetch("/api/stats")
-      .then((r) => r.json())
+    stats$()
       .then((d) => setStats(d.llm))
       .catch(() => {});
   }, []);

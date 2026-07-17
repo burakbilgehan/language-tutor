@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { roadmap, profileData } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -149,18 +150,13 @@ export function RoadmapView() {
   }, [data == null]);
 
   const loadRoadmap = () =>
-    fetch("/api/roadmap")
-      .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json()).error ?? t.loadFailed);
-        return r.json();
-      })
+    roadmap()
       .then(setData)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e instanceof Error ? e.message : t.loadFailed));
 
   useEffect(() => {
     loadRoadmap();
-    fetch("/api/profile")
-      .then((r) => (r.ok ? r.json() : null))
+    profileData()
       .then((d) => d?.profile?.id && setProfileId(d.profile.id))
       .catch(() => {});
   }, []);
