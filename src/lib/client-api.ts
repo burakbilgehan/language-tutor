@@ -130,6 +130,87 @@ export async function stats(): Promise<ReturnType<typeof import("@/core/stats").
   return core.getStats(db);
 }
 
+// ------------------------------------------------------------------ Ders akışı
+
+export async function openNodeApi(nodeId: string): Promise<
+  | import("@/core/lesson").OpenNodeResult
+  | { status: "generating"; jobId: string | null }
+> {
+  if (!IS_STATIC) {
+    return fetchJson(`/api/nodes/${nodeId}/open`, { method: "POST" });
+  }
+  const { db } = await browserDb();
+  const core = await import("@/core/lesson");
+  const result = core.openNode(db, nodeId);
+  if (result.status === "notFound") throw new Error("Ders bulunamadı");
+  if (result.status === "locked") throw new Error("Bu ders henüz kilitli");
+  if (result.status === "needsGeneration") {
+    // Tarayıcı LLM katmanı gelene kadar: üretilmemiş ders statikte açılamaz.
+    throw new Error(
+      "Bu ders henüz üretilmemiş. (Statik mod: tarayıcı LLM katmanı yolda)"
+    );
+  }
+  return result;
+}
+
+export async function completeNodeApi(nodeId: string): Promise<{
+  xpAwarded: number;
+  newCards: number;
+  unlockedNodeIds: string[];
+  extendingLevel: string | null;
+}> {
+  if (!IS_STATIC) {
+    return fetchJson(`/api/nodes/${nodeId}/complete`, { method: "POST" });
+  }
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreL = await import("@/core/lesson");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const flow = coreL.completeNodeFlow(db, nodeId, profile.id);
+  persistSoon();
+  if (!flow) throw new Error("Ders bulunamadı");
+  return { ...flow, extendingLevel: null }; // auto-extend LLM katmanıyla gelecek
+}
+
+export async function attemptApi(
+  exerciseId: string,
+  response: string,
+  selfVerdict?: boolean
+): Promise<
+  | { needsSelfCheck: true; expected: { answer: string; acceptAlso: string[] } }
+  | import("@/core/lesson").AttemptResultDto
+> {
+  if (!IS_STATIC) {
+    return fetchJson(`/api/exercises/${exerciseId}/attempt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        selfVerdict === undefined ? { response } : { response, selfVerdict }
+      ),
+    });
+  }
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreL = await import("@/core/lesson");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const outcome = await coreL.attemptExercise(db, {
+    exerciseId,
+    response,
+    selfVerdict,
+    profile,
+    // llmGrade yok → compare miss'te self-check protokolü. Tarayıcı LLM
+    // katmanı geldiğinde buradan beslenecek.
+  });
+  if (outcome.kind === "notFound") throw new Error("Alıştırma bulunamadı");
+  persistSoon();
+  if (outcome.kind === "needsSelfCheck") {
+    return { needsSelfCheck: true, expected: outcome.expected };
+  }
+  return outcome.result;
+}
+
 // ------------------------------------------------------------------ SRS
 
 export async function srsDue(): Promise<{

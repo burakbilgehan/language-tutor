@@ -66,6 +66,44 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   check("listProfiles", ps.length > 0 && typeof ps[0].displayName === "string", `→ ${ps.length} profil`);
 }
 
+
+// 6. Ders akışı (open/attempt/complete)
+{
+  const { openNode, attemptExercise, completeNodeFlow } = await import("@/core/lesson");
+  const schema = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const readyLesson = db.select().from(schema.lessons).where(eq(schema.lessons.status, "ready")).limit(1).get();
+  const opened = readyLesson ? openNode(db as never, readyLesson.nodeId) : null;
+  check("openNode ready", opened?.status === "ready",
+    opened?.status === "ready" ? `→ ${opened.exercises.length} egzersiz` : String(opened?.status));
+
+  if (opened?.status === "ready") {
+    // deterministik yanlış cevap (mcq)
+    const mcq = opened.exercises.find((e) => e.type === "mcq");
+    if (mcq) {
+      const out = await attemptExercise(db as never, {
+        exerciseId: mcq.id, response: "kesinlikle-yanlis-cevap-xyz",
+        profile: { id: profile!.id, targetLanguage: profile!.targetLanguage, uiLanguage: "tr" },
+      });
+      check("attempt mcq deterministik", out.kind === "graded" && out.result.gradedBy === "deterministic",
+        out.kind === "graded" ? `→ correct=${out.result.isCorrect}` : out.kind);
+    }
+    // self-check protokolü (translate, llmGrade yok)
+    const tr = db.select().from(schema.exercises)
+      .where(eq(schema.exercises.grading, "llm")).limit(1).get();
+    if (tr) {
+      const p = { id: profile!.id, targetLanguage: profile!.targetLanguage, uiLanguage: "tr" };
+      const step1 = await attemptExercise(db as never, { exerciseId: tr.id, response: "alakasiz xyz", profile: p });
+      check("attempt self-check adım 1", step1.kind === "needsSelfCheck");
+      const step2 = await attemptExercise(db as never, { exerciseId: tr.id, response: "alakasiz xyz", selfVerdict: true, profile: p });
+      check("attempt self-check adım 2", step2.kind === "graded" && step2.result.gradedBy === "self" && step2.result.xpAwarded === 5);
+    }
+    // complete akışı
+    const flow = completeNodeFlow(db as never, opened.node.id, profile!.id);
+    check("completeNodeFlow", flow !== null, `→ xp=${flow?.xpAwarded}, yeniKart=${flow?.newCards}, unlock=${flow?.unlockedNodeIds.length}`);
+  }
+}
+
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);
 process.exit(fail ? 1 : 0);
 
