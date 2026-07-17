@@ -1,72 +1,30 @@
-import { eq, sum } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
+import * as core from "@/core/xp";
+
+// Sunucu tarafı sarmalayıcı: iş mantığı src/core/xp.ts'te (ortam bağımsız),
+// burası sunucu db'sini bağlar. Route'lardaki import imzaları değişmedi.
 
 type XpReason = (typeof tables.xpEvents.$inferSelect)["reason"];
 
-export function awardXp(profileId: string, amount: number, reason: XpReason, refId?: string) {
-  db.insert(tables.xpEvents)
-    .values({ id: nanoid(), profileId, amount, reason, refId })
-    .run();
-  bumpStreak(profileId);
+export function awardXp(
+  profileId: string,
+  amount: number,
+  reason: XpReason,
+  refId?: string
+) {
+  core.awardXp(db, profileId, amount, reason, refId);
 }
 
 export function totalXp(profileId: string): number {
-  const row = db
-    .select({ total: sum(tables.xpEvents.amount) })
-    .from(tables.xpEvents)
-    .where(eq(tables.xpEvents.profileId, profileId))
-    .get();
-  return Number(row?.total ?? 0);
+  return core.totalXp(db, profileId);
 }
 
-export function localDateStr(d = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+export const localDateStr = core.localDateStr;
 
 export function bumpStreak(profileId: string) {
-  const today = localDateStr();
-  const yesterday = localDateStr(new Date(Date.now() - 86_400_000));
-  const s = db.query.streaks
-    .findFirst({ where: eq(tables.streaks.profileId, profileId) })
-    .sync();
-
-  if (!s) {
-    db.insert(tables.streaks)
-      .values({
-        profileId,
-        currentStreak: 1,
-        longestStreak: 1,
-        lastActivityDate: today,
-      })
-      .run();
-    return;
-  }
-  if (s.lastActivityDate === today) return;
-
-  const current = s.lastActivityDate === yesterday ? s.currentStreak + 1 : 1;
-  db.update(tables.streaks)
-    .set({
-      currentStreak: current,
-      longestStreak: Math.max(current, s.longestStreak),
-      lastActivityDate: today,
-    })
-    .where(eq(tables.streaks.profileId, profileId))
-    .run();
+  core.bumpStreak(db, profileId);
 }
 
 export function getStreak(profileId: string) {
-  const s = db.query.streaks
-    .findFirst({ where: eq(tables.streaks.profileId, profileId) })
-    .sync();
-  if (!s) return { current: 0, longest: 0 };
-  // A streak is only "alive" if last activity was today or yesterday.
-  const today = localDateStr();
-  const yesterday = localDateStr(new Date(Date.now() - 86_400_000));
-  const alive =
-    s.lastActivityDate === today || s.lastActivityDate === yesterday;
-  return { current: alive ? s.currentStreak : 0, longest: s.longestStreak };
+  return core.getStreak(db, profileId);
 }

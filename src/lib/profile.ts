@@ -1,39 +1,16 @@
-import { eq } from "drizzle-orm";
-import { db, tables } from "@/db";
+import { db } from "@/db";
+import * as core from "@/core/profile";
 
-export type Profile = typeof tables.profiles.$inferSelect;
+// Sunucu tarafı sarmalayıcı: iş mantığı src/core/profile.ts'te (ortam
+// bağımsız), burası sunucu db'sini bağlar. Route'lardaki import imzaları
+// değişmedi.
 
-/**
- * The single "active" profile drives everything: map, lessons, grammar, SRS,
- * chat. Switching language = switching active profile. Self-heals databases
- * created before the is_active flag existed by promoting the first profile.
- */
+export type Profile = core.Profile;
+
 export function getActiveProfile(): Profile | null {
-  const active = db.query.profiles
-    .findFirst({ where: eq(tables.profiles.isActive, true) })
-    .sync();
-  if (active) return active;
-
-  const first = db.query.profiles.findFirst().sync();
-  if (!first) return null;
-  db.update(tables.profiles)
-    .set({ isActive: true })
-    .where(eq(tables.profiles.id, first.id))
-    .run();
-  return { ...first, isActive: true };
+  return core.getActiveProfile(db);
 }
 
 export function setActiveProfile(profileId: string): Profile | null {
-  const target = db.query.profiles
-    .findFirst({ where: eq(tables.profiles.id, profileId) })
-    .sync();
-  if (!target) return null;
-  db.transaction((tx) => {
-    tx.update(tables.profiles).set({ isActive: false }).run();
-    tx.update(tables.profiles)
-      .set({ isActive: true })
-      .where(eq(tables.profiles.id, profileId))
-      .run();
-  });
-  return { ...target, isActive: true };
+  return core.setActiveProfile(db, profileId);
 }
