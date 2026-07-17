@@ -85,7 +85,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/grammar", label: "grammar" },
   { href: "/kana", label: "kana", jaOnly: true },
   { href: "/stroke", label: "stroke", jaOnly: true },
-  { href: "/conjugate", label: "conjugate", jaOnly: true },
+  // ja: conjugator, zh: aspect chart, nl: conjugator — all languages covered.
+  { href: "/conjugate", label: "conjugate" },
   { href: "/review", label: "review" },
   { href: "/chat", label: "chat" },
 ];
