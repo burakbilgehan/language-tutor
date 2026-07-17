@@ -88,7 +88,7 @@ function runCli(opts: {
       clearTimeout(timer);
       const secs = ((Date.now() - started) / 1000).toFixed(1);
       console.log(
-        `[llm] tier=${opts.tier} model=${modelForTier(opts.tier)} exit=${code} ${secs}s`
+        `[llm] provider=claude-cli model=${modelForTier(opts.tier)} tier=${opts.tier} purpose=${opts.purpose} exit=${code} ${secs}s`
       );
       if (timedOut) {
         return reject(

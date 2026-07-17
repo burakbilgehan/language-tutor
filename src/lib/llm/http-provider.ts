@@ -100,6 +100,10 @@ async function chatCompletion(opts: {
     throw new LlmError("LLM yanıtında içerik yok", text);
   }
 
+  const secs = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(
+    `[llm] provider=openai-compat host=${new URL(baseUrl).host} model=${model} tier=${opts.tier} purpose=${opts.purpose} ${secs}s`
+  );
   recordCall({
     purpose: opts.purpose,
     model,
