@@ -1,8 +1,13 @@
-import { parseFurigana } from "@/lib/jp";
+import { parseFurigana, splitJapaneseRuns } from "@/lib/jp";
 
 /**
- * Renders target-language text, turning 漢字[かんじ] bracket notation into
- * <ruby> annotations (hiragana above the kanji).
+ * Renders target-language text, turning reading-bracket notation into
+ * <ruby> annotations: 漢字[かんじ] (furigana) or 学生[xuésheng] (pinyin).
+ * The lang attribute (and the CJK typography it triggers) is applied per
+ * CJK-script run, not to the whole string — Turkish prose mixed into the
+ * text, and Dutch content, must be neither announced nor styled as CJK.
+ * The ruby lang is inferred from the reading script: kana → ja, latin
+ * (pinyin) → zh, so no caller has to thread the profile language through.
  */
 export function Furigana({
   text,
@@ -13,17 +18,25 @@ export function Furigana({
 }) {
   const segments = parseFurigana(text);
   return (
-    <span lang="ja" className={className}>
+    <span className={className}>
       {segments.map((seg, i) =>
         seg.reading ? (
-          <ruby key={i}>
+          <ruby key={i} lang={/[぀-ヿ]/.test(seg.reading) ? "ja" : "zh"}>
             {seg.text}
-            <rt className="text-[0.55em] text-ink-soft select-none">
+            <rt className="text-[0.65em] text-ink-soft select-none">
               {seg.reading}
             </rt>
           </ruby>
         ) : (
-          <span key={i}>{seg.text}</span>
+          splitJapaneseRuns(seg.text).map((run, j) =>
+            run.ja ? (
+              <span key={`${i}-${j}`} lang="ja">
+                {run.text}
+              </span>
+            ) : (
+              <span key={`${i}-${j}`}>{run.text}</span>
+            )
+          )
         )
       )}
     </span>
