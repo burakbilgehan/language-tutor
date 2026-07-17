@@ -9,12 +9,13 @@ import {
   topChapterLevel,
   ensureChaptersBackfilled,
 } from "@/lib/jobs";
-import { nextLevel } from "@/lib/curriculum/levels";
+import { nextLevelFor } from "@/lib/curriculum/levels";
 
 export const runtime = "nodejs";
 
 /**
- * Manually prepare the next JLPT chapter. Only the immediate next level is
+ * Manually prepare the next chapter of the profile's level scheme. Only the
+ * immediate next level is
  * enqueued; the auto-trigger on the complete route chains forward from there,
  * so we never fire several 2-5 min opus jobs at once.
  */
@@ -36,9 +37,15 @@ export async function POST(req: Request) {
   if (!curriculum) {
     return NextResponse.json({ error: "Müfredat yok" }, { status: 404 });
   }
+  const profile = db.query.profiles
+    .findFirst({ where: eq(tables.profiles.id, profileId) })
+    .sync();
+  if (!profile) {
+    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+  }
 
-  const top = topChapterLevel(curriculum.id);
-  const next = top ? nextLevel(top) : null;
+  const top = topChapterLevel(curriculum.id, profile.targetLanguage);
+  const next = top ? nextLevelFor(profile.targetLanguage, top) : null;
   if (!next) {
     return NextResponse.json(
       { error: "En üst seviyeye ulaşıldı", done: true },

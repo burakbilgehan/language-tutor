@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { and, asc, eq, lte, count } from "drizzle-orm";
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }

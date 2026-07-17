@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { completeNode, isCurriculumTail } from "@/lib/roadmap";
 import { awardXp } from "@/lib/xp";
 import {
@@ -10,24 +11,29 @@ import {
   runJob,
   topChapterLevel,
 } from "@/lib/jobs";
-import { nextLevel } from "@/lib/curriculum/levels";
+import { nextLevelFor } from "@/lib/curriculum/levels";
 
 export const runtime = "nodejs";
 
 /**
- * If the just-completed node is the curriculum tail and a next JLPT level
- * exists, enqueue that chapter (fire-and-forget) so progression never
- * dead-ends. No-op at N1, or if a chapter job is already queued/running.
+ * If the just-completed node is the curriculum tail and a next level exists
+ * in the profile's scheme (JLPT/HSK/CEFR), enqueue that chapter
+ * (fire-and-forget) so progression never dead-ends. No-op at the top level,
+ * or if a chapter job is already queued/running.
  * Returns the level being generated, if any.
  */
-function maybeAutoExtend(profileId: string, nodeId: string): string | null {
+function maybeAutoExtend(
+  profileId: string,
+  targetLanguage: string,
+  nodeId: string
+): string | null {
   if (!isCurriculumTail(nodeId)) return null;
   const curriculum = db.query.curricula
     .findFirst({ where: eq(tables.curricula.profileId, profileId) })
     .sync();
   if (!curriculum) return null;
-  const top = topChapterLevel(curriculum.id);
-  const next = top ? nextLevel(top) : null;
+  const top = topChapterLevel(curriculum.id, targetLanguage);
+  const next = top ? nextLevelFor(targetLanguage, top) : null;
   if (!next) return null;
 
   // createJob dedupes on (jobType, refId) — safe to call unconditionally.
@@ -47,7 +53,7 @@ export async function POST(
   if (!node) {
     return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
   }
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
@@ -71,10 +77,10 @@ export async function POST(
       .run();
   }
 
-  // Auto-extend to the next JLPT level when the learner clears the tail.
+  // Auto-extend to the next level when the learner clears the tail.
   const extendingLevel =
     !alreadyCompleted && node.nodeType === "main"
-      ? maybeAutoExtend(profile.id, nodeId)
+      ? maybeAutoExtend(profile.id, profile.targetLanguage, nodeId)
       : null;
 
   // Harvest lesson vocab into SRS cards (dedup via unique index).

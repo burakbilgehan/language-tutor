@@ -10,6 +10,8 @@ export interface GenerateJsonOptions<T> {
   fixtureKey: string;
   tier: ModelTier;
   timeoutMs?: number;
+  /** Interactive call (user is waiting) — jumps ahead of queued background generations. */
+  urgent?: boolean;
 }
 
 export interface GenerateTextOptions {
@@ -18,6 +20,8 @@ export interface GenerateTextOptions {
   fixtureKey: string;
   tier: ModelTier;
   timeoutMs?: number;
+  /** Interactive call (user is waiting) — jumps ahead of queued background generations. */
+  urgent?: boolean;
 }
 
 export interface LlmProvider {

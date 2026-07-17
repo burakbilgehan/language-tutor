@@ -24,9 +24,18 @@ export function getStrugglesLine(profileId: string): string | null {
     .sync()
     .map((c) => c.front);
 
-  // Failed/low-score attempts → their lesson node titles (topic-level signal).
-  const weakTopicRows = db
-    .select({ title: tables.nodes.titleTr })
+  // Topic-level signal from exercise attempts. Only the LATEST attempt per
+  // exercise counts: earlier failures the learner subsequently corrected are
+  // progress, not struggle (and grading hiccups would otherwise poison the
+  // signal permanently). Scoped to this profile's curriculum.
+  const recent = db
+    .select({
+      exerciseId: tables.attempts.exerciseId,
+      isCorrect: tables.attempts.isCorrect,
+      score: tables.attempts.score,
+      title: tables.nodes.titleTr,
+      profileId: tables.curricula.profileId,
+    })
     .from(tables.attempts)
     .innerJoin(
       tables.exercises,
@@ -34,16 +43,35 @@ export function getStrugglesLine(profileId: string): string | null {
     )
     .innerJoin(tables.lessons, eq(tables.exercises.lessonId, tables.lessons.id))
     .innerJoin(tables.nodes, eq(tables.lessons.nodeId, tables.nodes.id))
-    .where(
-      or(eq(tables.attempts.isCorrect, false), lt(tables.attempts.score, 60))
+    .innerJoin(tables.units, eq(tables.nodes.unitId, tables.units.id))
+    .innerJoin(
+      tables.curricula,
+      eq(tables.units.curriculumId, tables.curricula.id)
     )
     .orderBy(desc(tables.attempts.createdAt))
-    .limit(30)
+    .limit(200)
     .all();
-  const weakTopics = [...new Set(weakTopicRows.map((r) => r.title))].slice(
-    0,
-    4
-  );
+
+  const latestPerExercise = new Map<
+    string,
+    { isCorrect: boolean | null; score: number | null; title: string }
+  >();
+  for (const a of recent) {
+    if (a.profileId !== profileId) continue;
+    if (!latestPerExercise.has(a.exerciseId)) {
+      latestPerExercise.set(a.exerciseId, a);
+    }
+  }
+  const weakTopics = [
+    ...new Set(
+      [...latestPerExercise.values()]
+        .filter(
+          (a) =>
+            a.isCorrect === false || (a.score !== null && a.score < 60)
+        )
+        .map((a) => a.title)
+    ),
+  ].slice(0, 4);
 
   if (weakCards.length === 0 && weakTopics.length === 0) return null;
 

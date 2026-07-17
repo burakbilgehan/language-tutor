@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
 function findTopic(slug: string) {
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
   if (!profile) return null;
   return (
     db.query.grammarTopics

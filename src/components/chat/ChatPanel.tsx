@@ -3,6 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
+import { useStrings } from "@/lib/i18n/use-strings";
+
+const S = {
+  tr: {
+    title: "Kumo ile Sohbet ☁️",
+    replyFailed: "Cevap alınamadı",
+    genericError: "Bir şeyler ters gitti",
+    emptyState:
+      "Merhaba! İstediğin dilde yaz — Türkçe sor, Japonca pratik yap, ya da ikisini karıştır.",
+    placeholder: "Bir şeyler yaz...",
+    send: "Gönder",
+  },
+  en: {
+    title: "Chat with Kumo ☁️",
+    replyFailed: "No reply received",
+    genericError: "Something went wrong",
+    emptyState:
+      "Hi! Write in any language — ask in Turkish, practice Japanese, or mix the two.",
+    placeholder: "Type something...",
+    send: "Send",
+  },
+};
 
 interface Msg {
   role: "user" | "assistant";
@@ -10,6 +32,7 @@ interface Msg {
 }
 
 export function ChatPanel() {
+  const t = useStrings(S);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -42,7 +65,7 @@ export function ChatPanel() {
         body: JSON.stringify({ sessionId, message }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Cevap alınamadı");
+      if (!res.ok) throw new Error(body.error ?? t.replyFailed);
       setSessionId(body.sessionId);
       setMessages((m) => [...m, { role: "assistant", content: body.reply }]);
     } catch (e) {
@@ -50,7 +73,7 @@ export function ChatPanel() {
         ...m,
         {
           role: "assistant",
-          content: `⚠️ ${e instanceof Error ? e.message : "Bir şeyler ters gitti"}`,
+          content: `⚠️ ${e instanceof Error ? e.message : t.genericError}`,
         },
       ]);
     } finally {
@@ -60,16 +83,13 @@ export function ChatPanel() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <StatsHeader title="Kumo ile Sohbet ☁️" backHref="/map" />
+      <StatsHeader title={t.title} />
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 py-6">
         <div className="flex flex-1 flex-col gap-3">
           {messages.length === 0 && !busy && (
             <div className="my-auto text-center text-ink-soft">
               <div className="mb-3 text-5xl">☁️</div>
-              <p>
-                Merhaba! İstediğin dilde yaz — Türkçe sor, Japonca pratik yap,
-                ya da ikisini karıştır.
-              </p>
+              <p>{t.emptyState}</p>
             </div>
           )}
           {messages.map((m, i) => (
@@ -108,11 +128,11 @@ export function ChatPanel() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Bir şeyler yaz..."
+            placeholder={t.placeholder}
             className="flex-1 rounded-full border-2 border-surface-2 bg-surface px-5 py-3 shadow-cozy outline-none focus:border-accent"
           />
           <CozyButton type="submit" disabled={busy || !input.trim()}>
-            Gönder
+            {t.send}
           </CozyButton>
         </form>
       </main>

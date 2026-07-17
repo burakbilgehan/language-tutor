@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { db, tables } from "@/db";
-import { ensureLessonJob, recoverStaleJobs } from "@/lib/jobs";
+import {
+  ensureLessonJob,
+  prefetchSuccessorLessons,
+  recoverStaleJobs,
+} from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
@@ -27,6 +31,10 @@ export async function POST(
     .sync();
 
   if (lesson?.status === "ready" && lesson.content) {
+    // The learner is about to spend minutes here — generate the next lesson
+    // in the background now, not at completion time.
+    prefetchSuccessorLessons(nodeId);
+
     const exercises = db.query.exercises
       .findMany({
         where: eq(tables.exercises.lessonId, lesson.id),

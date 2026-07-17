@@ -1,8 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatsHeader } from "@/components/shared/StatsHeader";
+import { LessonPlayer } from "@/components/lesson/LessonPlayer";
+import { useStrings } from "@/lib/i18n/use-strings";
+
+const S = {
+  tr: {
+    loadFailed: "Yüklenemedi",
+    loading: "Harita yükleniyor...",
+    startFailed: "Başlatılamadı",
+    unit: (n: number) => `Ünite ${n}`,
+    preparing: (lvl: string) =>
+      `${lvl} hazırlanıyor... Bu birkaç dakika sürebilir.`,
+    nextLevelFallback: "Sonraki seviye",
+    nextAutoPre: "Bu seviyeyi bitirince ",
+    nextAutoPost: " otomatik açılır — ya da şimdi hazırlayabilirsin.",
+    prepareNext: (lvl: string) => `Sonraki seviyeyi hazırla (${lvl})`,
+    allDone: (lvl: string) =>
+      `Tüm seviyeler (${lvl}'e kadar) tamamlandı. Sözlük + gramer artık senin.`,
+    review: "Tekrar",
+  },
+  en: {
+    loadFailed: "Failed to load",
+    loading: "Loading map...",
+    startFailed: "Could not start",
+    unit: (n: number) => `Unit ${n}`,
+    preparing: (lvl: string) =>
+      `Preparing ${lvl}... This can take a few minutes.`,
+    nextLevelFallback: "The next level",
+    nextAutoPre: "Finish this level and ",
+    nextAutoPost: " unlocks automatically — or you can prepare it now.",
+    prepareNext: (lvl: string) => `Prepare the next level (${lvl})`,
+    allDone: (lvl: string) =>
+      `All levels (up to ${lvl}) completed. The dictionary + grammar are yours now.`,
+    review: "Review",
+  },
+};
 
 interface NodeDto {
   id: string;
@@ -17,6 +52,8 @@ interface NodeDto {
 
 interface RoadmapDto {
   curriculum: { id: string; title: string };
+  levelScheme: string;
+  finalLevel: string;
   units: {
     id: string;
     titleTr: string;
@@ -48,22 +85,56 @@ const QUEST_ICON: Record<string, string> = {
   vocab_review: "🔁",
 };
 
-const LEVEL_NAME: Record<string, string> = {
-  N5: "N5", N4: "N4", N3: "N3", N2: "N2", N1: "N1",
-};
-
 export function RoadmapView() {
   const router = useRouter();
+  const t = useStrings(S);
   const [data, setData] = useState<RoadmapDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [extendJobId, setExtendJobId] = useState<string | null>(null);
   const [extendError, setExtendError] = useState<string | null>(null);
+  const [openLessonId, setOpenLessonId] = useState<string | null>(null);
+
+  // Lessons open in a drawer over the map (scroll position survives). The
+  // drawer state is mirrored into ?lesson=<id> so the browser back button
+  // closes the drawer instead of leaving the page.
+  const openLesson = useCallback((id: string) => {
+    window.history.pushState(null, "", `/map?lesson=${id}`);
+    setOpenLessonId(id);
+  }, []);
+  const closeLesson = useCallback(() => {
+    if (new URLSearchParams(window.location.search).has("lesson")) {
+      window.history.back();
+    } else {
+      setOpenLessonId(null);
+    }
+  }, []);
+  useEffect(() => {
+    const sync = () =>
+      setOpenLessonId(
+        new URLSearchParams(window.location.search).get("lesson")
+      );
+    sync(); // deep link: /map?lesson=<id>
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+  // Keep the LessonPlayer mounted during the slide-out animation.
+  const [renderedLessonId, setRenderedLessonId] = useState<string | null>(
+    null
+  );
+  useEffect(() => {
+    if (openLessonId) {
+      setRenderedLessonId(openLessonId);
+      return;
+    }
+    const t = setTimeout(() => setRenderedLessonId(null), 500);
+    return () => clearTimeout(t);
+  }, [openLessonId]);
 
   const loadRoadmap = () =>
     fetch("/api/roadmap")
       .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json()).error ?? "Yüklenemedi");
+        if (!r.ok) throw new Error((await r.json()).error ?? t.loadFailed);
         return r.json();
       })
       .then(setData)
@@ -104,10 +175,10 @@ export function RoadmapView() {
         body: JSON.stringify({ profileId }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? "Başlatılamadı");
+      if (!r.ok) throw new Error(j.error ?? t.startFailed);
       setExtendJobId(j.jobId);
     } catch (e) {
-      setExtendError(e instanceof Error ? e.message : "Başlatılamadı");
+      setExtendError(e instanceof Error ? e.message : t.startFailed);
     }
   };
 
@@ -122,25 +193,38 @@ export function RoadmapView() {
   if (!data) {
     return (
       <div className="flex min-h-dvh items-center justify-center text-ink-soft">
-        Harita yükleniyor...
+        {t.loading}
       </div>
     );
   }
 
+  const lessonOpen = openLessonId != null;
+
   return (
-    <div className="min-h-dvh pb-32">
+    <div
+      className="min-h-dvh pb-32"
+      style={{ ["--panel-w" as string]: "clamp(28rem, 64vw, 72rem)" }}
+    >
       <StatsHeader
         title={data.curriculum.title}
         xpTotal={data.xpTotal}
         streak={data.streak}
       />
 
+      {/* When a lesson is open the map column slides left: right padding
+          reserves the panel's width, left padding the quest rail's. The DOM
+          (and thus body scroll position) is untouched. */}
+      <div
+        className={`transition-[padding] duration-500 ease-in-out ${
+          lessonOpen ? "sm:pl-20 sm:pr-[var(--panel-w)]" : ""
+        }`}
+      >
       <main className="mx-auto max-w-xl px-4">
         {data.units.map((unit, ui) => (
           <section key={unit.id} className="relative">
-            <div className="sticky top-16 z-10 my-6 rounded-cozy bg-surface px-5 py-4 shadow-cozy">
+            <div className="sticky top-[calc(var(--header-h)+8px)] z-10 my-6 rounded-cozy bg-surface px-5 py-4 shadow-cozy">
               <div className="text-xs font-semibold uppercase tracking-wider text-accent">
-                Ünite {ui + 1}
+                {t.unit(ui + 1)}
               </div>
               <h2 className="text-lg font-semibold">{unit.titleTr}</h2>
               <p className="text-sm text-ink-soft">{unit.descriptionTr}</p>
@@ -155,8 +239,7 @@ export function RoadmapView() {
                   node={node}
                   offset={Math.sin((ui * 7 + ni) * 1.1) * 90}
                   onClick={() =>
-                    node.status !== "locked" &&
-                    router.push(`/lesson/${node.id}`)
+                    node.status !== "locked" && openLesson(node.id)
                   }
                 />
               ))}
@@ -164,7 +247,7 @@ export function RoadmapView() {
           </section>
         ))}
 
-        {/* End-of-map: extend to the next JLPT level */}
+        {/* End-of-map: extend to the next level of the language's scheme */}
         <div className="my-10 flex flex-col items-center gap-3 text-center">
           {data.isGenerating || extendJobId ? (
             <div className="flex flex-col items-center gap-2 rounded-cozy bg-surface px-6 py-5 shadow-cozy">
@@ -178,24 +261,23 @@ export function RoadmapView() {
                 ))}
               </div>
               <p className="text-sm text-ink-soft">
-                {LEVEL_NAME[data.isGenerating ?? ""] ?? "Sonraki seviye"}{" "}
-                hazırlanıyor... Bu birkaç dakika sürebilir.
+                {t.preparing(data.isGenerating ?? t.nextLevelFallback)}
               </p>
             </div>
           ) : data.nextLevel ? (
             <>
               <div className="text-3xl">🗻</div>
               <p className="text-sm text-ink-soft">
-                Bu seviyeyi bitirince{" "}
-                <strong>{LEVEL_NAME[data.nextLevel]}</strong> otomatik açılır —
-                ya da şimdi hazırlayabilirsin.
+                {t.nextAutoPre}
+                <strong>{data.nextLevel}</strong>
+                {t.nextAutoPost}
               </p>
               <button
                 onClick={startExtend}
                 disabled={!profileId}
                 className="rounded-full bg-accent px-6 py-2.5 text-sm font-semibold text-surface shadow-cozy transition-transform hover:-translate-y-0.5 disabled:opacity-50"
               >
-                Sonraki seviyeyi hazırla ({LEVEL_NAME[data.nextLevel]})
+                {t.prepareNext(data.nextLevel)}
               </button>
               {extendError && (
                 <p className="text-xs text-red-500">{extendError}</p>
@@ -204,40 +286,92 @@ export function RoadmapView() {
           ) : (
             <>
               <div className="text-3xl">🎌</div>
-              <p className="text-sm text-ink-soft">
-                Tüm seviyeler (N1&apos;e kadar) tamamlandı. Sözlük + gramer
-                artık senin.
-              </p>
+              <p className="text-sm text-ink-soft">{t.allDone(data.finalLevel)}</p>
             </>
           )}
         </div>
       </main>
+      </div>
 
-      {/* Side quest rail */}
-      <div className="fixed bottom-0 inset-x-0 z-20 border-t border-surface-2 bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-xl items-center gap-2 overflow-x-auto px-4 py-3">
-          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-ink-soft">
-            Yan görevler
-          </span>
-          {data.sideQuests.map((sq) => (
-            <button
-              key={sq.id}
-              onClick={() => router.push(`/quest/${sq.id}`)}
-              className="flex shrink-0 items-center gap-2 rounded-full bg-surface-2 px-4 py-2 text-sm font-medium transition-all hover:bg-accent-soft active:scale-95 cursor-pointer"
-            >
-              <span>{QUEST_ICON[sq.sideQuestKind ?? ""] ?? "✦"}</span>
-              {sq.titleTr}
-            </button>
-          ))}
-          <button
-            onClick={() => router.push("/review")}
-            className="flex shrink-0 items-center gap-2 rounded-full bg-moss-soft px-4 py-2 text-sm font-medium transition-all hover:brightness-105 active:scale-95 cursor-pointer"
-          >
-            🔁 Tekrar
-          </button>
-        </div>
+      {/* Side quests: rail pinned to the left edge — always on screen while
+          the curriculum scrolls underneath. Labels are visible on wide
+          screens and collapse to hover-tooltips while a lesson is open. */}
+      <div className="fixed left-3 top-1/2 z-20 flex -translate-y-1/2 flex-col items-start gap-2.5 sm:left-5">
+        {data.sideQuests.map((sq) => (
+          <QuestBubble
+            key={sq.id}
+            icon={QUEST_ICON[sq.sideQuestKind ?? ""] ?? "✦"}
+            label={sq.titleTr}
+            compact={lessonOpen}
+            onClick={() => router.push(`/quest/${sq.id}`)}
+          />
+        ))}
+        <QuestBubble
+          icon="🔁"
+          label={`${t.review}${data.dueCards ? ` (${data.dueCards})` : ""}`}
+          accent
+          compact={lessonOpen}
+          onClick={() => router.push("/review")}
+        />
+      </div>
+
+      {/* Lesson panel: slides in from the right, map stays visible (and
+          scrollable) on the left. */}
+      <div
+        className={`fixed inset-y-0 right-0 z-30 w-full overflow-y-auto overscroll-contain bg-background shadow-cozy transition-transform duration-500 ease-in-out sm:w-[var(--panel-w)] sm:rounded-l-3xl sm:border-l sm:border-surface-2 ${
+          lessonOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        {renderedLessonId && (
+          <LessonPlayer
+            key={renderedLessonId}
+            nodeId={renderedLessonId}
+            embedded
+            onExit={closeLesson}
+            onCompleted={loadRoadmap}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+function QuestBubble({
+  icon,
+  label,
+  accent = false,
+  compact = false,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  accent?: boolean;
+  compact?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className="group relative flex items-center gap-2 cursor-pointer"
+    >
+      <span
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl shadow-cozy transition-all group-hover:scale-110 active:scale-95 ${
+          accent ? "bg-moss-soft" : "bg-surface"
+        }`}
+      >
+        {icon}
+      </span>
+      <span
+        className={
+          compact
+            ? "pointer-events-none absolute left-full ml-2 hidden whitespace-nowrap rounded-full bg-ink px-3 py-1 text-xs font-medium text-background group-hover:block"
+            : "hidden max-w-40 truncate rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-ink shadow-cozy lg:block"
+        }
+      >
+        {label}
+      </span>
+    </button>
   );
 }
 

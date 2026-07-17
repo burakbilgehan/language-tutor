@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { SideQuestPayloadSchema } from "@/lib/llm/schemas";
 import { sideQuestPrompt } from "@/lib/llm/prompts/side-quest";
@@ -18,7 +19,7 @@ export async function POST(
   if (!node || node.nodeType !== "side_quest") {
     return NextResponse.json({ error: "Yan görev bulunamadı" }, { status: 404 });
   }
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
@@ -52,6 +53,7 @@ export async function POST(
 
   const { system, prompt } = sideQuestPrompt({
     targetLanguage: profile.targetLanguage,
+    nativeLanguage: profile.nativeLanguage,
     node,
     selfLevel: profile.selfLevel,
     recentVocab,

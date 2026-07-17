@@ -1,17 +1,24 @@
 import { asc, eq } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { totalXp, getStreak } from "./xp";
-import { nextLevel, isJlptLevel, type JlptLevel } from "./curriculum/levels";
+import { nextLevelFor, isLevelOf, schemeFor } from "./curriculum/levels";
 import { ensureChaptersBackfilled } from "./jobs";
 
 export function getRoadmap(profileId: string) {
+  const profile = db.query.profiles
+    .findFirst({ where: eq(tables.profiles.id, profileId) })
+    .sync();
+  if (!profile) return null;
+  const lang = profile.targetLanguage;
+
   const curriculum = db.query.curricula
     .findFirst({ where: eq(tables.curricula.profileId, profileId) })
     .sync();
   if (!curriculum || curriculum.status !== "ready") return null;
 
   // Self-heal: a pre-chapters curriculum gets its N4 chapter row so the
-  // extend affordance and auto-trigger have a "current top level" to work from.
+  // extend affordance and auto-trigger have a "current top level" to work
+  // from; legacy non-ja JLPT level strings are remapped to the real scheme.
   ensureChaptersBackfilled();
 
   const chapterRows = db.query.curriculumChapters
@@ -22,7 +29,7 @@ export function getRoadmap(profileId: string) {
     .sync();
   const topLevel = [...chapterRows]
     .reverse()
-    .find((c) => isJlptLevel(c.level))?.level as JlptLevel | undefined;
+    .find((c) => isLevelOf(lang, c.level))?.level;
   const generatingChapter = chapterRows.find((c) => c.status === "generating");
 
   const unitRows = db.query.units
@@ -53,10 +60,13 @@ export function getRoadmap(profileId: string) {
     }
   }
 
-  const next = topLevel ? nextLevel(topLevel) : null;
+  const next = topLevel ? nextLevelFor(lang, topLevel) : null;
+  const scheme = schemeFor(lang);
 
   return {
     curriculum: { id: curriculum.id, title: curriculum.title },
+    levelScheme: scheme.name,
+    finalLevel: scheme.levels[scheme.levels.length - 1],
     units: unitRows.map((u) => ({
       id: u.id,
       titleTr: u.titleTr,

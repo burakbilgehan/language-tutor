@@ -3,13 +3,29 @@ import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { GradeSchema } from "@/lib/llm/schemas";
 import { gradingPrompt } from "@/lib/llm/prompts/lesson";
 import { awardXp } from "@/lib/xp";
-import { answersMatch, stripFurigana } from "@/lib/jp";
+import { stripFurigana } from "@/lib/jp";
+import { answersMatchFor } from "@/lib/answers";
+import { pick } from "@/lib/i18n";
 
 export const runtime = "nodejs";
+
+// User-visible deterministic grading feedback (LLM feedback is generated in
+// the profile's language by the prompt itself).
+const S = {
+  tr: {
+    correct: "Doğru! 🌸",
+    correctAnswer: (a: string) => `Doğru cevap: ${a}`,
+  },
+  en: {
+    correct: "Correct! 🌸",
+    correctAnswer: (a: string) => `Correct answer: ${a}`,
+  },
+};
 
 export async function POST(
   req: Request,
@@ -30,16 +46,20 @@ export async function POST(
   if (!exercise) {
     return NextResponse.json({ error: "Alıştırma bulunamadı" }, { status: 404 });
   }
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
 
-  // Romaji-tolerant: "konnichiwa" matches こんにちは (see lib/jp.ts).
+  // Reading-tolerant: romaji matches kana for ja ("konnichiwa" = こんにちは),
+  // toneless pinyin matches toned for zh ("ni hao" = "nǐ hǎo"). See lib/jp.ts
+  // and lib/zh.ts.
   const accepted = [exercise.answer, ...(exercise.acceptAlso ?? [])].map(
     stripFurigana
   );
-  const isExactMatch = accepted.some((a) => answersMatch(a, userResponse));
+  const isExactMatch = accepted.some((a) =>
+    answersMatchFor(profile.targetLanguage, a, userResponse)
+  );
 
   let result: {
     isCorrect: boolean;
@@ -49,17 +69,18 @@ export async function POST(
   };
 
   if (exercise.grading === "deterministic" || isExactMatch) {
+    const t = pick(S, profile.uiLanguage);
     result = isExactMatch
       ? {
           isCorrect: true,
           score: 100,
-          feedbackTr: "Doğru! 🌸",
+          feedbackTr: t.correct,
           gradedBy: "deterministic",
         }
       : {
           isCorrect: false,
           score: 0,
-          feedbackTr: `Doğru cevap: ${exercise.answer}`,
+          feedbackTr: t.correctAnswer(exercise.answer),
           gradedBy: "deterministic",
         };
   } else {
@@ -76,7 +97,7 @@ export async function POST(
         (a) =>
           a.gradedBy === "llm" &&
           a.isCorrect !== null &&
-          answersMatch(a.response, userResponse)
+          answersMatchFor(profile.targetLanguage, a.response, userResponse)
       );
 
     if (priorSame) {
@@ -89,6 +110,7 @@ export async function POST(
     } else {
       const { system, prompt } = gradingPrompt({
         targetLanguage: profile.targetLanguage,
+        nativeLanguage: profile.nativeLanguage,
         exerciseType: exercise.type,
         promptTr: exercise.promptTr,
         targetText: exercise.targetText,
@@ -103,6 +125,7 @@ export async function POST(
         fixtureKey: "grade",
         tier: exercise.type === "free_response" ? "balanced" : "fast",
         timeoutMs: 90_000,
+        urgent: true, // user is staring at "Hoca düşünüyor..."
       });
       result = {
         isCorrect: grade.correct,

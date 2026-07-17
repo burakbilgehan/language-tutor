@@ -214,19 +214,21 @@ export class ClaudeCliProvider implements LlmProvider {
           timeoutMs,
         });
       }
-    });
+    }, { urgent: opts.urgent });
   }
 
   async generateText(opts: GenerateTextOptions): Promise<string> {
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    return enqueue(() =>
-      runCli({
-        prompt: opts.prompt,
-        system: opts.system,
-        tier: opts.tier,
-        purpose: opts.fixtureKey,
-        timeoutMs,
-      })
+    return enqueue(
+      () =>
+        runCli({
+          prompt: opts.prompt,
+          system: opts.system,
+          tier: opts.tier,
+          purpose: opts.fixtureKey,
+          timeoutMs,
+        }),
+      { urgent: opts.urgent }
     );
   }
 }

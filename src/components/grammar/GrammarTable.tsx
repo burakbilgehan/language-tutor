@@ -16,7 +16,7 @@ export function GrammarTable({ table }: { table: GrammarTableData }) {
                   key={i}
                   className="sticky top-0 border-b-2 border-accent-soft bg-surface-2 px-3 py-2 text-left font-semibold"
                 >
-                  {h}
+                  <Furigana text={h} />
                 </th>
               ))}
             </tr>
@@ -42,7 +42,9 @@ export function GrammarTable({ table }: { table: GrammarTableData }) {
       {table.footnotes_tr && table.footnotes_tr.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1 text-xs text-ink-soft">
           {table.footnotes_tr.map((f, i) => (
-            <li key={i}>※ {f}</li>
+            <li key={i}>
+              ※ <Furigana text={f} />
+            </li>
           ))}
         </ul>
       )}

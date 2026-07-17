@@ -2,10 +2,84 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import ReactMarkdown from "react-markdown";
+import Link from "next/link";
+import { JpMarkdown } from "@/components/shared/JpMarkdown";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
+import { useProfileMeta } from "@/lib/use-profile-meta";
+import { useStrings } from "@/lib/i18n/use-strings";
+
+const S = {
+  tr: {
+    openFailed: "Açılamadı",
+    genericError: "Bir şeyler ters gitti",
+    regenFailed: "Yenilenemedi",
+    close: "Kapat",
+    backToLessons: "Derslere dön",
+    preparingTitle: "Dersin hazırlanıyor",
+    preparingHint:
+      "Kumo bu dersi sana özel yazıyor — ilk açılışta biraz sürer, sonra hep hazır olacak.",
+    closeGenInBg: "Kapat (üretim arkada sürer)",
+    backGenInBg: "← Derslere dön (üretim arkada sürer)",
+    lessonDone: "Ders tamamlandı!",
+    newCards: (n: number) => `🔁 ${n} yeni kart`,
+    exercisesScore: (c: number, n: number) => `Alıştırmalar: ${c}/${n} doğru`,
+    continueBtn: "Devam et →",
+    regenTitle: "Dersi yeni sorularla baştan üret",
+    examples: "Örnekler",
+    grammarNotes: "Gramer notları",
+    toExercises: "Alıştırmalara geç →",
+    exerciseProgress: (i: number, n: number) => `Alıştırma ${i} / ${n}`,
+    gradeFailed: "Değerlendirme başarısız oldu",
+    gradeErrorFallback: "Değerlendirme sırasında bir sorun çıktı.",
+    answerPlaceholder: "Cevabını yaz...",
+    answerPlaceholderJa: "Cevabını yaz (romaji olur: konnichiwa)...",
+    answerPlaceholderZh: "Cevabını yaz (pinyin olur: ni hao)...",
+    thinking: "Hoca düşünüyor...",
+    check: "Kontrol et",
+    retry: "Tekrar dene",
+    skip: "Atla →",
+    correct: "Doğru! 🌸",
+    wrong: "Olmadı 🍂",
+    next: "Sıradaki →",
+    finishLesson: "Dersi bitir 🎉",
+  },
+  en: {
+    openFailed: "Could not open",
+    genericError: "Something went wrong",
+    regenFailed: "Could not regenerate",
+    close: "Close",
+    backToLessons: "Back to lessons",
+    preparingTitle: "Your lesson is being prepared",
+    preparingHint:
+      "Kumo is writing this lesson just for you — the first open takes a while, then it's always ready.",
+    closeGenInBg: "Close (generation continues in the background)",
+    backGenInBg: "← Back to lessons (generation continues in the background)",
+    lessonDone: "Lesson complete!",
+    newCards: (n: number) => `🔁 ${n} new cards`,
+    exercisesScore: (c: number, n: number) => `Exercises: ${c}/${n} correct`,
+    continueBtn: "Continue →",
+    regenTitle: "Regenerate the lesson with fresh questions",
+    examples: "Examples",
+    grammarNotes: "Grammar notes",
+    toExercises: "Go to exercises →",
+    exerciseProgress: (i: number, n: number) => `Exercise ${i} / ${n}`,
+    gradeFailed: "Grading failed",
+    gradeErrorFallback: "Something went wrong while grading.",
+    answerPlaceholder: "Type your answer...",
+    answerPlaceholderJa: "Type your answer (romaji works: konnichiwa)...",
+    answerPlaceholderZh: "Type your answer (pinyin works: ni hao)...",
+    thinking: "Teacher is thinking...",
+    check: "Check",
+    retry: "Try again",
+    skip: "Skip →",
+    correct: "Correct! 🌸",
+    wrong: "Not quite 🍂",
+    next: "Next →",
+    finishLesson: "Finish lesson 🎉",
+  },
+};
 
 interface ExerciseDto {
   id: string;
@@ -51,8 +125,29 @@ interface AttemptResult {
 
 type Phase = "explanation" | "exercises" | "done";
 
-export function LessonPlayer({ nodeId }: { nodeId: string }) {
+/**
+ * Two render modes: standalone (/lesson/[nodeId] deep link — own header,
+ * exit navigates to /map) and embedded (drawer over the map — compact sticky
+ * header with a close button, exit closes the drawer, completion notifies the
+ * map so it can refresh without losing scroll).
+ */
+export function LessonPlayer({
+  nodeId,
+  embedded = false,
+  onExit,
+  onCompleted,
+}: {
+  nodeId: string;
+  embedded?: boolean;
+  onExit?: () => void;
+  onCompleted?: () => void;
+}) {
+  const t = useStrings(S);
   const router = useRouter();
+  const exit = useCallback(() => {
+    if (onExit) onExit();
+    else router.push("/map");
+  }, [onExit, router]);
   const [data, setData] = useState<OpenResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("explanation");
@@ -67,7 +162,7 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
   const open = useCallback(async () => {
     try {
       const res = await fetch(`/api/nodes/${nodeId}/open`, { method: "POST" });
-      if (!res.ok) throw new Error((await res.json()).error ?? "Açılamadı");
+      if (!res.ok) throw new Error((await res.json()).error ?? t.openFailed);
       const body: OpenResponse = await res.json();
       if (stopped.current) return;
       setData(body);
@@ -76,9 +171,9 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
       }
     } catch (e) {
       if (!stopped.current)
-        setError(e instanceof Error ? e.message : "Bir şeyler ters gitti");
+        setError(e instanceof Error ? e.message : t.genericError);
     }
-  }, [nodeId]);
+  }, [nodeId, t]);
 
   useEffect(() => {
     stopped.current = false;
@@ -88,6 +183,25 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
     };
   }, [open]);
 
+  // Throw the cached lesson away and rebuild it under the current prompt
+  // (better exercises). Resets local progress; the node's status is kept.
+  const regenerate = useCallback(async () => {
+    setData(null);
+    setPhase("explanation");
+    setExIdx(0);
+    setCorrectCount(0);
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/regenerate`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? t.regenFailed);
+      open();
+    } catch (e) {
+      if (!stopped.current)
+        setError(e instanceof Error ? e.message : t.regenFailed);
+    }
+  }, [nodeId, open, t]);
+
   const finish = useCallback(async () => {
     const res = await fetch(`/api/nodes/${nodeId}/complete`, {
       method: "POST",
@@ -95,28 +209,43 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
     const body = await res.json();
     setCompletion({ xpAwarded: body.xpAwarded, newCards: body.newCards });
     setPhase("done");
-  }, [nodeId]);
+    onCompleted?.();
+  }, [nodeId, onCompleted]);
 
   if (error) {
     return (
-      <Centered>
+      <Centered embedded={embedded}>
         <div className="text-4xl">🍂</div>
         <p className="text-ink-soft">{error}</p>
-        <CozyButton onClick={() => router.push("/map")}>Haritaya dön</CozyButton>
+        <CozyButton onClick={exit}>
+          {embedded ? t.close : t.backToLessons}
+        </CozyButton>
       </Centered>
     );
   }
 
   if (!data || data.status === "generating") {
     return (
-      <Centered>
+      <Centered embedded={embedded}>
         <div className="animate-float-slow text-5xl">🖌️</div>
-        <h1 className="text-xl font-semibold">Dersin hazırlanıyor</h1>
-        <p className="text-sm text-ink-soft">
-          Kumo bu dersi sana özel yazıyor — ilk açılışta biraz sürer, sonra
-          hep hazır olacak.
-        </p>
+        <h1 className="text-xl font-semibold">{t.preparingTitle}</h1>
+        <p className="text-sm text-ink-soft">{t.preparingHint}</p>
         <Dots />
+        {embedded ? (
+          <button
+            onClick={exit}
+            className="mt-2 rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+          >
+            {t.closeGenInBg}
+          </button>
+        ) : (
+          <Link
+            href="/map"
+            className="mt-2 rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors"
+          >
+            {t.backGenInBg}
+          </Link>
+        )}
       </Centered>
     );
   }
@@ -126,37 +255,61 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
 
   if (phase === "done" && completion) {
     return (
-      <Centered>
+      <Centered embedded={embedded}>
         <div className="text-6xl">🎉</div>
-        <h1 className="text-2xl font-semibold">Ders tamamlandı!</h1>
+        <h1 className="text-2xl font-semibold">{t.lessonDone}</h1>
         <div className="flex gap-3">
           <Badge>✦ +{completion.xpAwarded} XP</Badge>
           {completion.newCards > 0 && (
-            <Badge>🔁 {completion.newCards} yeni kart</Badge>
+            <Badge>{t.newCards(completion.newCards)}</Badge>
           )}
         </div>
         <p className="text-sm text-ink-soft">
-          Alıştırmalar: {correctCount}/{exercises.length} doğru
+          {t.exercisesScore(correctCount, exercises.length)}
         </p>
-        <CozyButton onClick={() => router.push("/map")}>
-          Haritaya dön
+        <CozyButton onClick={exit}>
+          {embedded ? t.continueBtn : t.backToLessons}
         </CozyButton>
       </Centered>
     );
   }
 
   return (
-    <div className="min-h-dvh pb-16">
-      <StatsHeader title={lesson.titleTr} backHref="/map" />
-      <main className="mx-auto max-w-2xl px-4 py-8">
+    <div className={embedded ? "" : "min-h-dvh pb-16"}>
+      {embedded ? (
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-surface-2 bg-surface/95 px-5 py-3 backdrop-blur">
+          <h2 className="truncate font-display text-lg font-semibold">
+            {lesson.titleTr}
+          </h2>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              onClick={regenerate}
+              title={t.regenTitle}
+              className="rounded-full bg-surface-2 px-3 py-1.5 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+            >
+              ↻
+            </button>
+            <button
+              onClick={exit}
+              title={t.close}
+              className="rounded-full bg-surface-2 px-3 py-1.5 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ) : (
+        <StatsHeader title={lesson.titleTr} />
+      )}
+      <main className="mx-auto max-w-3xl px-4 py-8">
         {phase === "explanation" && (
           <div className="flex flex-col gap-6">
             <section className="rounded-cozy bg-surface p-6 shadow-cozy prose-cozy">
-              <ReactMarkdown>{lesson.explanationTr}</ReactMarkdown>
+              <JpMarkdown>{lesson.explanationTr}</JpMarkdown>
             </section>
 
             <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-              <h2 className="mb-4 text-lg font-semibold">Örnekler</h2>
+              <h2 className="mb-4 text-lg font-semibold">{t.examples}</h2>
               <div className="flex flex-col gap-4">
                 {lesson.examples.map((ex, i) => (
                   <div key={i} className="rounded-xl bg-background p-4">
@@ -179,7 +332,7 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
 
             {lesson.grammarNotes.length > 0 && (
               <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-                <h2 className="mb-3 text-lg font-semibold">Gramer notları</h2>
+                <h2 className="mb-3 text-lg font-semibold">{t.grammarNotes}</h2>
                 {lesson.grammarNotes.map((n, i) => (
                   <div key={i} className="mb-3 last:mb-0">
                     <div className="font-semibold text-accent">
@@ -197,7 +350,7 @@ export function LessonPlayer({ nodeId }: { nodeId: string }) {
                 exercises.length > 0 ? setPhase("exercises") : finish()
               }
             >
-              Alıştırmalara geç →
+              {t.toExercises}
             </CozyButton>
           </div>
         )}
@@ -231,19 +384,33 @@ function ExerciseCard({
   total: number;
   onNext: (wasCorrect: boolean) => void;
 }) {
+  const t = useStrings(S);
   const [response, setResponse] = useState("");
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [grading, setGrading] = useState(false);
+  const [gradeError, setGradeError] = useState<string | null>(null);
+  const targetLanguage = useProfileMeta()?.targetLanguage;
 
   const submit = async (value: string) => {
     setGrading(true);
+    setGradeError(null);
     try {
       const res = await fetch(`/api/exercises/${exercise.id}/attempt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ response: value }),
       });
-      setResult(await res.json());
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(body?.error ?? t.gradeFailed);
+      }
+      setResult(body);
+    } catch (e) {
+      setGradeError(
+        e instanceof Error && e.message !== "Failed to fetch"
+          ? e.message
+          : t.gradeErrorFallback
+      );
     } finally {
       setGrading(false);
     }
@@ -252,9 +419,7 @@ function ExerciseCard({
   return (
     <div className="rounded-cozy bg-surface p-6 shadow-cozy">
       <div className="mb-4 flex items-center justify-between text-xs font-semibold text-ink-soft">
-        <span>
-          Alıştırma {index + 1} / {total}
-        </span>
+        <span>{t.exerciseProgress(index + 1, total)}</span>
         <div className="flex gap-1">
           {Array.from({ length: total }).map((_, i) => (
             <span
@@ -311,7 +476,7 @@ function ExerciseCard({
                 onChange={(e) => setResponse(e.target.value)}
                 disabled={!!result}
                 rows={3}
-                placeholder="Cevabını yaz..."
+                placeholder={t.answerPlaceholder}
                 className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
               />
             ) : (
@@ -319,7 +484,13 @@ function ExerciseCard({
                 value={response}
                 onChange={(e) => setResponse(e.target.value)}
                 disabled={!!result}
-                placeholder="Cevabını yaz (romaji olur: konnichiwa)..."
+                placeholder={
+                  targetLanguage === "ja"
+                    ? t.answerPlaceholderJa
+                    : targetLanguage === "zh"
+                      ? t.answerPlaceholderZh
+                      : t.answerPlaceholder
+                }
                 className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
               />
             )}
@@ -329,12 +500,34 @@ function ExerciseCard({
                 disabled={grading || !response.trim()}
                 className="self-end"
               >
-                {grading ? "Hoca düşünüyor..." : "Kontrol et"}
+                {grading ? t.thinking : t.check}
               </CozyButton>
             )}
           </form>
         )}
       </div>
+
+      {gradeError && !result && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-danger/10 px-4 py-3">
+          <p className="text-sm">🍂 {gradeError}</p>
+          <div className="flex gap-2">
+            <CozyButton
+              variant="soft"
+              className="px-4 py-2 text-sm"
+              onClick={() => submit(response)}
+            >
+              {t.retry}
+            </CozyButton>
+            <CozyButton
+              variant="ghost"
+              className="px-4 py-2 text-sm"
+              onClick={() => onNext(false)}
+            >
+              {t.skip}
+            </CozyButton>
+          </div>
+        </div>
+      )}
 
       {result && (
         <div
@@ -343,7 +536,7 @@ function ExerciseCard({
           }`}
         >
           <div className="font-semibold">
-            {result.isCorrect ? "Doğru! 🌸" : "Olmadı 🍂"}
+            {result.isCorrect ? t.correct : t.wrong}
             {result.xpAwarded > 0 && (
               <span className="ml-2 text-sm text-gold">+{result.xpAwarded} XP</span>
             )}
@@ -354,7 +547,7 @@ function ExerciseCard({
             variant="soft"
             onClick={() => onNext(result.isCorrect)}
           >
-            {index + 1 < total ? "Sıradaki →" : "Dersi bitir 🎉"}
+            {index + 1 < total ? t.next : t.finishLesson}
           </CozyButton>
         </div>
       )}
@@ -362,9 +555,19 @@ function ExerciseCard({
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+function Centered({
+  children,
+  embedded = false,
+}: {
+  children: React.ReactNode;
+  embedded?: boolean;
+}) {
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+    <div
+      className={`mx-auto flex max-w-md flex-col items-center justify-center gap-4 px-6 text-center ${
+        embedded ? "min-h-[70dvh] py-10" : "min-h-dvh"
+      }`}
+    >
       {children}
     </div>
   );

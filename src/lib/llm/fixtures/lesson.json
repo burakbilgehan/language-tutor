@@ -22,16 +22,36 @@
     }
   ],
   "vocab": [
-    { "term": "こんにちは", "reading": "konnichiwa", "meaning_tr": "merhaba", "example": "こんにちは、田中さん。" },
-    { "term": "おはよう", "reading": "ohayou", "meaning_tr": "günaydın", "example": null },
-    { "term": "こんばんは", "reading": "konbanwa", "meaning_tr": "iyi akşamlar", "example": null }
+    {
+      "term": "こんにちは",
+      "reading": "konnichiwa",
+      "meaning_tr": "merhaba",
+      "example": "こんにちは、田中さん。"
+    },
+    {
+      "term": "おはよう",
+      "reading": "ohayou",
+      "meaning_tr": "günaydın",
+      "example": null
+    },
+    {
+      "term": "こんばんは",
+      "reading": "konbanwa",
+      "meaning_tr": "iyi akşamlar",
+      "example": null
+    }
   ],
   "exercises": [
     {
       "type": "mcq",
       "prompt_tr": "Sabah bir arkadaşına nasıl selam verirsin?",
       "target_text": null,
-      "options": ["こんばんは", "おはよう", "こんにちは", "さようなら"],
+      "options": [
+        "こんばんは",
+        "おはよう",
+        "こんにちは",
+        "さようなら"
+      ],
       "answer": "おはよう",
       "accept_also": null
     },
@@ -39,7 +59,12 @@
       "type": "mcq",
       "prompt_tr": "「こんにちは」 ne anlama gelir?",
       "target_text": null,
-      "options": ["Günaydın", "Merhaba", "İyi geceler", "Hoşça kal"],
+      "options": [
+        "Günaydın",
+        "Merhaba",
+        "İyi geceler",
+        "Hoşça kal"
+      ],
       "answer": "Merhaba",
       "accept_also": null
     },
@@ -49,7 +74,9 @@
       "target_text": "___",
       "options": null,
       "answer": "こんばんは",
-      "accept_also": ["konbanwa"]
+      "accept_also": [
+        "konbanwa"
+      ]
     },
     {
       "type": "translate",
@@ -57,7 +84,10 @@
       "target_text": "おはようございます。",
       "options": null,
       "answer": "Günaydın",
-      "accept_also": ["Günaydın (kibar)", "İyi sabahlar"]
+      "accept_also": [
+        "Günaydın (kibar)",
+        "İyi sabahlar"
+      ]
     },
     {
       "type": "free_response",
@@ -65,7 +95,12 @@
       "target_text": null,
       "options": null,
       "answer": "こんにちは、田中さん。 gibi bir selamlama bekleniyor; こんにちは kullanımı ve さん eki doğru olmalı.",
-      "accept_also": null
+      "accept_also": [
+        "こんにちは、田中さん",
+        "konnichiwa, tanaka-san",
+        "tanaka-san konnichiwa",
+        "こんにちは 田中さん"
+      ]
     }
   ]
 }
