@@ -3,6 +3,7 @@
 import { Fragment } from "react";
 import { ZH_ASPECT_GROUPS } from "@/lib/conjugation/zh";
 import { Furigana } from "@/components/shared/Furigana";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 
@@ -75,7 +76,10 @@ export function ZhAspectView() {
                       {r.pattern}
                     </td>
                     <td className="border border-ink/10 px-2 py-1.5">
-                      <Furigana text={r.exZh} className="leading-relaxed" />
+                      <div className="flex items-start gap-1">
+                        <Furigana text={r.exZh} className="leading-relaxed" />
+                        <SpeakButton text={r.exZh} lang="zh-CN" />
+                      </div>
                       <div className="text-xs text-ink-soft">
                         {en ? r.exEn : r.exTr}
                       </div>

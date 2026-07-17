@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { getActiveProfile } from "@/lib/profile";
 import { pick } from "@/lib/i18n";
 import {
@@ -76,6 +77,7 @@ function PinyinTable({
               </td>
               <td className="whitespace-nowrap border border-ink/10 px-2 py-1.5 font-display text-lg">
                 <Furigana text={r.exampleZh} />
+                <SpeakButton text={r.exampleZh} lang="zh-CN" />
               </td>
               <td className="border border-ink/10 px-2 py-1.5 text-ink-soft">
                 {en ? r.hintEn : r.hintTr}
