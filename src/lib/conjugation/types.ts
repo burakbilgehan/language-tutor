@@ -26,6 +26,11 @@ export interface ConjForm {
   romaji: string | null;
   /** Bracket notation for the Furigana component: 食[た]べます. */
   furigana: string;
+  /**
+   * Verb-agnostic example: ja has the conjugated word inlined (bracket
+   * notation); tr/en translate the frame with 〜 standing for the word.
+   */
+  example: { ja: string; tr: string; en: string } | null;
 }
 
 export interface ConjGroup {

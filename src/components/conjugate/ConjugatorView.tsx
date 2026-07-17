@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toHiragana } from "wanakana";
 import { conjugatorFor, type JaWordClass } from "@/lib/conjugation";
 import { Furigana } from "@/components/shared/Furigana";
@@ -17,6 +17,10 @@ const S = {
     romaji: "Romaji",
     presets: "Örnekler",
     empty: "Bir kelime yaz ya da yukarıdan bir örnek seç.",
+    colForm: "Form",
+    colRule: "Kural",
+    colResult: "Sonuç",
+    colExample: "Örnek",
   },
   en: {
     inputLabel: "Word (romaji / kana / kanji)",
@@ -27,6 +31,10 @@ const S = {
     romaji: "Romaji",
     presets: "Presets",
     empty: "Type a word or pick a preset above.",
+    colForm: "Form",
+    colRule: "Rule",
+    colResult: "Result",
+    colExample: "Example",
   },
 };
 
@@ -96,6 +104,18 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
     setReadingTouched(true);
     setUserClass(p.wordClass as JaWordClass);
     lookedUpFor.current = p.surface;
+  };
+
+  // Ruler column: shared prefix stripped, e.g. かく→かきます renders 〜く → 〜きます.
+  // Kana is used when known so kanji spelling doesn't hide the sound change.
+  const dictBase = (hasKanji ? kanaReading : "") || surface;
+  const ruleFor = (formKana: string | null, formSurface: string) => {
+    const to = formKana ?? formSurface;
+    if (!dictBase || dictBase === to) return "—";
+    let p = 0;
+    while (p < dictBase.length && p < to.length && dictBase[p] === to[p]) p++;
+    if (p === 0) return `${dictBase} → ${to}`;
+    return `〜${dictBase.slice(p)} → 〜${to.slice(p)}`;
   };
 
   const onInputChange = (v: string) => {
@@ -211,35 +231,73 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
               ))}
             </div>
           )}
-          <div className="grid gap-4 md:grid-cols-2">
-            {result.groups.map((g) => (
-              <section key={g.id} className="rounded-cozy bg-surface p-4 shadow-cozy">
-                <h2 className="mb-2 font-display text-base font-bold">{en ? g.labelEn : g.labelTr}</h2>
-                <table className="w-full">
-                  <tbody>
+          <div className="overflow-x-auto rounded-cozy bg-surface p-2 shadow-cozy sm:p-4">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  {[t.colForm, t.colRule, t.colResult, t.colExample].map((h) => (
+                    <th
+                      key={h}
+                      className="border border-ink/10 bg-background px-2 py-1.5 text-left text-xs font-semibold tracking-wider text-accent"
+                    >
+                      {h.toUpperCase()}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {result.groups.map((g) => (
+                  <Fragment key={g.id}>
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="border border-ink/10 bg-accent/10 px-2 py-1.5 font-display text-sm font-bold"
+                      >
+                        {en ? g.labelEn : g.labelTr}
+                      </td>
+                    </tr>
                     {g.forms.map((f) => (
-                      <tr key={f.id} className="border-t border-ink/5 first:border-t-0">
-                        <td className="py-1.5 pr-2 align-baseline">
-                          <div className="text-xs text-ink-soft">{en ? f.labelEn : f.labelTr}</div>
-                          <div className="text-[0.65rem] text-ink-soft/60" lang="ja">
+                      <tr key={f.id} className="align-top">
+                        <td className="border border-ink/10 px-2 py-1.5">
+                          <div>{en ? f.labelEn : f.labelTr}</div>
+                          <div className="text-[0.65rem] text-ink-soft/70" lang="ja">
                             {f.pattern}
                           </div>
                         </td>
-                        <td className="py-1.5 text-right align-baseline">
+                        <td
+                          className="whitespace-nowrap border border-ink/10 px-2 py-1.5 text-ink-soft"
+                          lang="ja"
+                        >
+                          {ruleFor(f.kana, f.surface)}
+                        </td>
+                        <td className="border border-ink/10 px-2 py-1.5">
                           <Furigana
                             text={f.furigana}
-                            className="font-display text-lg leading-relaxed"
+                            className="font-display text-base leading-relaxed"
                           />
                           {showRomaji && f.romaji && (
                             <div className="text-xs text-ink-soft">{f.romaji}</div>
                           )}
                         </td>
+                        <td className="border border-ink/10 px-2 py-1.5">
+                          {f.example && (
+                            <>
+                              <Furigana
+                                text={f.example.ja}
+                                className="leading-relaxed"
+                              />
+                              <div className="text-xs text-ink-soft">
+                                {en ? f.example.en : f.example.tr}
+                              </div>
+                            </>
+                          )}
+                        </td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
-              </section>
-            ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
         </>
       )}
