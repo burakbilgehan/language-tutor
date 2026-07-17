@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, count, eq, lte } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { db, tables } from "@/db";
-import { review, type Rating } from "@/lib/srs";
-import { awardXp } from "@/lib/xp";
+import { db } from "@/db";
+import { srsReview } from "@/core/srs";
+import type { Rating } from "@/lib/srs";
 
 export const runtime = "nodejs";
 
@@ -17,61 +15,9 @@ export async function POST(req: Request) {
   }
   const { cardId, rating } = parsed.data;
 
-  const card = db.query.srsCards
-    .findFirst({ where: eq(tables.srsCards.id, cardId) })
-    .sync();
-  if (!card) {
+  const result = srsReview(db, cardId, rating as Rating);
+  if (!result) {
     return NextResponse.json({ error: "Kart bulunamadı" }, { status: 404 });
   }
-
-  const next = review(
-    {
-      easeFactor: card.easeFactor,
-      intervalDays: card.intervalDays,
-      repetitions: card.repetitions,
-      lapses: card.lapses,
-    },
-    rating as Rating
-  );
-
-  db.transaction((tx) => {
-    tx.update(tables.srsCards)
-      .set({
-        easeFactor: next.easeFactor,
-        intervalDays: next.intervalDays,
-        repetitions: next.repetitions,
-        lapses: next.lapses,
-        dueAt: next.dueAt,
-      })
-      .where(eq(tables.srsCards.id, cardId))
-      .run();
-    tx.insert(tables.srsReviews)
-      .values({
-        id: nanoid(),
-        cardId,
-        rating,
-        intervalBefore: card.intervalDays,
-        intervalAfter: next.intervalDays,
-      })
-      .run();
-  });
-
-  if (rating >= 2) awardXp(card.profileId, 2, "srs_review", cardId);
-
-  const remaining = db
-    .select({ n: count() })
-    .from(tables.srsCards)
-    .where(
-      and(
-        eq(tables.srsCards.profileId, card.profileId),
-        lte(tables.srsCards.dueAt, new Date())
-      )
-    )
-    .get();
-
-  return NextResponse.json({
-    nextDueAt: next.dueAt,
-    intervalDays: next.intervalDays,
-    remaining: remaining?.n ?? 0,
-  });
+  return NextResponse.json(result);
 }

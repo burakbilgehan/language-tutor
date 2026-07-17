@@ -6,6 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { srsDue, srsReview } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -59,20 +60,16 @@ export function SrsSession() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/srs/due")
-      .then((r) => r.json())
-      .then((d) => setCards(d.cards ?? []));
+    srsDue()
+      .then((d) => setCards(d.cards ?? []))
+      .catch(() => setCards([]));
   }, []);
 
   const rate = async (rating: 0 | 1 | 2 | 3) => {
     if (!cards || busy) return;
     setBusy(true);
     try {
-      await fetch("/api/srs/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardId: cards[idx].id, rating }),
-      });
+      await srsReview(cards[idx].id, rating);
       setReviewed((n) => n + 1);
       setRevealed(false);
       setIdx((i) => i + 1);
