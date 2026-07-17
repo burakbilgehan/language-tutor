@@ -123,6 +123,19 @@ const STRONG: Record<string, Parts> = {
   bidden: ["bad", "baden", "gebeden", "h"],
 };
 
+// Irregular PRESENT stems ([ik, jij, hij]) — the weak stem rule breaks for
+// these (zijn → *zij) and for komen (vowel-restore would give *koom).
+const PRESENT: Record<string, [string, string, string]> = {
+  zijn: ["ben", "bent", "is"],
+  hebben: ["heb", "hebt", "heeft"],
+  kunnen: ["kan", "kunt", "kan"],
+  zullen: ["zal", "zult", "zal"],
+  mogen: ["mag", "mag", "mag"],
+  willen: ["wil", "wilt", "wil"],
+  komen: ["kom", "komt", "komt"],
+  houden: ["houd", "houdt", "houdt"],
+};
+
 // Inseparable prefixes: participle takes no ge-.
 const INSEP = ["be", "ge", "er", "her", "ont", "ver"];
 
@@ -210,6 +223,19 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
   const notes: { tr: string; en: string }[] = [];
   const [sepPrefix, base] = splitSeparable(inf);
   const strong = STRONG[base] ?? null;
+
+  // Weak path sanity: a real infinitive ends in -en/-aan and leaves a stem
+  // with a vowel. "ben" (stem "b") is a conjugated form, not an infinitive.
+  if (!strong) {
+    const probe = nlStemParts(base).stem;
+    if (!/(?:en|aan)$/.test(base) || probe.length < 2 || !/[aeiouyë]/.test(probe)) {
+      return {
+        ok: false,
+        errorTr: "Bu bir mastar görünmüyor. Fiilin sözlük halini gir (werken, zijn, opstaan…).",
+        errorEn: "This doesn't look like an infinitive. Enter the dictionary form (werken, zijn, opstaan…).",
+      };
+    }
+  }
   const inseparable = INSEP.some(
     (p) => inf.startsWith(p) && !sepPrefix && inf.length > p.length + 3
   );
@@ -257,8 +283,11 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
   }
 
   // Present forms (separable verbs split in main clauses).
-  const presIk = stem;
-  const presJij = stem.endsWith("t") ? stem : stem + "t";
+  const pres = PRESENT[base];
+  const presIk = pres?.[0] ?? stem;
+  const presJij = pres?.[1] ?? (stem.endsWith("t") ? stem : stem + "t");
+  const presHij = pres?.[2] ?? presJij;
+  const impStem = base === "zijn" ? "wees" : presIk;
   const sepTail = sepPrefix ? " " + sepPrefix : "";
   const show = (core: string) => (sepPrefix ? `${core}${sepTail}` : core);
 
@@ -274,8 +303,8 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
           exNl: `Ik ${show(presIk)} elke dag.`, exTr: "Her gün 〜rım.", exEn: "I 〜 every day." },
         { id: "jij", labelTr: "jij/u (2. tekil)", labelEn: "jij/u (2sg)", pattern: "kök + t", value: show(presJij),
           exNl: `Jij ${show(presJij)} goed.`, exTr: "Sen iyi 〜rsın.", exEn: "You 〜 well." },
-        { id: "hij", labelTr: "hij/zij (3. tekil)", labelEn: "hij/zij (3sg)", pattern: "kök + t", value: show(presJij),
-          exNl: `Hij ${show(presJij)} vaak.`, exTr: "O sık sık 〜r.", exEn: "He often 〜s." },
+        { id: "hij", labelTr: "hij/zij (3. tekil)", labelEn: "hij/zij (3sg)", pattern: "kök + t", value: show(presHij),
+          exNl: `Hij ${show(presHij)} vaak.`, exTr: "O sık sık 〜r.", exEn: "He often 〜s." },
         { id: "wij", labelTr: "wij/jullie/zij (çoğul)", labelEn: "plural", pattern: "mastar", value: show(inf),
           exNl: `Wij ${show(inf)} samen.`, exTr: "Birlikte 〜rız.", exEn: "We 〜 together." },
       ],
@@ -315,8 +344,8 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
           exNl: `Hij gaat straks ${inf}.`, exTr: "Birazdan 〜ecek.", exEn: "He is going to 〜 soon." },
         { id: "conditional", labelTr: "Koşul kipi (zou)", labelEn: "Conditional (zou)", pattern: "zou/zouden + mastar", value: `zou ${inf}`,
           exNl: `Ik zou graag ${inf}.`, exTr: "Memnuniyetle 〜rdım.", exEn: "I would like to 〜." },
-        { id: "imperative", labelTr: "Emir", labelEn: "Imperative", pattern: "kök", value: sepPrefix ? `${stem} ${sepPrefix}!` : `${stem}!`,
-          exNl: sepPrefix ? `${stem[0].toUpperCase()}${stem.slice(1)} nu ${sepPrefix}!` : `${stem[0].toUpperCase()}${stem.slice(1)} nu!`, exTr: "Hemen 〜!", exEn: "〜 now!" },
+        { id: "imperative", labelTr: "Emir", labelEn: "Imperative", pattern: "kök", value: sepPrefix ? `${impStem} ${sepPrefix}!` : `${impStem}!`,
+          exNl: sepPrefix ? `${impStem[0].toUpperCase()}${impStem.slice(1)} nu ${sepPrefix}!` : `${impStem[0].toUpperCase()}${impStem.slice(1)} nu!`, exTr: "Hemen 〜!", exEn: "〜 now!" },
         { id: "present-participle", labelTr: "Şimdiki ortaç", labelEn: "Present participle", pattern: "mastar + d", value: inf + "d",
           exNl: `${inf[0].toUpperCase()}${inf.slice(1)}d kwam hij binnen.`, exTr: "〜erek içeri girdi.", exEn: "He came in 〜ing." },
       ],
