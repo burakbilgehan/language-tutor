@@ -2,6 +2,9 @@
 
 /* Cozy warm palette — light: cream/terracotta/moss, dark: warm brown. */
 :root {
+  /* Fixed height of the sticky StatsHeader (title row + nav row + border);
+     sticky offsets below the header reference this. */
+  --header-h: 101px;
   --background: #f7f2e9;
   --surface: #fffdf7;
   --surface-2: #f1e9db;
@@ -80,10 +83,13 @@ h3,
   font-family: var(--font-fraunces), Georgia, serif;
 }
 
-/* Japanese text gets a JP stack and breathing room. */
+/* Japanese text gets a JP stack, breathing room, and a size bump — kanji and
+   dakuten at Latin sizes are illegible; 1.55em keeps them readable without
+   zooming. */
 [lang="ja"] {
   font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
     "Noto Sans JP", sans-serif;
+  font-size: 1.55em;
   line-height: 1.9;
 }
 

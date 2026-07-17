@@ -5,34 +5,69 @@ import { getProvider, LlmError } from "@/lib/llm/provider";
 import {
   CurriculumSchema,
   GrammarTopicSchema,
+  KanjiContentSchema,
   LessonSchema,
 } from "@/lib/llm/schemas";
 import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
 import { lessonPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
+import { kanjiPrompt } from "@/lib/llm/prompts/kanji";
 import { grammarIndexFor } from "@/lib/grammar-index";
 import { getStrugglesLine } from "@/lib/struggles";
 import {
   levelOrdinal,
-  isJlptLevel,
-  type JlptLevel,
+  isLevelOf,
+  levelOrdinalFor,
+  remapLegacyLevel,
+  schemeFor,
 } from "@/lib/curriculum/levels";
 
 type JobType = (typeof tables.generationJobs.$inferSelect)["jobType"];
 
 const STALE_MS = 15 * 60 * 1000;
+const PROCESS_START = new Date();
 let staleCheckDone = false;
 
-/** Jobs left 'running' by a dead dev-server process → error, so UI can retry. */
+/**
+ * Recover from a dead dev-server process. Jobs only live inside one process,
+ * so at boot every 'running' job predating this process is an orphan — as is
+ * every stale 'queued' row (its `void runJob(...)` call died with the
+ * process; left queued it would block createJob's dedupe forever, making the
+ * resource un-regenerable). After erroring orphan jobs, resources left in
+ * 'generating' with no live job are flipped to 'error' so the UI offers a
+ * retry instead of an eternal spinner.
+ */
 export function recoverStaleJobs() {
   if (staleCheckDone) return;
   staleCheckDone = true;
+
+  const orphanError = {
+    status: "error" as const,
+    error: "Sunucu yeniden başladı, üretim yarıda kaldı.",
+    finishedAt: new Date(),
+  };
+  // Orphans from a previous process…
   db.update(tables.generationJobs)
-    .set({
-      status: "error",
-      error: "Sunucu yeniden başladı, üretim yarıda kaldı.",
-      finishedAt: new Date(),
-    })
+    .set(orphanError)
+    .where(
+      and(
+        eq(tables.generationJobs.status, "running"),
+        lt(tables.generationJobs.startedAt, PROCESS_START)
+      )
+    )
+    .run();
+  db.update(tables.generationJobs)
+    .set(orphanError)
+    .where(
+      and(
+        eq(tables.generationJobs.status, "queued"),
+        lt(tables.generationJobs.createdAt, PROCESS_START)
+      )
+    )
+    .run();
+  // …and in-process jobs hung well past every CLI timeout.
+  db.update(tables.generationJobs)
+    .set(orphanError)
     .where(
       and(
         eq(tables.generationJobs.status, "running"),
@@ -40,6 +75,61 @@ export function recoverStaleJobs() {
       )
     )
     .run();
+
+  // Resources stuck 'generating' with no live job → 'error' (retryable in UI).
+  const live = db.query.generationJobs
+    .findMany({
+      where: inArray(tables.generationJobs.status, ["queued", "running"]),
+      columns: { jobType: true, refId: true },
+    })
+    .sync();
+  const liveRefs = (type: JobType) =>
+    new Set(live.filter((j) => j.jobType === type).map((j) => j.refId));
+
+  const grammarLive = liveRefs("grammar");
+  db.query.grammarTopics
+    .findMany({
+      where: eq(tables.grammarTopics.status, "generating"),
+      columns: { id: true },
+    })
+    .sync()
+    .filter((t) => !grammarLive.has(t.id))
+    .forEach((t) => {
+      db.update(tables.grammarTopics)
+        .set({ status: "error" })
+        .where(eq(tables.grammarTopics.id, t.id))
+        .run();
+    });
+
+  const kanjiLive = liveRefs("kanji");
+  db.query.kanjiEntries
+    .findMany({
+      where: eq(tables.kanjiEntries.status, "generating"),
+      columns: { id: true },
+    })
+    .sync()
+    .filter((k) => !kanjiLive.has(k.id))
+    .forEach((k) => {
+      db.update(tables.kanjiEntries)
+        .set({ status: "error" })
+        .where(eq(tables.kanjiEntries.id, k.id))
+        .run();
+    });
+
+  const lessonLive = liveRefs("lesson");
+  db.query.lessons
+    .findMany({
+      where: eq(tables.lessons.status, "generating"),
+      columns: { id: true, nodeId: true },
+    })
+    .sync()
+    .filter((l) => !lessonLive.has(l.nodeId))
+    .forEach((l) => {
+      db.update(tables.lessons)
+        .set({ status: "error" })
+        .where(eq(tables.lessons.id, l.id))
+        .run();
+    });
 }
 
 /**
@@ -84,6 +174,91 @@ export function ensureLessonJob(nodeId: string): string | null {
   return jobId;
 }
 
+/**
+ * Force a fresh generation for a node whose lesson may already be ready —
+ * lets stale/low-quality cached lessons be rebuilt under the current prompt.
+ * The lesson row is flipped to "generating" up front so an open() racing the
+ * queued job doesn't serve the stale copy.
+ */
+export function regenerateLessonJob(nodeId: string): string {
+  const lesson = db.query.lessons
+    .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
+    .sync();
+  if (lesson) {
+    db.update(tables.lessons)
+      .set({ status: "generating" })
+      .where(eq(tables.lessons.id, lesson.id))
+      .run();
+  }
+  const jobId = createJob("lesson", nodeId);
+  void runJob(jobId);
+  return jobId;
+}
+
+/**
+ * Fire lesson generation for the node(s) whose prereq is `nodeId`. Called when
+ * a lesson is OPENED, so the successor generates while the learner works
+ * through the current one (~minutes of head start) instead of only in the
+ * completion→open gap. No extra LLM spend: the successor's lesson would be
+ * generated anyway; this only moves it earlier. Errored lessons are skipped —
+ * retries stay user-driven (opening the node itself), not poll-driven.
+ */
+export function prefetchSuccessorLessons(nodeId: string) {
+  const successors = db.query.nodes
+    .findMany({
+      where: and(
+        eq(tables.nodes.prereqNodeId, nodeId),
+        eq(tables.nodes.nodeType, "main")
+      ),
+      columns: { id: true },
+    })
+    .sync();
+  for (const s of successors) {
+    const lesson = db.query.lessons
+      .findFirst({ where: eq(tables.lessons.nodeId, s.id) })
+      .sync();
+    if (lesson?.status === "error") continue;
+    ensureLessonJob(s.id);
+  }
+}
+
+/**
+ * Queue LLM content generation for every kanji of a level. Jobs are driven
+ * SEQUENTIALLY (one 'running' at a time, rest stay 'queued'): kicking all ~80
+ * at once would mark them all running and the 15-minute stale sweep would
+ * kill the tail of the batch while it waits behind the concurrency-1 CLI
+ * queue. Auto-fill passes includeErrors=false so failed entries are only
+ * retried by an explicit user action, never in a background loop.
+ * Returns how many jobs were queued.
+ */
+export function queueKanjiLevel(
+  targetLanguage: string,
+  level: string,
+  includeErrors: boolean
+): number {
+  const statuses = includeErrors ? ["pending", "error"] : ["pending"];
+  const entries = db.query.kanjiEntries
+    .findMany({
+      where: and(
+        eq(tables.kanjiEntries.targetLanguage, targetLanguage),
+        eq(tables.kanjiEntries.level, level),
+        inArray(tables.kanjiEntries.status, statuses as ("pending" | "error")[])
+      ),
+      orderBy: [asc(tables.kanjiEntries.position)],
+      columns: { id: true },
+    })
+    .sync();
+  if (entries.length === 0) return 0;
+
+  const jobIds = entries.map((e) => createJob("kanji", e.id));
+  void (async () => {
+    for (const id of jobIds) {
+      await runJob(id); // no-op for deduped ids already run elsewhere
+    }
+  })();
+  return jobIds.length;
+}
+
 export function getJob(id: string) {
   return db.query.generationJobs
     .findFirst({ where: eq(tables.generationJobs.id, id) })
@@ -101,19 +276,22 @@ export async function runJob(jobId: string) {
 
   try {
     if (job.jobType === "curriculum") {
-      // Legacy shim: an old "curriculum" job = generate the N5 chapter.
-      await runChapterJob(job.refId, "N5");
+      // Legacy shim: an old "curriculum" job = generate the first chapter
+      // of the profile's level scheme (N5 for ja, HSK1 for zh, A1 CEFR...).
+      await runChapterJob(job.refId, null);
     } else if (job.jobType === "chapter") {
-      // refId encodes "profileId:level".
+      // refId encodes "profileId:level". Level validity is checked inside
+      // runChapterJob against the profile's own scheme.
       const sep = job.refId.lastIndexOf(":");
       const profileId = job.refId.slice(0, sep);
       const level = job.refId.slice(sep + 1);
-      if (!isJlptLevel(level)) throw new Error(`Geçersiz seviye: ${level}`);
       await runChapterJob(profileId, level);
     } else if (job.jobType === "lesson") {
       await runLessonJob(job.refId);
     } else if (job.jobType === "grammar") {
       await runGrammarJob(job.refId);
+    } else if (job.jobType === "kanji") {
+      await runKanjiJob(job.refId);
     } else {
       throw new Error(`Bilinmeyen job tipi: ${job.jobType}`);
     }
@@ -163,6 +341,22 @@ async function runLessonJob(nodeId: string) {
     .map((r) => r.title)
     .slice(-12);
 
+  // Recent exercise questions in this curriculum — fed to the prompt so the
+  // LLM stops recycling the same trivially-patterned questions across lessons.
+  const recentExercisePrompts = db
+    .select({ prompt: tables.exercises.promptTr })
+    .from(tables.exercises)
+    .innerJoin(
+      tables.lessons,
+      eq(tables.exercises.lessonId, tables.lessons.id)
+    )
+    .innerJoin(tables.nodes, eq(tables.lessons.nodeId, tables.nodes.id))
+    .innerJoin(tables.units, eq(tables.nodes.unitId, tables.units.id))
+    .where(eq(tables.units.curriculumId, unit.curriculumId))
+    .all()
+    .map((r) => r.prompt)
+    .slice(-30);
+
   // Ensure a lessons row exists (status marker for the UI).
   const existing = db.query.lessons
     .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
@@ -187,6 +381,7 @@ async function runLessonJob(nodeId: string) {
       unitTheme: unit.theme,
       completedTitles,
       strugglesLine: getStrugglesLine(profile.id),
+      recentExercisePrompts,
     });
     const lesson = await getProvider().generateJson({
       system,
@@ -202,7 +397,20 @@ async function runLessonJob(nodeId: string) {
         .set({ content: lesson, status: "ready", generatedAt: new Date() })
         .where(eq(tables.lessons.id, lessonId))
         .run();
-      // Re-generation: replace old exercises.
+      // Re-generation: replace old exercises. Attempts on the replaced
+      // exercises go with them (FK, and they grade questions that no longer
+      // exist).
+      tx.delete(tables.attempts)
+        .where(
+          inArray(
+            tables.attempts.exerciseId,
+            tx
+              .select({ id: tables.exercises.id })
+              .from(tables.exercises)
+              .where(eq(tables.exercises.lessonId, lessonId))
+          )
+        )
+        .run();
       tx.delete(tables.exercises)
         .where(eq(tables.exercises.lessonId, lessonId))
         .run();
@@ -241,7 +449,13 @@ async function runGrammarJob(topicId: string) {
     .sync();
   if (!topic) throw new Error("Gramer konusu bulunamadı");
 
-  const profile = db.query.profiles.findFirst().sync();
+  // Level personalization must follow the topic's language, not whichever
+  // profile happens to be active when the job runs.
+  const profile = db.query.profiles
+    .findFirst({
+      where: eq(tables.profiles.targetLanguage, topic.targetLanguage),
+    })
+    .sync();
   const siblingTitles = db
     .select({ title: tables.grammarTopics.titleTr })
     .from(tables.grammarTopics)
@@ -258,6 +472,7 @@ async function runGrammarJob(topicId: string) {
     const { system, prompt } = grammarPrompt({
       topic,
       selfLevel: profile?.selfLevel ?? "zero",
+      nativeLanguage: profile?.nativeLanguage ?? "tr",
       siblingTitles,
     });
     const content = await getProvider().generateJson({
@@ -276,6 +491,52 @@ async function runGrammarJob(topicId: string) {
     db.update(tables.grammarTopics)
       .set({ status: "error" })
       .where(eq(tables.grammarTopics.id, topicId))
+      .run();
+    throw err;
+  }
+}
+
+async function runKanjiJob(entryId: string) {
+  const entry = db.query.kanjiEntries
+    .findFirst({ where: eq(tables.kanjiEntries.id, entryId) })
+    .sync();
+  if (!entry) throw new Error("Kanji kaydı bulunamadı");
+
+  // Personalization follows the entry's language, not the active profile.
+  const profile = db.query.profiles
+    .findFirst({
+      where: eq(tables.profiles.targetLanguage, entry.targetLanguage),
+    })
+    .sync();
+
+  db.update(tables.kanjiEntries)
+    .set({ status: "generating" })
+    .where(eq(tables.kanjiEntries.id, entryId))
+    .run();
+
+  try {
+    const { system, prompt } = kanjiPrompt({
+      entry,
+      selfLevel: profile?.selfLevel ?? "zero",
+      interests: profile?.interests ?? [],
+      nativeLanguage: profile?.nativeLanguage,
+    });
+    const content = await getProvider().generateJson({
+      system,
+      prompt,
+      schema: KanjiContentSchema,
+      fixtureKey: "kanji",
+      tier: "fast",
+      timeoutMs: 120_000,
+    });
+    db.update(tables.kanjiEntries)
+      .set({ content, status: "ready", generatedAt: new Date() })
+      .where(eq(tables.kanjiEntries.id, entryId))
+      .run();
+  } catch (err) {
+    db.update(tables.kanjiEntries)
+      .set({ status: "error" })
+      .where(eq(tables.kanjiEntries.id, entryId))
       .run();
     throw err;
   }
@@ -324,24 +585,29 @@ function findChainTail(curriculumId: string): string | null {
   return tails[0]?.id ?? null;
 }
 
-/** Highest JLPT level already present as a chapter, or null. */
-function topChapterLevel(curriculumId: string): JlptLevel | null {
+/** Highest level (in the language's own scheme) already present as a chapter. */
+function topChapterLevel(
+  curriculumId: string,
+  targetLanguage: string
+): string | null {
   const chapters = db.query.curriculumChapters
     .findMany({
       where: eq(tables.curriculumChapters.curriculumId, curriculumId),
       orderBy: [desc(tables.curriculumChapters.position)],
     })
     .sync();
-  const top = chapters.find((c) => isJlptLevel(c.level));
-  return top && isJlptLevel(top.level) ? top.level : null;
+  return chapters.find((c) => isLevelOf(targetLanguage, c.level))?.level ?? null;
 }
 
 /**
  * Backfill: an existing pre-chapters curriculum (units with chapterId=null)
  * gets a single "N4" chapter row (the old ceiling) so extend logic knows where
- * it stands. Idempotent — safe to call repeatedly.
+ * it stands. Also remaps legacy JLPT level strings stored for non-Japanese
+ * curricula (pre-scheme era faked "N5"≈A1) onto the language's real scheme.
+ * Idempotent — safe to call repeatedly.
  */
 export function ensureChaptersBackfilled() {
+  ensureLevelSchemeMigrated();
   // drizzle eq(col, null) doesn't emit IS NULL; scan and filter in JS instead.
   const units = db.query.units.findMany().sync();
   const orphans = units.filter((u) => u.chapterId == null);
@@ -387,11 +653,49 @@ export function ensureChaptersBackfilled() {
   }
 }
 
+/**
+ * Legacy self-heal: non-Japanese curricula created before per-language level
+ * schemes stored JLPT strings ("N5"≈A1). Remap chapters + units onto the
+ * language's real scheme by ordinal. No-op once everything is valid.
+ */
+function ensureLevelSchemeMigrated() {
+  const curricula = db.query.curricula.findMany().sync();
+  for (const cur of curricula) {
+    const profile = db.query.profiles
+      .findFirst({ where: eq(tables.profiles.id, cur.profileId) })
+      .sync();
+    if (!profile || schemeFor(profile.targetLanguage).name === "JLPT") continue;
+
+    const chapters = db.query.curriculumChapters
+      .findMany({ where: eq(tables.curriculumChapters.curriculumId, cur.id) })
+      .sync();
+    for (const ch of chapters) {
+      const mapped = remapLegacyLevel(profile.targetLanguage, ch.level);
+      if (mapped === ch.level) continue;
+      db.transaction((tx) => {
+        tx.update(tables.curriculumChapters)
+          .set({
+            level: mapped,
+            position: levelOrdinalFor(profile.targetLanguage, mapped),
+            // The auto-title was just the level string; keep custom titles.
+            ...(ch.titleTr === ch.level ? { titleTr: mapped } : {}),
+          })
+          .where(eq(tables.curriculumChapters.id, ch.id))
+          .run();
+        tx.update(tables.units)
+          .set({ level: mapped })
+          .where(eq(tables.units.chapterId, ch.id))
+          .run();
+      });
+    }
+  }
+}
+
 /** Compact summary of already-taught units + covered grammar for the prompt. */
 function buildPriorSummary(
   curriculumId: string,
   targetLanguage: string,
-  level: JlptLevel
+  level: string
 ): string {
   const units = db.query.units
     .findMany({
@@ -406,9 +710,12 @@ function buildPriorSummary(
     .join("\n");
 
   // Grammar slugs at levels strictly below the target level.
-  const targetOrd = levelOrdinal(level);
+  const targetOrd = levelOrdinalFor(targetLanguage, level);
   const coveredGrammar = grammarIndexFor(targetLanguage)
-    .filter((g) => isJlptLevel(g.level) && levelOrdinal(g.level) < targetOrd)
+    .filter((g) => {
+      const ord = levelOrdinalFor(targetLanguage, g.level);
+      return ord >= 0 && ord < targetOrd;
+    })
     .map((g) => g.title_tr);
   const grammarLine =
     coveredGrammar.length > 0
@@ -419,15 +726,21 @@ function buildPriorSummary(
 }
 
 /**
- * Generates ONE JLPT chapter for a profile and appends it to the profile's
- * single curriculum. First chapter (N5) creates the curriculum + side quests;
- * later chapters stitch onto the existing prereq chain.
+ * Generates ONE chapter (a level of the profile's scheme: JLPT/HSK/CEFR) and
+ * appends it to the profile's single curriculum. The first chapter creates
+ * the curriculum + side quests; later chapters stitch onto the existing
+ * prereq chain. `level: null` means the scheme's first level (legacy jobs).
  */
-async function runChapterJob(profileId: string, level: JlptLevel) {
+async function runChapterJob(profileId: string, levelArg: string | null) {
   const profile = db.query.profiles.findFirst({
     where: eq(tables.profiles.id, profileId),
   }).sync();
   if (!profile) throw new Error("Profil bulunamadı");
+
+  const level = levelArg ?? schemeFor(profile.targetLanguage).levels[0];
+  if (!isLevelOf(profile.targetLanguage, level)) {
+    throw new Error(`Geçersiz seviye: ${level}`);
+  }
 
   ensureChaptersBackfilled();
 
@@ -471,7 +784,7 @@ async function runChapterJob(profileId: string, level: JlptLevel) {
         id: chapterId,
         curriculumId,
         level,
-        position: levelOrdinal(level),
+        position: levelOrdinalFor(profile.targetLanguage, level),
         status: "generating",
         titleTr: level,
       })

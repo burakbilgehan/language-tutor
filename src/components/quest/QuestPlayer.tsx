@@ -6,6 +6,36 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
 import { answersMatch, stripFurigana } from "@/lib/jp";
+import { useStrings } from "@/lib/i18n/use-strings";
+
+const S = {
+  tr: {
+    startFailed: "Başlatılamadı",
+    backToMap: "Haritaya dön",
+    preparingTitle: "Görev hazırlanıyor",
+    preparingHint: "Sana taze sorular yazılıyor...",
+    questDone: "Görev tamam!",
+    score: (c: number, n: number) => `${c}/${n} doğru`,
+    answerPlaceholder: "Cevabın...",
+    correct: "Doğru! 🌸",
+    answerLabel: "Cevap: ",
+    next: "Sıradaki →",
+    finish: "Bitir 🏅",
+  },
+  en: {
+    startFailed: "Could not start",
+    backToMap: "Back to map",
+    preparingTitle: "Preparing your quest",
+    preparingHint: "Fresh questions are being written for you...",
+    questDone: "Quest complete!",
+    score: (c: number, n: number) => `${c}/${n} correct`,
+    answerPlaceholder: "Your answer...",
+    correct: "Correct! 🌸",
+    answerLabel: "Answer: ",
+    next: "Next →",
+    finish: "Finish 🏅",
+  },
+};
 
 interface QuestItem {
   type: "mcq" | "type_answer";
@@ -21,6 +51,7 @@ interface QuestData {
 }
 
 export function QuestPlayer({ nodeId }: { nodeId: string }) {
+  const t = useStrings(S);
   const router = useRouter();
   const [data, setData] = useState<QuestData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,12 +67,12 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
     startedRef.current = true;
     fetch(`/api/quests/${nodeId}/start`, { method: "POST" })
       .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json()).error ?? "Başlatılamadı");
+        if (!r.ok) throw new Error((await r.json()).error ?? t.startFailed);
         return r.json();
       })
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [nodeId]);
+  }, [nodeId, t]);
 
   const finish = useCallback(async () => {
     const res = await fetch(`/api/nodes/${nodeId}/complete`, {
@@ -56,7 +87,7 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
       <Center>
         <div className="text-4xl">🍂</div>
         <p className="text-ink-soft">{error}</p>
-        <CozyButton onClick={() => router.push("/map")}>Haritaya dön</CozyButton>
+        <CozyButton onClick={() => router.push("/map")}>{t.backToMap}</CozyButton>
       </Center>
     );
   }
@@ -65,8 +96,8 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
     return (
       <Center>
         <div className="animate-float-slow text-5xl">🎲</div>
-        <h1 className="text-xl font-semibold">Görev hazırlanıyor</h1>
-        <p className="text-sm text-ink-soft">Sana taze sorular yazılıyor...</p>
+        <h1 className="text-xl font-semibold">{t.preparingTitle}</h1>
+        <p className="text-sm text-ink-soft">{t.preparingHint}</p>
       </Center>
     );
   }
@@ -77,11 +108,11 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
     return (
       <Center>
         <div className="text-6xl">🏅</div>
-        <h1 className="text-2xl font-semibold">Görev tamam!</h1>
+        <h1 className="text-2xl font-semibold">{t.questDone}</h1>
         <p className="text-ink-soft">
-          {correctCount}/{items.length} doğru · <span className="text-gold font-semibold">+{xpAwarded} XP</span>
+          {t.score(correctCount, items.length)} · <span className="text-gold font-semibold">+{xpAwarded} XP</span>
         </p>
-        <CozyButton onClick={() => router.push("/map")}>Haritaya dön</CozyButton>
+        <CozyButton onClick={() => router.push("/map")}>{t.backToMap}</CozyButton>
       </Center>
     );
   }
@@ -101,7 +132,7 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
 
   return (
     <div className="min-h-dvh">
-      <StatsHeader title={data.quest.title_tr} backHref="/map" />
+      <StatsHeader title={data.quest.title_tr} />
       <main className="mx-auto max-w-md px-4 py-8">
         <div className="mb-4 flex justify-center gap-1">
           {items.map((_, i) => (
@@ -159,7 +190,7 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
                 onChange={(e) => setResponse(e.target.value)}
                 disabled={!!outcome}
                 autoFocus
-                placeholder="Cevabın..."
+                placeholder={t.answerPlaceholder}
                 className="flex-1 rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
               />
               {!outcome && (
@@ -178,15 +209,16 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
             >
               <span className="font-semibold">
                 {outcome.correct ? (
-                  "Doğru! 🌸"
+                  t.correct
                 ) : (
                   <>
-                    Cevap: <Furigana text={item.answer} />
+                    {t.answerLabel}
+                    <Furigana text={item.answer} />
                   </>
                 )}
               </span>
               <CozyButton variant="soft" onClick={next}>
-                {idx + 1 < items.length ? "Sıradaki →" : "Bitir 🏅"}
+                {idx + 1 < items.length ? t.next : t.finish}
               </CozyButton>
             </div>
           )}

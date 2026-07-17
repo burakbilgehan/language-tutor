@@ -5,6 +5,33 @@ import { useRouter } from "next/navigation";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
+import { useStrings } from "@/lib/i18n/use-strings";
+
+const S = {
+  tr: {
+    ratingLabels: ["Tekrar", "Zor", "İyi", "Kolay"],
+    loading: "Kartlar yükleniyor...",
+    doneTitle: "Tekrar bitti!",
+    emptyTitle: "Şimdilik kart yok",
+    doneBody: (n: number) =>
+      `${n} kart gözden geçirdin. Beynin teşekkür ediyor.`,
+    emptyBody: "Ders tamamladıkça yeni kelimeler buraya düşecek.",
+    backToMap: "Haritaya dön",
+    headerTitle: "Kelime Tekrarı",
+    tapToReveal: "Görmek için dokun",
+  },
+  en: {
+    ratingLabels: ["Again", "Hard", "Good", "Easy"],
+    loading: "Loading cards...",
+    doneTitle: "Review done!",
+    emptyTitle: "No cards for now",
+    doneBody: (n: number) => `You reviewed ${n} cards. Your brain thanks you.`,
+    emptyBody: "New words will land here as you complete lessons.",
+    backToMap: "Back to map",
+    headerTitle: "Vocabulary Review",
+    tapToReveal: "Tap to reveal",
+  },
+};
 
 interface CardDto {
   id: string;
@@ -15,14 +42,15 @@ interface CardDto {
   example: string | null;
 }
 
-const RATINGS: { value: 0 | 1 | 2 | 3; label: string; cls: string }[] = [
-  { value: 0, label: "Tekrar", cls: "bg-danger/15 hover:bg-danger/25" },
-  { value: 1, label: "Zor", cls: "bg-gold/15 hover:bg-gold/25" },
-  { value: 2, label: "İyi", cls: "bg-moss-soft hover:brightness-105" },
-  { value: 3, label: "Kolay", cls: "bg-accent-soft/50 hover:bg-accent-soft" },
+const RATINGS: { value: 0 | 1 | 2 | 3; cls: string }[] = [
+  { value: 0, cls: "bg-danger/15 hover:bg-danger/25" },
+  { value: 1, cls: "bg-gold/15 hover:bg-gold/25" },
+  { value: 2, cls: "bg-moss-soft hover:brightness-105" },
+  { value: 3, cls: "bg-accent-soft/50 hover:bg-accent-soft" },
 ];
 
 export function SrsSession() {
+  const t = useStrings(S);
   const router = useRouter();
   const [cards, setCards] = useState<CardDto[] | null>(null);
   const [idx, setIdx] = useState(0);
@@ -56,7 +84,7 @@ export function SrsSession() {
   if (!cards) {
     return (
       <div className="flex min-h-dvh items-center justify-center text-ink-soft">
-        Kartlar yükleniyor...
+        {t.loading}
       </div>
     );
   }
@@ -66,14 +94,12 @@ export function SrsSession() {
       <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="text-6xl">{reviewed > 0 ? "🌸" : "🍵"}</div>
         <h1 className="text-2xl font-semibold">
-          {reviewed > 0 ? "Tekrar bitti!" : "Şimdilik kart yok"}
+          {reviewed > 0 ? t.doneTitle : t.emptyTitle}
         </h1>
         <p className="text-ink-soft">
-          {reviewed > 0
-            ? `${reviewed} kart gözden geçirdin. Beynin teşekkür ediyor.`
-            : "Ders tamamladıkça yeni kelimeler buraya düşecek."}
+          {reviewed > 0 ? t.doneBody(reviewed) : t.emptyBody}
         </p>
-        <CozyButton onClick={() => router.push("/map")}>Haritaya dön</CozyButton>
+        <CozyButton onClick={() => router.push("/map")}>{t.backToMap}</CozyButton>
       </div>
     );
   }
@@ -82,7 +108,7 @@ export function SrsSession() {
 
   return (
     <div className="min-h-dvh">
-      <StatsHeader title="Kelime Tekrarı" backHref="/map" />
+      <StatsHeader title={t.headerTitle} />
       <main className="mx-auto max-w-md px-4 py-10">
         <div className="mb-4 flex justify-center gap-1">
           {cards.map((_, i) => (
@@ -118,7 +144,7 @@ export function SrsSession() {
               )}
             </>
           ) : (
-            <div className="text-sm text-ink-soft">Görmek için dokun</div>
+            <div className="text-sm text-ink-soft">{t.tapToReveal}</div>
           )}
         </button>
 
@@ -131,7 +157,7 @@ export function SrsSession() {
                 disabled={busy}
                 className={`rounded-xl px-2 py-3 text-sm font-semibold transition-all active:scale-95 cursor-pointer disabled:opacity-40 ${r.cls}`}
               >
-                {r.label}
+                {t.ratingLabels[r.value]}
               </button>
             ))}
           </div>

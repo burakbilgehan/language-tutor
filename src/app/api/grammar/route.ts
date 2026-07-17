@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { grammarIndexFor } from "@/lib/grammar-index";
+import { recoverStaleJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
@@ -52,7 +54,8 @@ function ensureSeeded(targetLanguage: string) {
 }
 
 export async function GET() {
-  const profile = db.query.profiles.findFirst().sync();
+  recoverStaleJobs();
+  const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }

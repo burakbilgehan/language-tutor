@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { getRoadmap } from "@/lib/roadmap";
+import { recoverStaleJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const profile = db.query.profiles.findFirst().sync();
+  recoverStaleJobs();
+  const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }

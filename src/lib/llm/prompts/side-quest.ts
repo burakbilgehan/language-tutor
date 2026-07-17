@@ -1,19 +1,18 @@
-type Node = typeof import("@/db/schema").nodes.$inferSelect;
+import { languageName, nativeLanguageName } from "@/lib/profile-options";
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  ja: "Japonca",
-  nl: "Hollandaca",
-};
+type Node = typeof import("@/db/schema").nodes.$inferSelect;
 
 export function sideQuestPrompt(opts: {
   targetLanguage: string;
+  nativeLanguage: string;
   node: Node;
   selfLevel: string;
   recentVocab: { term: string; meaning: string }[];
   completedTitles: string[];
 }) {
-  const lang = LANGUAGE_NAMES[opts.targetLanguage] ?? opts.targetLanguage;
-  const system = `Sen bir ${lang} öğretmenisin, kısa ve eğlenceli mini alıştırma setleri hazırlıyorsun. Sorular Türkçe. Sadece istenen JSON'u döndür.`;
+  const lang = languageName(opts.targetLanguage);
+  const native = nativeLanguageName(opts.nativeLanguage);
+  const system = `Sen bir ${lang} öğretmenisin, kısa ve eğlenceli mini alıştırma setleri hazırlıyorsun. Sorular ${native} dilinde. Sadece istenen JSON'u döndür.`;
 
   const kindInstructions: Record<string, string> = {
     kana_drill:
@@ -25,6 +24,9 @@ export function sideQuestPrompt(opts: {
     vocab_review:
       "Aşağıdaki kelime listesinden anlam eşleştirme soruları üret.",
   };
+
+  const bracketExample =
+    opts.targetLanguage === "zh" ? "学生[xuésheng]" : "日本[にほん]";
 
   const prompt = `Yan görev: "${opts.node.titleTr}" (tür: ${opts.node.sideQuestKind})
 Öğrenci seviyesi: ${opts.selfLevel}
@@ -38,8 +40,8 @@ ${kindInstructions[opts.node.sideQuestKind ?? "pop_quiz"]}
 
 8-12 soruluk bir set üret:
 - "mcq": options 4 seçenek, answer seçeneklerden birinin AYNEN kendisi.
-- "type_answer": kısa yazılı cevap; answer kanonik cevap. Öğrenci romaji yazar — answer romaji ya da kana olabilir, ikisi de kabul edilir.
-- target_text alanına hedef dildeki karakter/kelimeyi koy (varsa). Kanji kullanırsan furigana'yı köşeli parantezle ekle: 日[に]本[ほん] değil, kelime bütünüyle: 日本[にほん].
+- "type_answer": kısa yazılı cevap; answer kanonik cevap. Öğrenci latin harfleriyle (romaji/pinyin) yazar — answer latin ya da hedef yazıyla olabilir, ikisi de kabul edilir.
+- target_text alanına hedef dildeki karakter/kelimeyi koy (varsa). Kanji/hanzi kullanırsan okunuşu köşeli parantezle, kelime bütünüyle ekle: ${bracketExample}.
 
 Sadece şemaya uygun JSON döndür.`;
 

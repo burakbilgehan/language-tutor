@@ -3,6 +3,7 @@ import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { getProvider } from "@/lib/llm/provider";
 import { chatPrompt } from "@/lib/llm/prompts/chat";
 
@@ -16,7 +17,7 @@ const Input = z.object({
 
 export async function GET() {
   // Latest session's history, so the chat page can restore it.
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
   if (!profile) return NextResponse.json({ sessionId: null, messages: [] });
   const session = db.query.chatSessions
     .findFirst({
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "message gerekli" }, { status: 400 });
   }
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }

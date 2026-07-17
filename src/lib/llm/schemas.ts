@@ -73,18 +73,64 @@ export const LessonVocabSchema = z.object({
   example: z.string().nullish(),
 });
 
-export const LessonExerciseSchema = z.object({
-  type: ExerciseType,
-  // question shown to the user; for mcq includes options; for fill_blank the
-  // sentence contains "___"
-  prompt_tr: z.string(),
-  target_text: z.string().nullish(),
-  options: z.array(z.string()).nullish(), // mcq only
-  // expected answer: mcq = exact option text, fill_blank/translate = canonical
-  // answer, free_response = grading guidance for the LLM grader
-  answer: z.string(),
-  accept_also: z.array(z.string()).nullish(),
-});
+/** Rubric-style answer text ("...tam puan verilmeli...") — can never be
+ * string-matched, so it must be accompanied by literal accept_also entries. */
+const RUBRIC_RE = /puan|verilmeli|değerlendir|kılavuz|olmalı/i;
+
+export const LessonExerciseSchema = z
+  .object({
+    type: ExerciseType,
+    // question shown to the user; for mcq includes options; for fill_blank the
+    // sentence contains "___"
+    prompt_tr: z.string(),
+    target_text: z.string().nullish(),
+    options: z.array(z.string()).nullish(), // mcq only
+    // expected answer: mcq = exact option text, fill_blank/translate = canonical
+    // answer, free_response = grading guidance for the LLM grader
+    answer: z.string(),
+    accept_also: z.array(z.string()).nullish(),
+  })
+  .superRefine((ex, ctx) => {
+    // Content contracts: schema-level so a violating generation self-corrects
+    // via the CLI retry loop instead of shipping a broken exercise.
+    if (ex.type === "mcq") {
+      if (!ex.options || ex.options.length < 2) {
+        ctx.addIssue({
+          code: "custom",
+          message: "mcq için options zorunlu (en az 2 seçenek).",
+        });
+      } else if (!ex.options.includes(ex.answer)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `mcq answer, options'tan birinin AYNEN kendisi olmalı; "${ex.answer}" seçeneklerde yok.`,
+        });
+      }
+    }
+    if (ex.type === "fill_blank" && !ex.prompt_tr.includes("___")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "fill_blank prompt_tr içinde ___ boşluğu olmalı.",
+      });
+    }
+    if (ex.type === "translate" && (ex.accept_also?.length ?? 0) < 1) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "translate için accept_also boş olamaz: 3-6 kabul edilebilir alternatif çeviri ekle.",
+      });
+    }
+    if (
+      ex.type === "free_response" &&
+      RUBRIC_RE.test(ex.answer) &&
+      (ex.accept_also?.length ?? 0) < 1
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "free_response answer'ı bir değerlendirme kılavuzu; accept_also'ya birebir kabul edilebilir örnek cevaplar ekle (deterministik eşleşme için).",
+      });
+    }
+  });
 
 export const LessonSchema = z.object({
   title_tr: z.string(),
@@ -128,15 +174,49 @@ export const GrammarTopicSchema = z.object({
 });
 export type GrammarTopicContent = z.infer<typeof GrammarTopicSchema>;
 
+// -- Kanji entry ---------------------------------------------------------------
+
+// Only the subjective/translated half is LLM-generated; readings and English
+// glosses are static dictionary facts in src/lib/kanji-index/ (never ask the
+// LLM to produce readings — it will hallucinate rare ones).
+export const KanjiExampleSchema = z.object({
+  word: z.string(),
+  reading: z.string(),
+  meaning_tr: z.string(),
+});
+
+export const KanjiContentSchema = z.object({
+  meanings_tr: z.array(z.string()).min(1),
+  note_tr: z.string().nullish(),
+  examples: z.array(KanjiExampleSchema).min(2).max(8),
+});
+export type KanjiContent = z.infer<typeof KanjiContentSchema>;
+
 // -- Side quest payloads -----------------------------------------------------
 
-export const SideQuestItemSchema = z.object({
-  type: z.enum(["mcq", "type_answer"]),
-  prompt_tr: z.string(),
-  target_text: z.string().nullish(),
-  options: z.array(z.string()).nullish(),
-  answer: z.string(),
-});
+export const SideQuestItemSchema = z
+  .object({
+    type: z.enum(["mcq", "type_answer"]),
+    prompt_tr: z.string(),
+    target_text: z.string().nullish(),
+    options: z.array(z.string()).nullish(),
+    answer: z.string(),
+  })
+  .superRefine((item, ctx) => {
+    if (item.type === "mcq") {
+      if (!item.options || item.options.length < 2) {
+        ctx.addIssue({
+          code: "custom",
+          message: "mcq için options zorunlu (en az 2 seçenek).",
+        });
+      } else if (!item.options.includes(item.answer)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `mcq answer, options'tan birinin AYNEN kendisi olmalı; "${item.answer}" seçeneklerde yok.`,
+        });
+      }
+    }
+  });
 
 export const SideQuestPayloadSchema = z.object({
   title_tr: z.string(),

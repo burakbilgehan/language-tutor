@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db, tables } from "@/db";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
+import { firstLevel } from "@/lib/curriculum/levels";
 
 export const runtime = "nodejs";
 
@@ -14,10 +17,21 @@ export async function POST(req: Request) {
   }
   const { profileId } = parsed.data;
 
-  // First chapter (N5). Same (jobType, refId) namespace as extend/auto-extend
-  // so all chapter enqueue paths dedupe against each other; createJob itself
-  // returns the in-flight job id if one exists.
-  const jobId = createJob("chapter", `${profileId}:N5`);
+  const profile = db.query.profiles
+    .findFirst({ where: eq(tables.profiles.id, profileId) })
+    .sync();
+  if (!profile) {
+    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+  }
+
+  // First chapter of the profile's level scheme (N5 / HSK1 / A1). Same
+  // (jobType, refId) namespace as extend/auto-extend so all chapter enqueue
+  // paths dedupe against each other; createJob itself returns the in-flight
+  // job id if one exists.
+  const jobId = createJob(
+    "chapter",
+    `${profileId}:${firstLevel(profile.targetLanguage)}`
+  );
   void runJob(jobId); // fire-and-forget; client polls /api/jobs/[id]
   return NextResponse.json({ jobId });
 }
