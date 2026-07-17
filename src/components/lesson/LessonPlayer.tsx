@@ -9,6 +9,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { openNodeApi, completeNodeApi, attemptApi } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -175,13 +176,7 @@ export function LessonPlayer({
 
   const open = useCallback(async () => {
     try {
-      const res = await fetch(`/api/nodes/${nodeId}/open`, { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json();
-        // 503 llm_unconfigured carries a human-readable message.
-        throw new Error(body.message ?? body.error ?? t.openFailed);
-      }
-      const body: OpenResponse = await res.json();
+      const body = (await openNodeApi(nodeId)) as OpenResponse;
       if (stopped.current) return;
       setData(body);
       if (body.status === "generating") {
@@ -221,10 +216,7 @@ export function LessonPlayer({
   }, [nodeId, open, t]);
 
   const finish = useCallback(async () => {
-    const res = await fetch(`/api/nodes/${nodeId}/complete`, {
-      method: "POST",
-    });
-    const body = await res.json();
+    const body = await completeNodeApi(nodeId);
     setCompletion({ xpAwarded: body.xpAwarded, newCards: body.newCards });
     setPhase("done");
     onCompleted?.();
@@ -419,20 +411,8 @@ function ExerciseCard({
     setGrading(true);
     setGradeError(null);
     try {
-      const res = await fetch(`/api/exercises/${exercise.id}/attempt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          selfVerdict === undefined
-            ? { response: value }
-            : { response: value, selfVerdict }
-        ),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        throw new Error(body?.message ?? body?.error ?? t.gradeFailed);
-      }
-      if (body.needsSelfCheck) {
+      const body = await attemptApi(exercise.id, value, selfVerdict);
+      if ("needsSelfCheck" in body) {
         setSelfCheck(body.expected);
         return;
       }

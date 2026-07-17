@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
-import { db, tables } from "@/db";
+import { db } from "@/db";
+import { openNode } from "@/core/lesson";
 import {
   ensureLessonJob,
   prefetchSuccessorLessons,
@@ -17,62 +17,22 @@ export async function POST(
   recoverStaleJobs();
   const { id: nodeId } = await params;
 
-  const node = db.query.nodes
-    .findFirst({ where: eq(tables.nodes.id, nodeId) })
-    .sync();
-  if (!node) {
+  const result = openNode(db, nodeId);
+  if (result.status === "notFound") {
     return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
   }
-  if (node.status === "locked") {
+  if (result.status === "locked") {
     return NextResponse.json({ error: "Bu ders henüz kilitli" }, { status: 403 });
   }
-
-  const lesson = db.query.lessons
-    .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
-    .sync();
-
-  if (lesson?.status === "ready" && lesson.content) {
+  if (result.status === "ready") {
     // The learner is about to spend minutes here — generate the next lesson
     // in the background now, not at completion time.
     prefetchSuccessorLessons(nodeId);
-
-    const exercises = db.query.exercises
-      .findMany({
-        where: eq(tables.exercises.lessonId, lesson.id),
-        orderBy: [asc(tables.exercises.position)],
-      })
-      .sync()
-      .map((e) => ({
-        id: e.id,
-        type: e.type,
-        promptTr: e.promptTr,
-        targetText: e.targetText,
-        options: e.options,
-        // answers stay server-side
-      }));
-    return NextResponse.json({
-      status: "ready",
-      node: {
-        id: node.id,
-        titleTr: node.titleTr,
-        subtitleTr: node.subtitleTr,
-        lessonType: node.lessonType,
-        xpReward: node.xpReward,
-        status: node.status,
-      },
-      lesson: {
-        titleTr: lesson.content.title_tr,
-        explanationTr: lesson.content.explanation_tr,
-        examples: lesson.content.examples,
-        grammarNotes: lesson.content.grammar_notes,
-        vocab: lesson.content.vocab,
-      },
-      exercises,
-    });
+    return NextResponse.json(result);
   }
 
-  // Not ready → without an LLM the generation job can't run; return an
-  // explicit state instead of an eternal "generating" poll.
+  // needsGeneration → without an LLM the job can't run; return an explicit
+  // state instead of an eternal "generating" poll.
   if (!llmConfigured()) {
     return NextResponse.json(
       {
@@ -83,8 +43,6 @@ export async function POST(
       { status: 503 }
     );
   }
-  // Ensure a generation job is running (deduped centrally in createJob) and
-  // tell the client to poll.
   const jobId = ensureLessonJob(nodeId);
   return NextResponse.json({ status: "generating", jobId });
 }

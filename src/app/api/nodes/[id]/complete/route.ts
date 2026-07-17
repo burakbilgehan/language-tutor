@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
-import { completeNode, isCurriculumTail } from "@/lib/roadmap";
-import { awardXp } from "@/lib/xp";
-import {
-  createJob,
-  ensureLessonJob,
-  runJob,
-  topChapterLevel,
-} from "@/lib/jobs";
+import { isCurriculumTail } from "@/lib/roadmap";
+import { completeNodeFlow } from "@/core/lesson";
+import { createJob, ensureLessonJob, runJob, topChapterLevel } from "@/lib/jobs";
 import { nextLevelFor } from "@/lib/curriculum/levels";
 import { llmConfigured } from "@/lib/llm/config";
 
@@ -30,9 +24,12 @@ function maybeAutoExtend(
 ): string | null {
   if (!llmConfigured()) return null; // no LLM → don't enqueue a doomed chapter job
   if (!isCurriculumTail(nodeId)) return null;
-  const curriculum = db.query.curricula
-    .findFirst({ where: eq(tables.curricula.profileId, profileId) })
-    .sync();
+  const curriculum = db
+    .select()
+    .from(tables.curricula)
+    .where(eq(tables.curricula.profileId, profileId))
+    .limit(1)
+    .get();
   if (!curriculum) return null;
   const top = topChapterLevel(curriculum.id, targetLanguage);
   const next = top ? nextLevelFor(targetLanguage, top) : null;
@@ -49,83 +46,37 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: nodeId } = await params;
-  const node = db.query.nodes
-    .findFirst({ where: eq(tables.nodes.id, nodeId) })
-    .sync();
-  if (!node) {
-    return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
-  }
   const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
+  const node = db
+    .select()
+    .from(tables.nodes)
+    .where(eq(tables.nodes.id, nodeId))
+    .limit(1)
+    .get();
+  if (!node) {
+    return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
+  }
+  const wasCompleted = node.status === "completed";
 
-  const alreadyCompleted = node.status === "completed";
-  const unlockedNodeIds = alreadyCompleted ? [] : completeNode(nodeId);
-
-  // Prefetch: generate the just-unlocked lesson(s) in the background so the
-  // learner never stares at a 90s spinner — by the time they open the next
-  // node, it's ready (open route serves cached lessons instantly).
-  for (const unlockedId of unlockedNodeIds) {
-    ensureLessonJob(unlockedId);
+  const flow = completeNodeFlow(db, nodeId, profile.id);
+  if (!flow) {
+    return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
   }
 
-  // Side quests: clear the cached drill payload on completion so the NEXT run
-  // gets fresh content (re-opens without completing stay free).
-  if (node.nodeType === "side_quest") {
-    db.update(tables.nodes)
-      .set({ sideQuestPayload: null })
-      .where(eq(tables.nodes.id, nodeId))
-      .run();
+  // Prefetch: generate the just-unlocked lesson(s) in the background so the
+  // learner never stares at a 90s spinner.
+  for (const unlockedId of flow.unlockedNodeIds) {
+    ensureLessonJob(unlockedId);
   }
 
   // Auto-extend to the next level when the learner clears the tail.
   const extendingLevel =
-    !alreadyCompleted && node.nodeType === "main"
+    !wasCompleted && node.nodeType === "main"
       ? maybeAutoExtend(profile.id, profile.targetLanguage, nodeId)
       : null;
 
-  // Harvest lesson vocab into SRS cards (dedup via unique index).
-  let newCards = 0;
-  const lesson = db.query.lessons
-    .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
-    .sync();
-  if (!alreadyCompleted && lesson?.content) {
-    for (const v of lesson.content.vocab) {
-      const inserted = db
-        .insert(tables.srsCards)
-        .values({
-          id: nanoid(),
-          profileId: profile.id,
-          itemType: "vocab",
-          front: v.term,
-          back: v.meaning_tr,
-          reading: v.reading ?? null,
-          example: v.example ?? null,
-          sourceLessonId: lesson.id,
-          dueAt: new Date(),
-        })
-        .onConflictDoNothing()
-        .run();
-      newCards += inserted.changes;
-    }
-  }
-
-  let xpAwarded = 0;
-  if (!alreadyCompleted) {
-    xpAwarded = node.xpReward;
-    awardXp(
-      profile.id,
-      xpAwarded,
-      node.nodeType === "side_quest" ? "side_quest" : "lesson_complete",
-      nodeId
-    );
-  }
-
-  return NextResponse.json({
-    xpAwarded,
-    newCards,
-    unlockedNodeIds,
-    extendingLevel,
-  });
+  return NextResponse.json({ ...flow, extendingLevel });
 }

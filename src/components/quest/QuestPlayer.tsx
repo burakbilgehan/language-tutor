@@ -7,6 +7,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
 import { answersMatch, stripFurigana } from "@/lib/jp";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { completeNodeApi } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -79,11 +80,8 @@ export function QuestPlayer({ nodeId }: { nodeId: string }) {
   }, [nodeId, t]);
 
   const finish = useCallback(async () => {
-    const res = await fetch(`/api/nodes/${nodeId}/complete`, {
-      method: "POST",
-    });
-    const body = await res.json();
-    setXpAwarded(body.xpAwarded ?? 0);
+    const body = await completeNodeApi(nodeId).catch(() => null);
+    setXpAwarded(body?.xpAwarded ?? 0);
   }, [nodeId]);
 
   if (error) {
