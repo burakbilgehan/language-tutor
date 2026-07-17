@@ -7,14 +7,18 @@
 // Goal: reading this index + a dictionary should be enough for "infinite
 // Japanese" — every JLPT grammar pattern plus consolidated conjugation tables.
 
+// `level` is a string drawn from the language's own scheme (JLPT here,
+// HSK in zh.ts, CEFR in nl.ts) — see src/lib/curriculum/levels.ts.
 export interface GrammarIndexEntry {
   slug: string;
   title_tr: string;
   category: string;
-  level: "N5" | "N4" | "N3" | "N2" | "N1";
+  level: string;
 }
 
-export const JA_GRAMMAR_INDEX: GrammarIndexEntry[] = [
+export const JA_GRAMMAR_INDEX: (Omit<GrammarIndexEntry, "level"> & {
+  level: "N5" | "N4" | "N3" | "N2" | "N1";
+})[] = [
   // ===================================================================
   // N5
   // ===================================================================
