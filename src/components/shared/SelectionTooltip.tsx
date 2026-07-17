@@ -124,7 +124,35 @@ export function SelectionTooltip() {
         translation: null,
         translating: false,
       });
-      if (!isJa) return; // zh: per-char meanings come with the translate click
+      if (!isJa) {
+        // zh: per-char meanings from the translations CACHE, instantly and
+        // for free; uncached chars arrive with the translate click.
+        const chars = [...new Set(source.match(/[一-鿿]/g) ?? [])].slice(0, 6);
+        chars.forEach((ch) => {
+          fetch("/api/translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: ch, cachedOnly: true }),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d: { translation: string | null } | null) => {
+              if (!d?.translation || seq.current !== token) return;
+              setTip((t) =>
+                t
+                  ? {
+                      ...t,
+                      kanji: [
+                        ...t.kanji.filter((k) => k.char !== ch),
+                        { char: ch, reading: "", meaning: d.translation! },
+                      ],
+                    }
+                  : t
+              );
+            })
+            .catch(() => {});
+        });
+        return;
+      }
       fetch(`/api/kanji/lookup?text=${encodeURIComponent(source)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then(
