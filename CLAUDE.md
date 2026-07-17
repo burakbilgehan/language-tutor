@@ -18,6 +18,7 @@ Next.js 15 (App Router, `src/`) + TS + Tailwind 4 + SQLite (Drizzle + better-sql
 - `LLM_PROVIDER=fixture npm run dev` — token-free dev
 - `npm run dev` — real LLM
 - `npm run llm:smoke` — provider canary (one haiku call); fixture mode validates fixtures
+- `npm run llm:bridge` — local CLI→OpenAI-compat bridge (`scripts/llm-bridge.mjs`, backends: claude/codex/copilot/gemini/opencode; app connects via the "Yerel köprü" preset, `--origin` for static deploys)
 - `npm run db:push` / `db:studio`, `npm test` (SM-2 unit tests)
 
 ## Architecture notes
