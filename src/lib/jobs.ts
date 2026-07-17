@@ -29,13 +29,17 @@ const PROCESS_START = new Date();
 let staleCheckDone = false;
 
 /**
- * Recover from a dead dev-server process. Jobs only live inside one process,
- * so at boot every 'running' job predating this process is an orphan — as is
- * every stale 'queued' row (its `void runJob(...)` call died with the
- * process; left queued it would block createJob's dedupe forever, making the
- * resource un-regenerable). After erroring orphan jobs, resources left in
- * 'generating' with no live job are flipped to 'error' so the UI offers a
- * retry instead of an eternal spinner.
+ * Recover from a dead process — WITHOUT assuming this is the only server.
+ * Several processes share the DB (the UI dev server + a prod generation
+ * worker), so a job this process doesn't recognize may be alive elsewhere:
+ * declaring every predating job dead at boot wiped a full bulk queue twice.
+ * Policy now: 'running' jobs are only declared dead past STALE_MS (longer
+ * than any single generation); orphan 'queued' jobs are ADOPTED — re-driven
+ * here, sequentially — instead of errored (left alone they would block
+ * createJob's dedupe forever; errored they lose the whole backlog on every
+ * restart). runJob's queued-status check keeps double-adoption harmless.
+ * Resources left in 'generating' with no live job flip to 'error' so the UI
+ * offers a retry instead of an eternal spinner.
  */
 export function recoverStaleJobs() {
   if (staleCheckDone) return;
@@ -43,29 +47,11 @@ export function recoverStaleJobs() {
 
   const orphanError = {
     status: "error" as const,
-    error: "Sunucu yeniden başladı, üretim yarıda kaldı.",
+    error: "Üretim süreci öldü, iş yarıda kaldı.",
     finishedAt: new Date(),
   };
-  // Orphans from a previous process…
-  db.update(tables.generationJobs)
-    .set(orphanError)
-    .where(
-      and(
-        eq(tables.generationJobs.status, "running"),
-        lt(tables.generationJobs.startedAt, PROCESS_START)
-      )
-    )
-    .run();
-  db.update(tables.generationJobs)
-    .set(orphanError)
-    .where(
-      and(
-        eq(tables.generationJobs.status, "queued"),
-        lt(tables.generationJobs.createdAt, PROCESS_START)
-      )
-    )
-    .run();
-  // …and in-process jobs hung well past every CLI timeout.
+  // Running jobs hung past every CLI timeout — dead no matter which process
+  // owned them. Fresher running jobs may be live in another process: skip.
   db.update(tables.generationJobs)
     .set(orphanError)
     .where(
@@ -75,6 +61,25 @@ export function recoverStaleJobs() {
       )
     )
     .run();
+  // Adopt orphan queued jobs: their driving loop may have died with an old
+  // process. Driven sequentially, like every bulk loop.
+  const orphans = db.query.generationJobs
+    .findMany({
+      where: and(
+        eq(tables.generationJobs.status, "queued"),
+        lt(tables.generationJobs.createdAt, PROCESS_START)
+      ),
+      columns: { id: true },
+      orderBy: [asc(tables.generationJobs.createdAt)],
+    })
+    .sync();
+  if (orphans.length > 0) {
+    void (async () => {
+      for (const o of orphans) {
+        await runJob(o.id); // no-op if another process picked it up
+      }
+    })();
+  }
 
   // Resources stuck 'generating' with no live job → 'error' (retryable in UI).
   const live = db.query.generationJobs
