@@ -59,15 +59,40 @@ function canonicalJa(s: string): string {
 }
 
 /**
+ * Fold Turkish diacritics to ASCII so "hayir" matches "hayır", "asagi"
+ * matches "aşağı" — the user shouldn't lose an answer to a missing dot.
+ */
+const TURKISH_FOLD: Record<string, string> = {
+  ı: "i",
+  ş: "s",
+  ç: "c",
+  ğ: "g",
+  ö: "o",
+  ü: "u",
+  â: "a",
+  î: "i",
+  û: "u",
+};
+
+function foldTurkish(s: string): string {
+  return s.replace(/[ışçğöüâîû]/g, (ch) => TURKISH_FOLD[ch] ?? ch);
+}
+
+/**
  * Answer equivalence check. Japanese-aware when either side contains
- * kana/kanji; plain normalized compare otherwise (Turkish, Dutch, ...).
+ * kana/kanji; otherwise normalized compare with Turkish diacritics folded
+ * (Turkish, Dutch, ...).
  */
 export function answersMatch(expected: string, given: string): boolean {
   if (basicNormalize(expected) === basicNormalize(given)) return true;
   if (hasJapanese(expected) || hasJapanese(given)) {
     return canonicalJa(expected) === canonicalJa(given);
   }
-  return false;
+  const e = foldTurkish(basicNormalize(expected));
+  const g = foldTurkish(basicNormalize(given));
+  if (e === g) return true;
+  // Whitespace-insensitive: "a i u e o" (normalized "a, i, u, e, o") = "aiueo".
+  return e.replace(/\s+/g, "") === g.replace(/\s+/g, "");
 }
 
 /** Romaji rendering for the selection tooltip. Kanji passes through as-is. */
@@ -98,6 +123,26 @@ export function parseFurigana(text: string): FuriganaSegment[] {
   }
   if (last < text.length) segments.push({ text: text.slice(last) });
   return segments;
+}
+
+/**
+ * Split mixed text into Japanese-script runs (kana/kanji/CJK punctuation) and
+ * everything else, so JP typography (font stack, size bump) can be applied to
+ * exactly the Japanese glyphs — not to Turkish prose surrounding them.
+ */
+export function splitJapaneseRuns(
+  s: string
+): { text: string; ja: boolean }[] {
+  const runs: { text: string; ja: boolean }[] = [];
+  const re = /[　-〿぀-ヿ一-鿿]+/g;
+  let last = 0;
+  for (const m of s.matchAll(re)) {
+    if (m.index! > last) runs.push({ text: s.slice(last, m.index), ja: false });
+    runs.push({ text: m[0], ja: true });
+    last = m.index! + m[0].length;
+  }
+  if (last < s.length) runs.push({ text: s.slice(last), ja: false });
+  return runs;
 }
 
 /** Strip furigana brackets: 漢字[かんじ] → 漢字 (for comparisons/tooltips). */

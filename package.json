@@ -14,13 +14,16 @@
     "test": "tsx --test src/lib/*.test.ts"
   },
   "dependencies": {
+    "@k1low/hanzi-writer-data-jp": "^0.8.0",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.44.7",
+    "hanzi-writer": "^3.7.3",
     "nanoid": "^5.1.16",
     "next": "15.5.20",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "wanakana": "^5.3.1",
     "zod": "^4.4.3"
   },
