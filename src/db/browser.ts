@@ -10,6 +10,7 @@ import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
 import { drizzle, type SQLJsDatabase as DrizzleSqlJs } from "drizzle-orm/sql-js";
 import * as schema from "./schema";
 import { DDL } from "./ddl";
+import { withBase } from "@/lib/base-path";
 
 export type BrowserDb = DrizzleSqlJs<typeof schema>;
 
@@ -67,7 +68,7 @@ let initPromise: Promise<BrowserDbHandle> | null = null;
 async function create(): Promise<BrowserDbHandle> {
   const SQL = await initSqlJs({
     // sql-wasm.wasm public/ altında servis edilir.
-    locateFile: (file) => `/${file}`,
+    locateFile: (file) => withBase(`/${file}`),
   });
 
   const stored = await idbGet();

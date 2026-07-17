@@ -412,7 +412,8 @@ export async function saveImportApi(file: File): Promise<void> {
   }
   const { SAVE_SCHEMA_VERSION } = await import("@/lib/save/version");
   const initSqlJs = (await import("sql.js")).default;
-  const SQL = await initSqlJs({ locateFile: (f: string) => `/${f}` });
+  const { withBase } = await import("@/lib/base-path");
+  const SQL = await initSqlJs({ locateFile: (f: string) => withBase(`/${f}`) });
   const probe = new SQL.Database(bytes);
   try {
     const res = probe.exec(
