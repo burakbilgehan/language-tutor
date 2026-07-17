@@ -1,10 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { StrokeTrainer } from "@/components/stroke/StrokeTrainer";
-import { getActiveProfile } from "@/lib/profile";
-import { pick } from "@/lib/i18n";
-
-export const dynamic = "force-dynamic";
+import { useProfileMeta } from "@/lib/use-profile-meta";
+import { useStrings } from "@/lib/i18n/use-strings";
 
 const S = {
   tr: {
@@ -22,9 +22,9 @@ const S = {
 };
 
 export default function StrokePage() {
-  const profile = getActiveProfile();
-  const t = pick(S, profile?.uiLanguage);
-  if (profile && profile.targetLanguage !== "ja") {
+  const meta = useProfileMeta();
+  const t = useStrings(S);
+  if (meta && meta.targetLanguage !== "ja") {
     return (
       <div className="min-h-dvh pb-16">
         <StatsHeader title={t.titleShort} />

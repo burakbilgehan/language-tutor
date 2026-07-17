@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLlmStatus } from "@/lib/llm-status";
 import { grammarTopics, grammarGenerate, grammarGenerateBatch } from "@/lib/client-api";
@@ -144,10 +144,7 @@ const CATEGORY_ORDER = [
 export function GrammarSidebar() {
   const s = useStrings(S);
   const llm = useLlmStatus();
-  const pathname = usePathname();
-  const activeSlug = pathname.startsWith("/grammar/")
-    ? decodeURIComponent(pathname.slice("/grammar/".length))
-    : null;
+  const activeSlug = useSearchParams().get("topic");
 
   const [topics, setTopics] = useState<TopicDto[] | null>(null);
   const [levelFilter, setLevelFilter] = useState<string | null>(null);
@@ -296,7 +293,7 @@ export function GrammarSidebar() {
                   {list.map((t) => (
                     <Link
                       key={t.slug}
-                      href={`/grammar/${t.slug}`}
+                      href={`/grammar?topic=${encodeURIComponent(t.slug)}`}
                       className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
                         activeSlug === t.slug
                           ? "bg-accent-soft font-semibold text-ink"

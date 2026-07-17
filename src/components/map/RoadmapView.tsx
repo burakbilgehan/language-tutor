@@ -310,7 +310,7 @@ export function RoadmapView() {
             icon={QUEST_ICON[sq.sideQuestKind ?? ""] ?? "✦"}
             label={sq.titleTr}
             compact={lessonOpen}
-            onClick={() => router.push(`/quest/${sq.id}`)}
+            onClick={() => router.push(`/quest?node=${sq.id}`)}
           />
         ))}
         <QuestBubble

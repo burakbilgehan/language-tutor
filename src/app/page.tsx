@@ -1,18 +1,28 @@
-import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { db, tables } from "@/db";
-import { getActiveProfile } from "@/lib/profile";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { profileData, roadmap } from "@/lib/client-api";
 
+// Giriş kapısı: profil + hazır müfredat varsa haritaya, yoksa onboarding'e.
+// İstemci tarafında karar verir — sunuculu ve statik modda aynı davranış.
 export default function Home() {
-  const profile = getActiveProfile();
-  if (!profile) redirect("/onboarding");
-
-  const curriculum = db.query.curricula
-    .findFirst({ where: eq(tables.curricula.profileId, profile.id) })
-    .sync();
-  if (!curriculum || curriculum.status !== "ready") redirect("/onboarding");
-
-  redirect("/map");
+  const router = useRouter();
+  useEffect(() => {
+    (async () => {
+      try {
+        const d = await profileData();
+        if (!d.profile) return router.replace("/onboarding");
+        await roadmap(); // müfredat hazır değilse throw
+        router.replace("/map");
+      } catch {
+        router.replace("/onboarding");
+      }
+    })();
+  }, [router]);
+  return (
+    <div className="flex min-h-dvh items-center justify-center text-ink-soft">
+      <div className="animate-float-slow text-5xl">🌸</div>
+    </div>
+  );
 }

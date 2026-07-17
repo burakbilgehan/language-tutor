@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { GrammarTable } from "@/components/grammar/GrammarTable";
 import { CozyButton } from "@/components/shared/CozyButton";
@@ -41,12 +41,7 @@ interface TopicResponse {
   content: GrammarTopicContent | null;
 }
 
-export default function GrammarTopicPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = use(params);
+export function GrammarTopicView({ slug }: { slug: string }) {
   const s = useStrings(S);
   const [topic, setTopic] = useState<TopicResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +129,7 @@ export default function GrammarTopicPage({
                 {topic.content.related_slugs.map((s) => (
                   <Link
                     key={s}
-                    href={`/grammar/${s}`}
+                    href={`/grammar?topic=${encodeURIComponent(s)}`}
                     className="rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors"
                   >
                     → {s}

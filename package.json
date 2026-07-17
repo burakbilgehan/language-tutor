@@ -6,6 +6,7 @@
     "predev": "node scripts/sync-assets.mjs",
     "dev": "next dev --turbopack",
     "prebuild": "node scripts/sync-assets.mjs",
+    "build:static": "node scripts/build-static.mjs",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
