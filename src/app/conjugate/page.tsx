@@ -1,11 +1,12 @@
+"use client";
+
+import { useStrings } from "@/lib/i18n/use-strings";
+import { useProfileMeta } from "@/lib/use-profile-meta";
+
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { ConjugatorView } from "@/components/conjugate/ConjugatorView";
 import { NlConjugatorView } from "@/components/conjugate/NlConjugatorView";
 import { ZhAspectView } from "@/components/conjugate/ZhAspectView";
-import { getActiveProfile } from "@/lib/profile";
-import { pick } from "@/lib/i18n";
-
-export const dynamic = "force-dynamic";
 
 const S = {
   tr: {
@@ -27,8 +28,8 @@ const S = {
 };
 
 export default function ConjugatePage() {
-  const profile = getActiveProfile();
-  const t = pick(S, profile?.uiLanguage);
+  const profile = useProfileMeta();
+  const t = useStrings(S);
   const lang = profile?.targetLanguage ?? "ja";
 
   return (

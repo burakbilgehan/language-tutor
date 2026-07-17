@@ -1,9 +1,12 @@
+"use client";
+
+import { useStrings } from "@/lib/i18n/use-strings";
+import { useProfileMeta } from "@/lib/use-profile-meta";
+
 import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { Furigana } from "@/components/shared/Furigana";
 import { SpeakButton } from "@/components/shared/SpeakButton";
-import { getActiveProfile } from "@/lib/profile";
-import { pick } from "@/lib/i18n";
 import {
   TONES,
   INITIALS,
@@ -11,8 +14,6 @@ import {
   PINYIN_NOTES,
   type PinyinRow,
 } from "@/lib/zh-pinyin";
-
-export const dynamic = "force-dynamic";
 
 const S = {
   tr: {
@@ -91,8 +92,8 @@ function PinyinTable({
 }
 
 export default function PinyinPage() {
-  const profile = getActiveProfile();
-  const t = pick(S, profile?.uiLanguage);
+  const profile = useProfileMeta();
+  const t = useStrings(S);
   const en = profile?.uiLanguage === "en";
   if (profile && profile.targetLanguage !== "zh") {
     return (

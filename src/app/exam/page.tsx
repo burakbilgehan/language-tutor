@@ -1,9 +1,10 @@
+"use client";
+
+import { useStrings } from "@/lib/i18n/use-strings";
+import { useProfileMeta } from "@/lib/use-profile-meta";
+
 import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
-import { getActiveProfile } from "@/lib/profile";
-import { pick } from "@/lib/i18n";
-
-export const dynamic = "force-dynamic";
 
 interface ExamPart {
   name: string;
@@ -108,8 +109,8 @@ const S = {
 };
 
 export default function ExamPage() {
-  const profile = getActiveProfile();
-  const t = pick(S, profile?.uiLanguage);
+  const profile = useProfileMeta();
+  const t = useStrings(S);
   const en = profile?.uiLanguage === "en";
   if (profile && profile.targetLanguage !== "nl") {
     return (
