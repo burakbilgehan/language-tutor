@@ -1,4 +1,5 @@
 import { db, tables } from "@/db";
+import { getActiveProfile } from "@/lib/profile";
 import { SAVE_SCHEMA_VERSION } from "./version";
 
 /**
@@ -9,7 +10,7 @@ import { SAVE_SCHEMA_VERSION } from "./version";
  * file on disk.
  */
 export function exportSave(): { buffer: Buffer; filename: string } {
-  const profile = db.query.profiles.findFirst().sync();
+  const profile = getActiveProfile();
 
   const meta: Record<string, string> = {
     schemaVersion: String(SAVE_SCHEMA_VERSION),
