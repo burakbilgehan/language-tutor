@@ -215,7 +215,11 @@ export function LlmProviderSection() {
     { value: "none", label: t.modeNone, desc: t.modeNoneDesc },
   ];
 
-  const needsKeyField = mode === "openai" || mode === "anthropic";
+  // Yerel hedefler (köprü/Ollama/LM Studio) key istemez — alanı hiç gösterme.
+  // "custom" için opsiyonel olarak göster (bilinmeyen endpoint key isteyebilir).
+  const needsKeyField =
+    mode === "anthropic" ||
+    (mode === "openai" && (PRESETS[preset].needsKey || preset === "custom"));
 
   return (
     <section className="rounded-cozy bg-surface p-6 shadow-cozy">
@@ -283,23 +287,25 @@ export function LlmProviderSection() {
         </div>
       )}
 
-      {needsKeyField && (
+      {(mode === "openai" || mode === "anthropic") && (
         <div className="mt-3 flex flex-col gap-3">
-          <label className="text-sm">
-            <span className="mb-1 block font-semibold">{t.apiKey}</span>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={config.hasKey ? config.apiKeyMasked : "sk-..."}
-              className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-accent"
-            />
-            {config.hasKey && (
-              <span className="mt-1 block text-xs text-ink-soft">
-                {t.apiKeyKept}
-              </span>
-            )}
-          </label>
+          {needsKeyField && (
+            <label className="text-sm">
+              <span className="mb-1 block font-semibold">{t.apiKey}</span>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={config.hasKey ? config.apiKeyMasked : "sk-..."}
+                className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-accent"
+              />
+              {config.hasKey && (
+                <span className="mt-1 block text-xs text-ink-soft">
+                  {t.apiKeyKept}
+                </span>
+              )}
+            </label>
+          )}
           <div className="text-sm">
             <span className="mb-1 block font-semibold">{t.models}</span>
             <div className="grid grid-cols-3 gap-2">
