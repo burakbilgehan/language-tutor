@@ -7,6 +7,7 @@ import { SideQuestPayloadSchema } from "@/lib/llm/schemas";
 import { sideQuestPrompt } from "@/lib/llm/prompts/side-quest";
 import { requireLlm } from "@/lib/llm/require-llm";
 import { getQuestCached } from "@/core/quest";
+import { generateQuestPayload } from "@/core/llm-gen";
 
 export const runtime = "nodejs";
 
@@ -35,46 +36,7 @@ export async function POST(
   const gate = requireLlm();
   if (gate) return gate;
 
-  const recentVocab = db.query.srsCards
-    .findMany({
-      where: eq(tables.srsCards.profileId, profile.id),
-      orderBy: [desc(tables.srsCards.createdAt)],
-      limit: 30,
-    })
-    .sync()
-    .map((c) => ({ term: c.front, meaning: c.back }));
-
-  const completedTitles = db
-    .select({ title: tables.nodes.titleTr })
-    .from(tables.nodes)
-    .where(eq(tables.nodes.status, "completed"))
-    .all()
-    .map((r) => r.title)
-    .slice(-12);
-
-  const { system, prompt } = sideQuestPrompt({
-    targetLanguage: profile.targetLanguage,
-    nativeLanguage: profile.nativeLanguage,
-    node,
-    selfLevel: profile.selfLevel,
-    recentVocab,
-    completedTitles,
-  });
-
-  // Fresh content per completed run. Fast tier, sync.
-  const payload = await getProvider().generateJson({
-    system,
-    prompt,
-    schema: SideQuestPayloadSchema,
-    fixtureKey: "side_quest",
-    tier: "fast",
-    timeoutMs: 120_000,
-  });
-
-  db.update(tables.nodes)
-    .set({ sideQuestPayload: payload })
-    .where(eq(tables.nodes.id, node.id))
-    .run();
+  const payload = await generateQuestPayload(db, getProvider(), profile, node);
 
   return NextResponse.json({
     node: { id: node.id, titleTr: node.titleTr, xpReward: node.xpReward },

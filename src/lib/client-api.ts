@@ -130,6 +130,18 @@ export async function stats(): Promise<ReturnType<typeof import("@/core/stats").
   return core.getStats(db);
 }
 
+/** Statikte aktif tarayıcı LLM'i; yapılandırılmamışsa net mesajla düşer. */
+async function browserGen() {
+  const { getBrowserGen } = await import("@/lib/llm/browser-provider");
+  const gen = getBrowserGen();
+  if (!gen) {
+    throw new Error(
+      "LLM yapılandırılmamış — Ayarlar → LLM Sağlayıcı'dan köprü/Ollama/API key bağla."
+    );
+  }
+  return gen;
+}
+
 /** Statikte henüz LLM yok: üretim gerektiren aksiyonlar bu mesajla düşer.
  * Tarayıcı LLM katmanı (localStorage config + köprü/API) gelince kalkacak. */
 function staticLlmGate(): never {
@@ -235,7 +247,18 @@ export async function chatSend(body: {
       body: JSON.stringify(body),
     });
   }
-  staticLlmGate();
+  const gen = await browserGen();
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreG = await import("@/core/llm-gen");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const result = await coreG.sendChatMessage(db, gen, profile, {
+    sessionId: body.sessionId,
+    message: body.message,
+  });
+  persistSoon();
+  return result;
 }
 
 export async function translateText(
@@ -259,7 +282,12 @@ export async function translateText(
     ? coreT.cachedTranslation(db, profile.targetLanguage, normalized)
     : null;
   if (cached || cachedOnly) return { translation: cached };
-  staticLlmGate(); // taze çeviri LLM ister
+  const gen = await browserGen();
+  const coreG = await import("@/core/llm-gen");
+  const { persistSoon } = await browserDb();
+  const translation = await coreG.freshTranslation(db, gen, profile, normalized);
+  persistSoon();
+  return { translation: translation || null };
 }
 
 // ------------------------------------------------------------------ Quest
@@ -277,7 +305,22 @@ export async function questStart(nodeId: string): Promise<{
   if (cached.status === "notFound") throw new Error("Yan görev bulunamadı");
   if (cached.status === "ready")
     return { node: cached.node, quest: cached.quest };
-  staticLlmGate(); // taze görev üretimi LLM ister
+  const gen = await browserGen();
+  const coreP = await import("@/core/profile");
+  const coreG = await import("@/core/llm-gen");
+  const { persistSoon } = await browserDb();
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const payload = await coreG.generateQuestPayload(db, gen, profile, cached.node);
+  persistSoon();
+  return {
+    node: {
+      id: cached.node.id,
+      titleTr: cached.node.titleTr,
+      xpReward: cached.node.xpReward,
+    },
+    quest: payload,
+  };
 }
 
 // ------------------------------------------------------------------ Save (statik: tarayıcı imajı)
@@ -349,7 +392,11 @@ export async function regenerateLesson(nodeId: string): Promise<void> {
     }
     return;
   }
-  staticLlmGate();
+  const gen = await browserGen();
+  const { db, persistSoon } = await browserDb();
+  const coreG = await import("@/core/llm-gen");
+  await coreG.generateLessonContent(db, gen, nodeId);
+  persistSoon();
 }
 
 export async function curriculumExtend(profileId: string): Promise<{ jobId?: string }> {
@@ -368,7 +415,17 @@ export async function grammarGenerate(slug: string): Promise<void> {
     await fetch(`/api/grammar/${slug}`, { method: "POST" });
     return;
   }
-  staticLlmGate();
+  const gen = await browserGen();
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreGr = await import("@/core/grammar");
+  const coreG = await import("@/core/llm-gen");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const topic = coreGr.findGrammarTopic(db, profile.targetLanguage, slug);
+  if (!topic) throw new Error("Konu bulunamadı");
+  await coreG.generateGrammarContent(db, gen, topic.id);
+  persistSoon();
 }
 
 export async function grammarGenerateBatch(level?: string): Promise<void> {
@@ -388,7 +445,17 @@ export async function kanjiGenerate(char: string): Promise<void> {
     await fetch(`/api/kanji/${encodeURIComponent(char)}`, { method: "POST" });
     return;
   }
-  staticLlmGate();
+  const gen = await browserGen();
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreK = await import("@/core/kanji");
+  const coreG = await import("@/core/llm-gen");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const entry = coreK.findKanji(db, profile.targetLanguage, char);
+  if (!entry) throw new Error("Kanji bulunamadı");
+  await coreG.generateKanjiContent(db, gen, entry.id);
+  persistSoon();
 }
 
 export async function kanjiGenerateBatch(level: string): Promise<{ queued: number }> {
@@ -500,10 +567,16 @@ export async function openNodeApi(nodeId: string): Promise<
   if (result.status === "notFound") throw new Error("Ders bulunamadı");
   if (result.status === "locked") throw new Error("Bu ders henüz kilitli");
   if (result.status === "needsGeneration") {
-    // Tarayıcı LLM katmanı gelene kadar: üretilmemiş ders statikte açılamaz.
-    throw new Error(
-      "Bu ders henüz üretilmemiş. (Statik mod: tarayıcı LLM katmanı yolda)"
-    );
+    // Tarayıcı LLM'iyle inline üret (1-3 dk sürebilir; UI hazırlanıyor
+    // ekranını gösterir), sonra cache'ten servis et.
+    const gen = await browserGen();
+    const coreG = await import("@/core/llm-gen");
+    const { persistSoon } = await browserDb();
+    await coreG.generateLessonContent(db, gen, nodeId);
+    persistSoon();
+    const after = core.openNode(db, nodeId);
+    if (after.status !== "ready") throw new Error("Ders üretimi tamamlanamadı");
+    return after;
   }
   return result;
 }
@@ -550,13 +623,16 @@ export async function attemptApi(
   const coreL = await import("@/core/lesson");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
+  const { getBrowserGen } = await import("@/lib/llm/browser-provider");
+  const gen = getBrowserGen();
+  const coreG = await import("@/core/llm-gen");
   const outcome = await coreL.attemptExercise(db, {
     exerciseId,
     response,
     selfVerdict,
     profile,
-    // llmGrade yok → compare miss'te self-check protokolü. Tarayıcı LLM
-    // katmanı geldiğinde buradan beslenecek.
+    // Tarayıcı LLM'i bağlıysa gerçek değerlendirme; değilse self-check.
+    llmGrade: gen ? coreG.makeLlmGrader(gen, profile, response) : undefined,
   });
   if (outcome.kind === "notFound") throw new Error("Alıştırma bulunamadı");
   persistSoon();
@@ -596,4 +672,92 @@ export async function srsReview(
   persistSoon();
   if (!result) throw new Error("Kart bulunamadı");
   return result;
+}
+
+// ------------------------------------------------------------------ LLM ayarları
+
+export interface LlmConfigDto {
+  mode: "cli" | "openai" | "anthropic" | "none";
+  baseUrl?: string;
+  apiKeyMasked?: string;
+  hasKey: boolean;
+  models?: { fast?: string; balanced?: string; deep?: string };
+  jsonMode?: boolean;
+  cliAllowed: boolean;
+}
+
+function maskKey(key?: string): string | undefined {
+  if (!key) return undefined;
+  return key.length <= 4 ? "••••" : `••••${key.slice(-4)}`;
+}
+
+export async function llmConfigGet(): Promise<LlmConfigDto> {
+  if (!IS_STATIC) return fetchJson("/api/llm-config");
+  const { readBrowserLlmConfig } = await import("@/lib/llm/browser-provider");
+  const c = readBrowserLlmConfig();
+  return {
+    mode: c?.mode ?? "none",
+    baseUrl: c?.baseUrl,
+    apiKeyMasked: maskKey(c?.apiKey),
+    hasKey: Boolean(c?.apiKey),
+    models: c?.models,
+    jsonMode: c?.jsonMode,
+    cliAllowed: false, // statikte CLI yok — çağrılar tarayıcıdan çıkar
+  };
+}
+
+export async function llmConfigPut(input: {
+  mode: string;
+  baseUrl?: string;
+  apiKey?: string;
+  models?: { fast?: string; balanced?: string; deep?: string };
+  jsonMode?: boolean;
+}): Promise<void> {
+  if (!IS_STATIC) {
+    await fetchJson("/api/llm-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    return;
+  }
+  const { readBrowserLlmConfig, writeBrowserLlmConfig } = await import(
+    "@/lib/llm/browser-provider"
+  );
+  const existing = readBrowserLlmConfig();
+  const keyLooksMasked = input.apiKey?.startsWith("••••");
+  writeBrowserLlmConfig({
+    mode: (input.mode === "cli" ? "none" : input.mode) as
+      | "openai"
+      | "anthropic"
+      | "none",
+    baseUrl: input.baseUrl,
+    apiKey:
+      input.apiKey && !keyLooksMasked ? input.apiKey : existing?.apiKey,
+    models: input.models,
+    jsonMode: input.jsonMode,
+  });
+}
+
+export async function llmTest(): Promise<{ ok: boolean; ms?: number; error?: string }> {
+  if (!IS_STATIC) {
+    const res = await fetch("/api/health/llm", { method: "POST" });
+    return res.json();
+  }
+  const started = Date.now();
+  try {
+    const gen = await browserGen();
+    const { z } = await import("zod");
+    const result = await gen.generateJson({
+      system: "Kısa cevap ver.",
+      prompt: 'JSON döndür: {"ok": true}',
+      schema: z.object({ ok: z.boolean() }),
+      fixtureKey: "smoke",
+      tier: "fast",
+      timeoutMs: 60_000,
+    });
+    return { ok: result.ok === true, ms: Date.now() - started };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }

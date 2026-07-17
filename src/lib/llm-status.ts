@@ -25,10 +25,17 @@ let inflight: Promise<LlmStatus> | null = null;
 
 async function fetchStatus(): Promise<LlmStatus> {
   if (cached) return cached;
-  // Statik mod: sunucu yok — tarayıcı LLM katmanı gelene kadar "LLM yok"
-  // kabul et (UI üretim aksiyonlarını gizler, cache'li her şey çalışır).
+  // Statik mod: durum localStorage'daki tarayıcı LLM config'inden gelir.
   if (process.env.NEXT_PUBLIC_STATIC_BUILD === "1") {
-    cached = { configured: false, mode: "none", cliAllowed: false };
+    const { readBrowserLlmConfig, browserLlmConfigured } = await import(
+      "@/lib/llm/browser-provider"
+    );
+    const c = readBrowserLlmConfig();
+    cached = {
+      configured: browserLlmConfigured(),
+      mode: (c?.mode ?? "none") as LlmStatus["mode"],
+      cliAllowed: false,
+    };
     return cached;
   }
   if (!inflight) {

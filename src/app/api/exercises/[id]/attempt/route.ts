@@ -7,6 +7,7 @@ import { GradeSchema } from "@/lib/llm/schemas";
 import { gradingPrompt } from "@/lib/llm/prompts/lesson";
 import { llmConfigured } from "@/lib/llm/config";
 import { attemptExercise } from "@/core/lesson";
+import { makeLlmGrader } from "@/core/llm-gen";
 
 export const runtime = "nodejs";
 
@@ -39,27 +40,7 @@ export async function POST(
     // LLM yapılandırılmışsa gerçek değerlendirme; değilse callback yok →
     // core self-check protokolüne düşer.
     llmGrade: llmConfigured()
-      ? async (exercise) => {
-          const { system, prompt } = gradingPrompt({
-            targetLanguage: profile.targetLanguage,
-            nativeLanguage: profile.nativeLanguage,
-            exerciseType: exercise.type,
-            promptTr: exercise.promptTr,
-            targetText: exercise.targetText,
-            expectedAnswer: exercise.answer,
-            acceptAlso: exercise.acceptAlso,
-            userResponse: parsed.data.response,
-          });
-          return getProvider().generateJson({
-            system,
-            prompt,
-            schema: GradeSchema,
-            fixtureKey: "grade",
-            tier: exercise.type === "free_response" ? "balanced" : "fast",
-            timeoutMs: 90_000,
-            urgent: true, // user is staring at "Hoca düşünüyor..."
-          });
-        }
+      ? makeLlmGrader(getProvider(), profile, parsed.data.response)
       : undefined,
   });
 

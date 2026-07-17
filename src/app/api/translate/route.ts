@@ -8,6 +8,7 @@ import { getProvider } from "@/lib/llm/provider";
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
 import { requireLlm } from "@/lib/llm/require-llm";
 import { cachedTranslation, normalizeTranslateText } from "@/core/translate";
+import { freshTranslation } from "@/core/llm-gen";
 
 export const runtime = "nodejs";
 
@@ -49,33 +50,15 @@ export async function POST(req: Request) {
   const gate = requireLlm();
   if (gate) return gate;
 
-  // Cache note: translations are keyed on (targetLanguage, sourceText) only;
-  // a profile's nativeLanguage effectively never changes, so stale-language
-  // cache entries aren't worth a schema change.
-  const lang = languageName(profile.targetLanguage);
-  const native = nativeLanguageName(profile.nativeLanguage);
-  const translation = (
-    await getProvider().generateText({
-      prompt: `Aşağıdaki ${lang} metni ${native} diline çevir. SADECE çeviriyi yaz, açıklama ekleme. Metin bir kelime listesiyse ("・" ile ayrılmış) her öğeyi aynı sırayla "・" ile ayırarak çevir.\n\n${text}`,
-      fixtureKey: "translate",
-      tier: "fast",
-      timeoutMs: 30_000,
-      urgent: true,
-    })
-  ).trim();
+  const translation = await freshTranslation(
+    db,
+    getProvider(),
+    profile,
+    text
+  );
   if (!translation) {
     return NextResponse.json({ error: "Çeviri alınamadı" }, { status: 502 });
   }
-
-  db.insert(tables.translations)
-    .values({
-      id: nanoid(),
-      targetLanguage: profile.targetLanguage,
-      sourceText: text,
-      translationTr: translation,
-    })
-    .onConflictDoNothing()
-    .run();
 
   return NextResponse.json({ translation });
 }
