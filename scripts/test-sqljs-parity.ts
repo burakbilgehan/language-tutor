@@ -155,6 +155,65 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   }
 }
 
+
+// 9. LLM üretim çekirdeği (mock gen + fixture içerikleri, sql.js üzerinde)
+{
+  const fsx = await import("node:fs");
+  const { generateGrammarContent, generateLessonContent, sendChatMessage, makeLlmGrader } =
+    await import("@/core/llm-gen");
+  const schema = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const fixtures: Record<string, string> = {
+    grammar: fsx.readFileSync("src/lib/llm/fixtures/grammar.json", "utf8"),
+    lesson: fsx.readFileSync("src/lib/llm/fixtures/lesson.json", "utf8"),
+    grade: fsx.readFileSync("src/lib/llm/fixtures/grade.json", "utf8"),
+    chat: fsx.readFileSync("src/lib/llm/fixtures/chat.txt", "utf8"),
+  };
+  const mockGen = {
+    async generateJson(o: { fixtureKey: string; schema: { parse: (x: unknown) => unknown } }) {
+      return o.schema.parse(JSON.parse(fixtures[o.fixtureKey.replace("-retry", "")]));
+    },
+    async generateText(o: { fixtureKey: string }) {
+      return fixtures[o.fixtureKey.replace("-retry", "")] ?? "mock";
+    },
+  } as never;
+
+  // grammar üretimi
+  const pending = db.select().from(schema.grammarTopics)
+    .where(eq(schema.grammarTopics.status, "pending")).limit(1).get();
+  if (pending) {
+    await generateGrammarContent(db as never, mockGen, pending.id);
+    const after = db.select().from(schema.grammarTopics)
+      .where(eq(schema.grammarTopics.id, pending.id)).limit(1).get();
+    check("generateGrammarContent", after?.status === "ready" && !!after.content);
+  }
+
+  // lesson üretimi (lesson'sız ya da error'lu bir node bul; yoksa mevcut ready birini yeniden üret)
+  const anyNode = db.select().from(schema.nodes).all().find((n) => n.nodeType === "main");
+  if (anyNode) {
+    await generateLessonContent(db as never, mockGen, anyNode.id);
+    const lessonRow = db.select().from(schema.lessons)
+      .where(eq(schema.lessons.nodeId, anyNode.id)).limit(1).get();
+    const exCount = db.select().from(schema.exercises)
+      .where(eq(schema.exercises.lessonId, lessonRow!.id)).all().length;
+    check("generateLessonContent", lessonRow?.status === "ready" && exCount > 0, `→ ${exCount} egzersiz`);
+  }
+
+  // chat
+  const chatRes = await sendChatMessage(db as never, mockGen, profile!, {
+    sessionId: null, message: "test mesajı",
+  });
+  check("sendChatMessage", chatRes.reply.length > 0, `→ ${chatRes.reply.slice(0, 30)}...`);
+
+  // grader
+  const ex = db.select().from(schema.exercises).where(eq(schema.exercises.grading, "llm")).limit(1).get();
+  if (ex) {
+    const grade = await makeLlmGrader(mockGen, profile!, "deneme")(ex);
+    check("makeLlmGrader", typeof grade.correct === "boolean", `→ score ${grade.score}`);
+  }
+}
+
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);
 process.exit(fail ? 1 : 0);
 

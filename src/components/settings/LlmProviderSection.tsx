@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
+import { llmConfigGet, llmConfigPut, llmTest } from "@/lib/client-api";
 import { PRESET_LIST, PRESETS, type PresetId } from "@/lib/llm/presets";
 
 const S = {
@@ -105,8 +106,7 @@ export function LlmProviderSection() {
   const [testMsg, setTestMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/llm-config")
-      .then((r) => r.json())
+    llmConfigGet()
       .then((d: ConfigDto) => {
         setConfig(d);
         setMode(d.mode);
@@ -153,32 +153,26 @@ export function LlmProviderSection() {
     setSaving(true);
     setSaveMsg(null);
     try {
-      const res = await fetch("/api/llm-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode,
-          baseUrl: baseUrl || undefined,
-          // Empty input = keep the stored key (server preserves it).
-          apiKey: apiKey || undefined,
-          models:
-            models.fast || models.balanced || models.deep
-              ? {
-                  fast: models.fast || undefined,
-                  balanced: models.balanced || undefined,
-                  deep: models.deep || undefined,
-                }
-              : undefined,
-          jsonMode: mode === "openai" ? jsonMode : undefined,
-        }),
+      await llmConfigPut({
+        mode,
+        baseUrl: baseUrl || undefined,
+        // Empty input = keep the stored key (preserved on both sides).
+        apiKey: apiKey || undefined,
+        models:
+          models.fast || models.balanced || models.deep
+            ? {
+                fast: models.fast || undefined,
+                balanced: models.balanced || undefined,
+                deep: models.deep || undefined,
+              }
+            : undefined,
+        jsonMode: mode === "openai" ? jsonMode : undefined,
       });
-      if (!res.ok) throw new Error();
       setSaveMsg(t.saved);
       setApiKey("");
       invalidateLlmStatus();
       // Refresh masked-key display.
-      const d: ConfigDto = await (await fetch("/api/llm-config")).json();
-      setConfig(d);
+      setConfig(await llmConfigGet());
     } catch {
       setSaveMsg(t.saveFailed);
     } finally {
@@ -190,11 +184,10 @@ export function LlmProviderSection() {
     setTesting(true);
     setTestMsg(null);
     try {
-      const res = await fetch("/api/health/llm", { method: "POST" });
-      const body = await res.json();
+      const body = await llmTest();
       setTestMsg(
         body.ok
-          ? t.testOk((body.ms / 1000).toFixed(1))
+          ? t.testOk(((body.ms ?? 0) / 1000).toFixed(1))
           : `❌ ${body.error ?? t.testFailed}`
       );
     } catch {

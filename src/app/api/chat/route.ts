@@ -8,6 +8,7 @@ import { getProvider } from "@/lib/llm/provider";
 import { chatPrompt } from "@/lib/llm/prompts/chat";
 import { requireLlm } from "@/lib/llm/require-llm";
 import { chatHistory } from "@/core/chat";
+import { sendChatMessage } from "@/core/llm-gen";
 
 export const runtime = "nodejs";
 
@@ -35,70 +36,10 @@ export async function POST(req: Request) {
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
-
-  let sessionId = parsed.data.sessionId ?? null;
-  if (sessionId) {
-    const exists = db.query.chatSessions
-      .findFirst({ where: eq(tables.chatSessions.id, sessionId) })
-      .sync();
-    if (!exists) sessionId = null;
-  }
-  if (!sessionId) {
-    sessionId = nanoid();
-    db.insert(tables.chatSessions)
-      .values({
-        id: sessionId,
-        profileId: profile.id,
-        contextNodeId: parsed.data.contextNodeId ?? null,
-      })
-      .run();
-  }
-
-  const history = db.query.chatMessages
-    .findMany({
-      where: eq(tables.chatMessages.sessionId, sessionId),
-      orderBy: [asc(tables.chatMessages.createdAt)],
-    })
-    .sync()
-    .slice(-20)
-    .map((m) => ({ role: m.role, content: m.content }));
-
-  let lessonContext: string | null = null;
-  if (parsed.data.contextNodeId) {
-    const node = db.query.nodes
-      .findFirst({ where: eq(tables.nodes.id, parsed.data.contextNodeId) })
-      .sync();
-    if (node) lessonContext = `"${node.titleTr}" — ${node.subtitleTr}`;
-  }
-
-  const { system, prompt } = chatPrompt({
-    profile,
-    lessonContext,
-    history,
+  const result = await sendChatMessage(db, getProvider(), profile, {
+    sessionId: parsed.data.sessionId ?? null,
     message: parsed.data.message,
+    contextNodeId: parsed.data.contextNodeId,
   });
-
-  const reply = (
-    await getProvider().generateText({
-      system,
-      prompt,
-      fixtureKey: "chat",
-      tier: "balanced",
-      timeoutMs: 120_000,
-    })
-  ).trim();
-
-  db.insert(tables.chatMessages)
-    .values([
-      {
-        id: nanoid(),
-        sessionId,
-        role: "user" as const,
-        content: parsed.data.message,
-      },
-      { id: nanoid(), sessionId, role: "assistant" as const, content: reply },
-    ])
-    .run();
-
-  return NextResponse.json({ sessionId, reply });
+  return NextResponse.json(result);
 }

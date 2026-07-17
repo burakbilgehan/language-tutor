@@ -4,6 +4,11 @@ import { db, tables } from "@/db";
 import { getProvider, LlmError } from "@/lib/llm/provider";
 import { llmConfigured } from "@/lib/llm/config";
 import {
+  generateLessonContent,
+  generateGrammarContent,
+  generateKanjiContent,
+} from "@/core/llm-gen";
+import {
   CurriculumSchema,
   GrammarTopicSchema,
   KanjiContentSchema,
@@ -377,231 +382,15 @@ export async function runJob(jobId: string) {
 }
 
 async function runLessonJob(nodeId: string) {
-  const node = db.query.nodes
-    .findFirst({ where: eq(tables.nodes.id, nodeId) })
-    .sync();
-  if (!node) throw new Error("Node bulunamadı");
-
-  const unit = db.query.units
-    .findFirst({ where: eq(tables.units.id, node.unitId) })
-    .sync();
-  if (!unit) throw new Error("Ünite bulunamadı");
-
-  const curriculum = db.query.curricula
-    .findFirst({ where: eq(tables.curricula.id, unit.curriculumId) })
-    .sync();
-  const profile = db.query.profiles
-    .findFirst({ where: eq(tables.profiles.id, curriculum!.profileId) })
-    .sync();
-  if (!profile) throw new Error("Profil bulunamadı");
-
-  const completedTitles = db
-    .select({ title: tables.nodes.titleTr })
-    .from(tables.nodes)
-    .where(eq(tables.nodes.status, "completed"))
-    .all()
-    .map((r) => r.title)
-    .slice(-12);
-
-  // Recent exercise questions in this curriculum — fed to the prompt so the
-  // LLM stops recycling the same trivially-patterned questions across lessons.
-  const recentExercisePrompts = db
-    .select({ prompt: tables.exercises.promptTr })
-    .from(tables.exercises)
-    .innerJoin(
-      tables.lessons,
-      eq(tables.exercises.lessonId, tables.lessons.id)
-    )
-    .innerJoin(tables.nodes, eq(tables.lessons.nodeId, tables.nodes.id))
-    .innerJoin(tables.units, eq(tables.nodes.unitId, tables.units.id))
-    .where(eq(tables.units.curriculumId, unit.curriculumId))
-    .all()
-    .map((r) => r.prompt)
-    .slice(-30);
-
-  // Ensure a lessons row exists (status marker for the UI).
-  const existing = db.query.lessons
-    .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
-    .sync();
-  const lessonId = existing?.id ?? nanoid();
-  if (!existing) {
-    db.insert(tables.lessons)
-      .values({ id: lessonId, nodeId, status: "generating" })
-      .run();
-  } else {
-    db.update(tables.lessons)
-      .set({ status: "generating" })
-      .where(eq(tables.lessons.id, lessonId))
-      .run();
-  }
-
-  try {
-    const { system, prompt } = lessonPrompt({
-      profile,
-      node,
-      unitTitle: unit.titleTr,
-      unitTheme: unit.theme,
-      completedTitles,
-      strugglesLine: getStrugglesLine(profile.id),
-      recentExercisePrompts,
-    });
-    const lesson = await getProvider().generateJson({
-      system,
-      prompt,
-      schema: LessonSchema,
-      fixtureKey: "lesson",
-      tier: "balanced",
-      timeoutMs: 300_000,
-    });
-
-    db.transaction((tx) => {
-      tx.update(tables.lessons)
-        .set({ content: lesson, status: "ready", generatedAt: new Date() })
-        .where(eq(tables.lessons.id, lessonId))
-        .run();
-      // Re-generation: replace old exercises. Attempts on the replaced
-      // exercises go with them (FK, and they grade questions that no longer
-      // exist).
-      tx.delete(tables.attempts)
-        .where(
-          inArray(
-            tables.attempts.exerciseId,
-            tx
-              .select({ id: tables.exercises.id })
-              .from(tables.exercises)
-              .where(eq(tables.exercises.lessonId, lessonId))
-          )
-        )
-        .run();
-      tx.delete(tables.exercises)
-        .where(eq(tables.exercises.lessonId, lessonId))
-        .run();
-      lesson.exercises.forEach((ex, i) => {
-        tx.insert(tables.exercises)
-          .values({
-            id: nanoid(),
-            lessonId,
-            position: i,
-            type: ex.type,
-            promptTr: ex.prompt_tr,
-            targetText: ex.target_text ?? null,
-            options: ex.options ?? null,
-            answer: ex.answer,
-            acceptAlso: ex.accept_also ?? null,
-            grading:
-              ex.type === "free_response" || ex.type === "translate"
-                ? "llm"
-                : "deterministic",
-          })
-          .run();
-      });
-    });
-  } catch (err) {
-    db.update(tables.lessons)
-      .set({ status: "error" })
-      .where(eq(tables.lessons.id, lessonId))
-      .run();
-    throw err;
-  }
+  await generateLessonContent(db, getProvider(), nodeId);
 }
 
 async function runGrammarJob(topicId: string) {
-  const topic = db.query.grammarTopics
-    .findFirst({ where: eq(tables.grammarTopics.id, topicId) })
-    .sync();
-  if (!topic) throw new Error("Gramer konusu bulunamadı");
-
-  // Level personalization must follow the topic's language, not whichever
-  // profile happens to be active when the job runs.
-  const profile = db.query.profiles
-    .findFirst({
-      where: eq(tables.profiles.targetLanguage, topic.targetLanguage),
-    })
-    .sync();
-  const siblingTitles = db
-    .select({ title: tables.grammarTopics.titleTr })
-    .from(tables.grammarTopics)
-    .where(eq(tables.grammarTopics.targetLanguage, topic.targetLanguage))
-    .all()
-    .map((r) => r.title);
-
-  db.update(tables.grammarTopics)
-    .set({ status: "generating" })
-    .where(eq(tables.grammarTopics.id, topicId))
-    .run();
-
-  try {
-    const { system, prompt } = grammarPrompt({
-      topic,
-      selfLevel: profile?.selfLevel ?? "zero",
-      nativeLanguage: profile?.nativeLanguage ?? "tr",
-      siblingTitles,
-    });
-    const content = await getProvider().generateJson({
-      system,
-      prompt,
-      schema: GrammarTopicSchema,
-      fixtureKey: "grammar",
-      tier: "balanced",
-      timeoutMs: 300_000,
-    });
-    db.update(tables.grammarTopics)
-      .set({ content, status: "ready", generatedAt: new Date() })
-      .where(eq(tables.grammarTopics.id, topicId))
-      .run();
-  } catch (err) {
-    db.update(tables.grammarTopics)
-      .set({ status: "error" })
-      .where(eq(tables.grammarTopics.id, topicId))
-      .run();
-    throw err;
-  }
+  await generateGrammarContent(db, getProvider(), topicId);
 }
 
 async function runKanjiJob(entryId: string) {
-  const entry = db.query.kanjiEntries
-    .findFirst({ where: eq(tables.kanjiEntries.id, entryId) })
-    .sync();
-  if (!entry) throw new Error("Kanji kaydı bulunamadı");
-
-  // Personalization follows the entry's language, not the active profile.
-  const profile = db.query.profiles
-    .findFirst({
-      where: eq(tables.profiles.targetLanguage, entry.targetLanguage),
-    })
-    .sync();
-
-  db.update(tables.kanjiEntries)
-    .set({ status: "generating" })
-    .where(eq(tables.kanjiEntries.id, entryId))
-    .run();
-
-  try {
-    const { system, prompt } = kanjiPrompt({
-      entry,
-      selfLevel: profile?.selfLevel ?? "zero",
-      interests: profile?.interests ?? [],
-      nativeLanguage: profile?.nativeLanguage,
-    });
-    const content = await getProvider().generateJson({
-      system,
-      prompt,
-      schema: KanjiContentSchema,
-      fixtureKey: "kanji",
-      tier: "fast",
-      timeoutMs: 120_000,
-    });
-    db.update(tables.kanjiEntries)
-      .set({ content, status: "ready", generatedAt: new Date() })
-      .where(eq(tables.kanjiEntries.id, entryId))
-      .run();
-  } catch (err) {
-    db.update(tables.kanjiEntries)
-      .set({ status: "error" })
-      .where(eq(tables.kanjiEntries.id, entryId))
-      .run();
-    throw err;
-  }
+  await generateKanjiContent(db, getProvider(), entryId);
 }
 
 /**
