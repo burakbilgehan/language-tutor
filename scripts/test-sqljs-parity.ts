@@ -104,6 +104,20 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   }
 }
 
+
+// 7. Gramer (nl profiline geçiş + dil-doğru liste — kullanıcının bug senaryosu)
+{
+  const { listGrammarTopics } = await import("@/core/grammar");
+  const { setActiveProfile, listProfiles: lp } = await import("@/core/profile");
+  const nl = lp(db as never).find((p) => p.targetLanguage === "nl");
+  if (nl) {
+    setActiveProfile(db as never, nl.id);
+    const topics = listGrammarTopics(db as never, "nl");
+    const wrongLang = topics.some((t) => /[぀-ヿ一-鿿]/.test(t.titleTr));
+    check("nl grammar listesi nl", topics.length > 0 && !wrongLang, `→ ${topics.length} konu, ilki: ${topics[0]?.titleTr}`);
+  } else check("nl profili yok", false);
+}
+
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);
 process.exit(fail ? 1 : 0);
 

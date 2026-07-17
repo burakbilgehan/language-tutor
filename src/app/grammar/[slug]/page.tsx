@@ -7,6 +7,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { grammarTopic } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -53,9 +54,7 @@ export default function GrammarTopicPage({
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/grammar/${slug}`);
-      if (!res.ok) throw new Error((await res.json()).error ?? s.loadFailed);
-      const body: TopicResponse = await res.json();
+      const body = (await grammarTopic(slug)) as TopicResponse;
       if (stopped.current) return;
       setTopic(body);
       if (body.status === "generating") setTimeout(load, 3000);
