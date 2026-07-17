@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
+import { findGrammarTopic } from "@/core/grammar";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
 
@@ -10,16 +11,7 @@ export const runtime = "nodejs";
 function findTopic(slug: string) {
   const profile = getActiveProfile();
   if (!profile) return null;
-  return (
-    db.query.grammarTopics
-      .findFirst({
-        where: and(
-          eq(tables.grammarTopics.targetLanguage, profile.targetLanguage),
-          eq(tables.grammarTopics.slug, slug)
-        ),
-      })
-      .sync() ?? null
-  );
+  return findGrammarTopic(db, profile.targetLanguage, slug);
 }
 
 export async function GET(

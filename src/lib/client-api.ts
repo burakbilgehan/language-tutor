@@ -130,6 +130,52 @@ export async function stats(): Promise<ReturnType<typeof import("@/core/stats").
   return core.getStats(db);
 }
 
+// ------------------------------------------------------------------ Gramer
+
+export interface GrammarTopicSummary {
+  slug: string;
+  titleTr: string;
+  category: string;
+  level: string | null;
+  status: "pending" | "generating" | "ready" | "error";
+}
+
+export async function grammarTopics(): Promise<{ topics: GrammarTopicSummary[] }> {
+  if (!IS_STATIC) return fetchJson("/api/grammar");
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreG = await import("@/core/grammar");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const topics = coreG.listGrammarTopics(db, profile.targetLanguage);
+  persistSoon(); // ensureSeeded yeni satır eklemiş olabilir
+  return { topics: topics as GrammarTopicSummary[] };
+}
+
+export async function grammarTopic(slug: string): Promise<{
+  slug: string;
+  titleTr: string;
+  category: string;
+  status: string;
+  content: unknown | null;
+}> {
+  if (!IS_STATIC) return fetchJson(`/api/grammar/${slug}`);
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreG = await import("@/core/grammar");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug);
+  if (!topic) throw new Error("Konu bulunamadı");
+  return {
+    slug: topic.slug,
+    titleTr: topic.titleTr,
+    category: topic.category,
+    status: topic.status,
+    content: topic.status === "ready" ? topic.content : null,
+  };
+}
+
 // ------------------------------------------------------------------ Ders akışı
 
 export async function openNodeApi(nodeId: string): Promise<

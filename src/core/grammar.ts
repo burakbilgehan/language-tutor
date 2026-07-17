@@ -1,0 +1,90 @@
+import { and, asc, eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import * as tables from "@/db/schema";
+import { grammarIndexFor } from "@/lib/grammar-index";
+import type { AppDb } from "./db-types";
+
+// Gramer cheatsheet'inin ortam-bağımsız okuma yüzeyi. Konu İÇERİĞİ üretimi
+// (LLM) sunucu job'unda / gelecekte tarayıcı LLM katmanında; burada yalnız
+// deterministik index senkronu + okuma var.
+
+/**
+ * Self-healing: incrementally sync the deterministic cheatsheet index.
+ * Missing slugs are inserted (status "pending"); existing rows get their
+ * position/title/category/level re-synced so index reordering and growth
+ * reach existing profiles too. Generated content (content/status/generatedAt)
+ * is NEVER touched.
+ */
+export function ensureSeeded(db: AppDb, targetLanguage: string) {
+  const existing = db
+    .select({ id: tables.grammarTopics.id, slug: tables.grammarTopics.slug })
+    .from(tables.grammarTopics)
+    .where(eq(tables.grammarTopics.targetLanguage, targetLanguage))
+    .all();
+  const bySlug = new Map(existing.map((t) => [t.slug, t.id]));
+
+  grammarIndexFor(targetLanguage).forEach((g, i) => {
+    const id = bySlug.get(g.slug);
+    if (id) {
+      db.update(tables.grammarTopics)
+        .set({
+          position: i,
+          titleTr: g.title_tr,
+          category: g.category,
+          level: g.level,
+        })
+        .where(eq(tables.grammarTopics.id, id))
+        .run();
+    } else {
+      db.insert(tables.grammarTopics)
+        .values({
+          id: nanoid(),
+          targetLanguage,
+          slug: g.slug,
+          titleTr: g.title_tr,
+          category: g.category,
+          level: g.level,
+          position: i,
+        })
+        .onConflictDoNothing()
+        .run();
+    }
+  });
+}
+
+export function listGrammarTopics(db: AppDb, targetLanguage: string) {
+  ensureSeeded(db, targetLanguage);
+  return db
+    .select()
+    .from(tables.grammarTopics)
+    .where(eq(tables.grammarTopics.targetLanguage, targetLanguage))
+    .orderBy(asc(tables.grammarTopics.position))
+    .all()
+    .map((t) => ({
+      slug: t.slug,
+      titleTr: t.titleTr,
+      category: t.category,
+      level: t.level,
+      status: t.status,
+    }));
+}
+
+export function findGrammarTopic(
+  db: AppDb,
+  targetLanguage: string,
+  slug: string
+) {
+  return (
+    db
+      .select()
+      .from(tables.grammarTopics)
+      .where(
+        and(
+          eq(tables.grammarTopics.targetLanguage, targetLanguage),
+          eq(tables.grammarTopics.slug, slug)
+        )
+      )
+      .limit(1)
+      .get() ?? null
+  );
+}

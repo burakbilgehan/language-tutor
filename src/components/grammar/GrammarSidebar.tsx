@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLlmStatus } from "@/lib/llm-status";
+import { grammarTopics } from "@/lib/client-api";
 
 interface TopicDto {
   slug: string;
@@ -154,8 +155,7 @@ export function GrammarSidebar() {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/grammar");
-    const d = await res.json();
+    const d = await grammarTopics().catch(() => ({ topics: [] }));
     const list: TopicDto[] = d.topics ?? [];
     setTopics(list);
     if (list.some((t) => t.status === "generating")) {
