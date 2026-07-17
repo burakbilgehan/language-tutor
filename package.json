@@ -10,6 +10,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "llm:smoke": "tsx scripts/llm-smoke.ts",
+    "llm:bridge": "node scripts/llm-bridge.mjs",
     "seed:fixtures": "tsx scripts/seed-fixtures.ts",
     "test": "tsx --test src/lib/*.test.ts"
   },

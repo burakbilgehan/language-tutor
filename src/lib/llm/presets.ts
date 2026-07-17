@@ -10,6 +10,7 @@ export type PresetId =
   | "openrouter"
   | "ollama"
   | "lmstudio"
+  | "bridge"
   | "custom";
 
 export interface ProviderPreset {
@@ -68,6 +69,16 @@ export const PRESETS: Record<PresetId, ProviderPreset> = {
     baseUrl: "http://localhost:1234/v1",
     jsonMode: false,
     models: { fast: "local-model", balanced: "local-model", deep: "local-model" },
+    needsKey: false,
+  },
+  bridge: {
+    // scripts/llm-bridge.mjs: yerel claude/codex/copilot/gemini/opencode
+    // CLI'sını OpenAI-uyumlu endpoint'e çevirir (abonelik, API key'siz).
+    id: "bridge",
+    label: "Yerel köprü (llm-bridge: claude/codex/...)",
+    baseUrl: "http://localhost:8484/v1",
+    jsonMode: false,
+    models: { fast: "haiku", balanced: "sonnet", deep: "opus" },
     needsKey: false,
   },
   custom: {

@@ -8,6 +8,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
 | [T-003](T-003-remaining-grammar.md) | Kalan grammar (zh 99 + ja 16) — hafta sonu kota | **todo** | p1 | S | high |
+| [T-009](T-009-local-first-static.md) | Faz 2b — local-first statik build (tarayıcı SQLite + Pages) | **todo** | p1 | XL | medium |
 | [T-001](T-001-inburgering-mock-exams.md) | Inburgering deneme bölümleri | backlog | p2 | M | medium |
 | [T-005](T-005-zh-stroke-dictionary.md) | zh yazım + hanzi sözlüğü (CEDICT) | backlog | p2 | L | medium |
 | [T-008](T-008-branch-hygiene.md) | Branch push / PR kararı | backlog | p2 | S | high |
