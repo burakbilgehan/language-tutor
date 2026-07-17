@@ -6,6 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { stats } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -98,8 +99,7 @@ export default function SettingsPage() {
   } | null>(null);
 
   useEffect(() => {
-    fetch("/api/stats")
-      .then((r) => r.json())
+    stats()
       .then((d) => setLlm(d.llm))
       .catch(() => {});
     setDark(document.documentElement.classList.contains("dark"));

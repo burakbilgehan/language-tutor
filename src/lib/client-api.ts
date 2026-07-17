@@ -49,6 +49,84 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// ------------------------------------------------------------------ Harita / Profil / Stats
+
+export async function roadmap(): Promise<import("@/core/roadmap").Roadmap> {
+  if (!IS_STATIC) return fetchJson("/api/roadmap");
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreR = await import("@/core/roadmap");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const result = coreR.getRoadmap(db, profile.id);
+  if (!result) throw new Error("Müfredat hazır değil");
+  return result;
+}
+
+export interface ProfileData {
+  profile: import("@/core/profile").Profile | null;
+  profiles: {
+    id: string;
+    displayName: string;
+    targetLanguage: string;
+    selfLevel: string;
+    isActive: boolean;
+  }[];
+}
+
+export async function profileData(): Promise<ProfileData> {
+  if (!IS_STATIC) return fetchJson("/api/profile");
+  const { db } = await browserDb();
+  const core = await import("@/core/profile");
+  return {
+    profile: core.getActiveProfile(db),
+    profiles: core.listProfiles(db),
+  };
+}
+
+export async function patchProfile(
+  patch: Record<string, unknown>
+): Promise<{ profile: import("@/core/profile").Profile }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  }
+  const { db, persistSoon } = await browserDb();
+  const core = await import("@/core/profile");
+  const profile = core.updateActiveProfile(
+    db,
+    patch as Parameters<typeof core.updateActiveProfile>[1]
+  );
+  persistSoon();
+  if (!profile) throw new Error("Profil bulunamadı");
+  return { profile };
+}
+
+export async function switchProfile(profileId: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetchJson("/api/profile/switch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId }),
+    });
+    return;
+  }
+  const { db, persistSoon } = await browserDb();
+  const core = await import("@/core/profile");
+  if (!core.setActiveProfile(db, profileId)) throw new Error("Profil bulunamadı");
+  persistSoon();
+}
+
+export async function stats(): Promise<ReturnType<typeof import("@/core/stats").getStats>> {
+  if (!IS_STATIC) return fetchJson("/api/stats");
+  const { db } = await browserDb();
+  const core = await import("@/core/stats");
+  return core.getStats(db);
+}
+
 // ------------------------------------------------------------------ SRS
 
 export async function srsDue(): Promise<{

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { profileData } from "@/lib/client-api";
 
 export interface ProfileMeta {
   targetLanguage: "ja" | "zh" | "nl";
@@ -18,12 +19,11 @@ export function useProfileMeta(): ProfileMeta | null {
 
   useEffect(() => {
     if (cached) return;
-    inflight ??= fetch("/api/profile")
-      .then((r) => (r.ok ? r.json() : null))
+    inflight ??= profileData()
       .then((d) =>
         d?.profile
           ? (cached = {
-              targetLanguage: d.profile.targetLanguage,
+              targetLanguage: d.profile.targetLanguage as ProfileMeta["targetLanguage"],
               nativeLanguage: d.profile.nativeLanguage ?? "tr",
               uiLanguage: d.profile.uiLanguage ?? "tr",
             })

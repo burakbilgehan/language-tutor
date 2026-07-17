@@ -52,6 +52,20 @@ const out = sqlite.export();
 const header = Buffer.from(out.slice(0, 15)).toString();
 check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6).toFixed(1)}MB`);
 
+
+// 5. Roadmap + Stats (harita tranche'ı)
+{
+  const { getRoadmap } = await import("@/core/roadmap");
+  const { getStats } = await import("@/core/stats");
+  const { listProfiles } = await import("@/core/profile");
+  const rm = getRoadmap(db as never, profile!.id);
+  check("getRoadmap", rm !== null, `→ ${rm?.units.length} ünite, ${rm?.sideQuests.length} yan görev, xp=${rm?.xpTotal}`);
+  const st = getStats(db as never);
+  check("getStats", st.llm.totalCalls > 0, `→ ${st.llm.totalCalls} çağrı, $${st.llm.totalUsd.toFixed(2)}`);
+  const ps = listProfiles(db as never);
+  check("listProfiles", ps.length > 0 && typeof ps[0].displayName === "string", `→ ${ps.length} profil`);
+}
+
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);
 process.exit(fail ? 1 : 0);
 
