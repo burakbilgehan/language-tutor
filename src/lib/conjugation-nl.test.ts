@@ -69,3 +69,21 @@ test("aan/oen/ien stems", () => {
   assert.equal(val("doen", "ik"), "doe");
   assert.equal(val("zien", "ik"), "zie");
 });
+
+test("irregular present stems", () => {
+  assert.equal(val("zijn", "ik"), "ben");
+  assert.equal(val("zijn", "jij"), "bent");
+  assert.equal(val("zijn", "hij"), "is");
+  assert.equal(val("zijn", "wij"), "zijn");
+  assert.equal(val("hebben", "hij"), "heeft");
+  assert.equal(val("kunnen", "ik"), "kan");
+  assert.equal(val("komen", "ik"), "kom");
+  assert.equal(val("zullen", "ik"), "zal");
+});
+
+test("non-infinitive input is rejected", () => {
+  for (const w of ["ben", "bent", "ln", "an"]) {
+    const r = conjugateNl({ infinitive: w });
+    assert.ok(!r.ok, `${w} should be rejected`);
+  }
+});

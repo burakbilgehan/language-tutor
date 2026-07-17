@@ -14,6 +14,7 @@ const S = {
       kana: "Kana",
       stroke: "Yazım",
       conjugate: "Çekim",
+      pinyin: "Pinyin",
       review: "Tekrar",
       chat: "Sohbet",
     },
@@ -29,6 +30,7 @@ const S = {
       kana: "Kana",
       stroke: "Writing",
       conjugate: "Conjugate",
+      pinyin: "Pinyin",
       review: "Review",
       chat: "Chat",
     },
@@ -78,12 +80,15 @@ interface NavItem {
   match?: string[];
   /** Only shown for Japanese profiles (kana table, stroke practice). */
   jaOnly?: boolean;
+  /** Only shown for these target languages (e.g. pinyin chart → zh). */
+  langs?: string[];
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/map", label: "lessons", match: ["/lesson", "/quest"] },
   { href: "/grammar", label: "grammar" },
   { href: "/kana", label: "kana", jaOnly: true },
+  { href: "/pinyin", label: "pinyin", langs: ["zh"] },
   { href: "/stroke", label: "stroke", jaOnly: true },
   // ja: conjugator, zh: aspect chart, nl: conjugator — all languages covered.
   { href: "/conjugate", label: "conjugate" },
@@ -108,7 +113,10 @@ export function StatsHeader({
   const pathname = usePathname();
   const t = useStrings(S);
   const lang = useProfileMeta()?.targetLanguage;
-  const items = NAV_ITEMS.filter((i) => !i.jaOnly || lang === "ja");
+  const items = NAV_ITEMS.filter(
+    (i) =>
+      (!i.jaOnly || lang === "ja") && (!i.langs || i.langs.includes(lang ?? ""))
+  );
 
   const isActive = (item: NavItem) =>
     [item.href, ...(item.match ?? [])].some(
