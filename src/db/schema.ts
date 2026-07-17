@@ -9,6 +9,7 @@ import type {
   LessonContent,
   GrammarTopicContent,
   SideQuestPayload,
+  KanjiContent,
 } from "@/lib/llm/schemas";
 
 const id = () => text("id").primaryKey();
@@ -30,6 +31,9 @@ export const profiles = sqliteTable("profiles", {
   minutesPerWeek: integer("minutes_per_week").notNull(),
   interests: text("interests", { mode: "json" }).notNull().$type<string[]>(),
   motivation: text("motivation").notNull().default(""),
+  // Exactly one profile is active at a time; getActiveProfile() self-heals
+  // legacy rows where no flag is set.
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
   createdAt: createdAt(),
 });
 
@@ -224,6 +228,47 @@ export const grammarTopics = sqliteTable(
   (t) => [uniqueIndex("grammar_slug_idx").on(t.targetLanguage, t.slug)]
 );
 
+export const kanjiEntries = sqliteTable(
+  "kanji_entries",
+  {
+    id: id(),
+    targetLanguage: text("target_language").notNull(),
+    char: text("char").notNull(),
+    level: text("level").notNull(), // 'N5'..'N1'
+    position: integer("position").notNull().default(0),
+    // Static dictionary facts, seeded from src/lib/kanji-index/ (re-synced by
+    // the /api/kanji self-heal, never LLM-generated).
+    onyomi: text("onyomi", { mode: "json" }).notNull().$type<string[]>(),
+    kunyomi: text("kunyomi", { mode: "json" }).notNull().$type<string[]>(),
+    meaningsEn: text("meanings_en", { mode: "json" })
+      .notNull()
+      .$type<string[]>(),
+    // LLM half: Turkish meanings + examples, generated once on demand.
+    content: text("content", { mode: "json" }).$type<KanjiContent>(),
+    status: text("status", {
+      enum: ["pending", "generating", "ready", "error"],
+    })
+      .notNull()
+      .default("pending"),
+    generatedAt: integer("generated_at", { mode: "timestamp" }),
+  },
+  (t) => [uniqueIndex("kanji_char_idx").on(t.targetLanguage, t.char)]
+);
+
+// Cached selection translations (SelectionTooltip "Çevir") so re-selecting
+// the same text never re-calls the LLM.
+export const translations = sqliteTable(
+  "translations",
+  {
+    id: id(),
+    targetLanguage: text("target_language").notNull(),
+    sourceText: text("source_text").notNull(),
+    translationTr: text("translation_tr").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("translation_text_idx").on(t.targetLanguage, t.sourceText)]
+);
+
 export const chatSessions = sqliteTable("chat_sessions", {
   id: id(),
   profileId: text("profile_id")
@@ -293,7 +338,7 @@ export const saveMeta = sqliteTable("save_meta", {
 export const generationJobs = sqliteTable("generation_jobs", {
   id: id(),
   jobType: text("job_type", {
-    enum: ["curriculum", "chapter", "lesson", "grammar", "side_quest"],
+    enum: ["curriculum", "chapter", "lesson", "grammar", "side_quest", "kanji"],
   }).notNull(),
   refId: text("ref_id").notNull(),
   status: text("status", {
