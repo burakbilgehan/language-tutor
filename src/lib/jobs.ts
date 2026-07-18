@@ -209,13 +209,21 @@ export function ensureLessonJob(nodeId: string): string | null {
   return jobId;
 }
 
+// User-entered "what was wrong" text for an in-flight regenerate, keyed by
+// nodeId. Transient, in-process only — the job row itself has no free-form
+// payload column (and doesn't need one: runJob drives this in the same
+// process that enqueued it, same as every other fire-and-forget job here).
+const pendingRegenerationFeedback = new Map<string, string>();
+
 /**
  * Force a fresh generation for a node whose lesson may already be ready —
  * lets stale/low-quality cached lessons be rebuilt under the current prompt.
  * The lesson row is flipped to "generating" up front so an open() racing the
- * queued job doesn't serve the stale copy.
+ * queued job doesn't serve the stale copy. `feedback` is optional free text
+ * describing what was wrong with the previous generation ("regenerate" UI) —
+ * threaded into the lesson prompt as a "fix these issues" section.
  */
-export function regenerateLessonJob(nodeId: string): string {
+export function regenerateLessonJob(nodeId: string, feedback?: string | null): string {
   const lesson = db.query.lessons
     .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
     .sync();
@@ -225,6 +233,8 @@ export function regenerateLessonJob(nodeId: string): string {
       .where(eq(tables.lessons.id, lesson.id))
       .run();
   }
+  if (feedback?.trim()) pendingRegenerationFeedback.set(nodeId, feedback.trim());
+  else pendingRegenerationFeedback.delete(nodeId);
   const jobId = createJob("lesson", nodeId);
   void runJob(jobId);
   return jobId;
@@ -405,7 +415,9 @@ export async function runJob(jobId: string) {
 }
 
 async function runLessonJob(nodeId: string) {
-  await generateLessonContent(db, getProvider(), nodeId);
+  const feedback = pendingRegenerationFeedback.get(nodeId) ?? null;
+  pendingRegenerationFeedback.delete(nodeId);
+  await generateLessonContent(db, getProvider(), nodeId, feedback);
 }
 
 async function runGrammarJob(topicId: string) {

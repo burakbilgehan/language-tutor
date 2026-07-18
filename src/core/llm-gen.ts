@@ -31,7 +31,9 @@ export type Gen = Pick<LlmProvider, "generateJson" | "generateText">;
 export async function generateLessonContent(
   db: AppDb,
   gen: Gen,
-  nodeId: string
+  nodeId: string,
+  /** User-entered complaint about the previous generation, from the "regenerate" flow. */
+  regenerationFeedback?: string | null
 ): Promise<void> {
   const node = db
     .select()
@@ -92,6 +94,19 @@ export async function generateLessonContent(
     .limit(1)
     .get();
   const lessonId = existing?.id ?? nanoid();
+  // Short summary of the lesson being replaced (regenerate flow only) — gives
+  // the LLM context for the user's feedback without dumping the full previous
+  // JSON into the prompt (token cost).
+  const previousLessonSummary =
+    regenerationFeedback?.trim() && existing?.content
+      ? [
+          `"${existing.content.title_tr}"`,
+          `${existing.content.exercises.length} alıştırma (${Array.from(
+            new Set(existing.content.exercises.map((e) => e.type))
+          ).join(", ")})`,
+          `${existing.content.examples.length} örnek`,
+        ].join(", ")
+      : null;
   if (!existing) {
     db.insert(tables.lessons)
       .values({ id: lessonId, nodeId, status: "generating" })
@@ -112,6 +127,8 @@ export async function generateLessonContent(
       completedTitles,
       strugglesLine: getStrugglesLine(db, profile.id),
       recentExercisePrompts,
+      regenerationFeedback,
+      previousLessonSummary,
     });
     const lesson = await gen.generateJson({
       system,

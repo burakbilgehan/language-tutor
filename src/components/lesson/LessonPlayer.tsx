@@ -29,6 +29,12 @@ const S = {
     exercisesScore: (c: number, n: number) => `Alıştırmalar: ${c}/${n} doğru`,
     continueBtn: "Devam et →",
     regenTitle: "Dersi yeni sorularla baştan üret",
+    regenPromptTitle: "Neyi düzeltelim?",
+    regenPromptHint:
+      "Ne yanlış/eksikti? (örn. \"örnekler çok kolay\", \"romaji hatalı\") — boş bırakırsan aynı şekilde yeniden üretilir.",
+    regenPlaceholder: "İsteğe bağlı geri bildirim...",
+    regenSubmit: "Yeniden üret",
+    regenCancel: "Vazgeç",
     examples: "Örnekler",
     grammarNotes: "Gramer notları",
     toExercises: "Alıştırmalara geç →",
@@ -70,6 +76,12 @@ const S = {
     exercisesScore: (c: number, n: number) => `Exercises: ${c}/${n} correct`,
     continueBtn: "Continue →",
     regenTitle: "Regenerate the lesson with fresh questions",
+    regenPromptTitle: "What should we fix?",
+    regenPromptHint:
+      "What was wrong or missing? (e.g. \"examples too easy\", \"romaji wrong\") — leave blank to regenerate the same way as before.",
+    regenPlaceholder: "Optional feedback...",
+    regenSubmit: "Regenerate",
+    regenCancel: "Cancel",
     examples: "Examples",
     grammarNotes: "Grammar notes",
     toExercises: "Go to exercises →",
@@ -173,6 +185,8 @@ export function LessonPlayer({
     xpAwarded: number;
     newCards: number;
   } | null>(null);
+  const [showRegenForm, setShowRegenForm] = useState(false);
+  const [regenFeedback, setRegenFeedback] = useState("");
   const stopped = useRef(false);
 
   const open = useCallback(async () => {
@@ -199,19 +213,26 @@ export function LessonPlayer({
 
   // Throw the cached lesson away and rebuild it under the current prompt
   // (better exercises). Resets local progress; the node's status is kept.
-  const regenerate = useCallback(async () => {
-    setData(null);
-    setPhase("explanation");
-    setExIdx(0);
-    setCorrectCount(0);
-    try {
-      await regenerateLesson(nodeId);
-      open();
-    } catch (e) {
-      if (!stopped.current)
-        setError(e instanceof Error ? e.message : t.regenFailed);
-    }
-  }, [nodeId, open, t]);
+  // `feedback` (optional) tells the LLM what was wrong with the previous
+  // generation so it doesn't just repeat the same mistake.
+  const regenerate = useCallback(
+    async (feedback?: string) => {
+      setShowRegenForm(false);
+      setRegenFeedback("");
+      setData(null);
+      setPhase("explanation");
+      setExIdx(0);
+      setCorrectCount(0);
+      try {
+        await regenerateLesson(nodeId, feedback);
+        open();
+      } catch (e) {
+        if (!stopped.current)
+          setError(e instanceof Error ? e.message : t.regenFailed);
+      }
+    },
+    [nodeId, open, t]
+  );
 
   const finish = useCallback(async () => {
     const body = await completeNodeApi(nodeId);
@@ -291,7 +312,7 @@ export function LessonPlayer({
           </h2>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
-              onClick={regenerate}
+              onClick={() => setShowRegenForm((v) => !v)}
               title={t.regenTitle}
               className="rounded-full bg-surface-2 px-3 py-1.5 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
             >
@@ -308,6 +329,35 @@ export function LessonPlayer({
         </div>
       ) : (
         <StatsHeader title={lesson.titleTr} />
+      )}
+      {showRegenForm && (
+        <div className="border-b border-surface-2 bg-surface/95 px-5 py-4">
+          <div className="mx-auto flex max-w-3xl flex-col gap-2">
+            <h3 className="text-sm font-semibold">{t.regenPromptTitle}</h3>
+            <p className="text-xs text-ink-soft">{t.regenPromptHint}</p>
+            <textarea
+              value={regenFeedback}
+              onChange={(e) => setRegenFeedback(e.target.value)}
+              placeholder={t.regenPlaceholder}
+              rows={2}
+              className="w-full rounded-xl border border-surface-2 bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+            <div className="flex gap-2">
+              <CozyButton onClick={() => regenerate(regenFeedback)}>
+                {t.regenSubmit}
+              </CozyButton>
+              <button
+                onClick={() => {
+                  setShowRegenForm(false);
+                  setRegenFeedback("");
+                }}
+                className="rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+              >
+                {t.regenCancel}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       <main className="mx-auto max-w-3xl px-4 py-8">
         {phase === "explanation" && (
