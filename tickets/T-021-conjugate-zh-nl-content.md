@@ -1,7 +1,7 @@
 ---
 id: T-021
 title: Çekim cheatsheet'i — zh zayıf, nl boş; ja seviyesine getir
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: medium
@@ -31,3 +31,15 @@ ja-charts.ts formatı önce okunup birebir taklit edilmeli.
 
 Bağımlılık yok; T-006 (nl zayıf ayrılabilir fiiller) ile aynı dosyalara
 dokunur — aynı session'da ele almak çakışmayı önler.
+
+## Durum (2026-07-18)
+Ticket açıldığından beri commit f587ab9 ("Bigger zh/nl cheatsheets,
+browser TTS, verified nl strong table") bu kapsamı zaten kapatmış: zh
+tarafında `ZH_ASPECT_GROUPS` 6 grup (aspect/negation/future-modal/
+time-frames/structures/questions, ~40 satır), nl tarafında hem
+`conjugateNl` motoru (zwak/sterk/onregelmatig, perfectum, ayrılabilir)
+hem `NL_PATTERN_GROUPS` (connector/infinitive/er/word-order, 4 grup).
+İkisi de view'larda generic map ile render ediliyor (ZhAspectView,
+NlConjugatorView) — statik veri, LLM'siz. Ticket metni artık repoyla
+eşleşmiyordu; ek iş gerekmedi, T-006 (aynı session) ayrı gerçek bug
+olarak kaldı ve ayrıca çözüldü.

@@ -204,18 +204,30 @@ function isKofschip(decisionChar: string): boolean {
 
 // Unambiguously separable prefixes. onder/over/om/voor/door are excluded:
 // they can be inseparable (onderzoeken → onderzocht), and guessing wrong
-// there is worse than treating the verb as simple. Weak separable verbs
-// whose base isn't in STRONG (opbellen) are a known v1 limitation.
+// there is worse than treating the verb as simple.
 const SEP_PREFIXES = [
   "op", "af", "aan", "uit", "mee", "na", "terug", "in", "toe", "weg",
   "samen", "binnen", "neer", "langs",
 ];
 
-/** opstaan → ["op", "staan"] when the remainder is a known strong verb. */
+// Common weak verb bases that only ever appear as separable-verb tails in
+// practice (bellen "to call" is always opbellen/terugbellen etc. in this
+// list's coverage). A curated list, not a heuristic: an open "consonant +
+// ends in -en" rule wrongly splits verbs like opperen (op + peren) or
+// openen (op + enen), which are simple weak verbs with a coincidental
+// op- prefix. Extend this list only with verbs actually confirmed safe.
+const WEAK_SEPARABLE_BASES = new Set([
+  "bellen", "raken", "leggen", "ruimen", "pakken", "maken", "voeden",
+  "werken", "praten", "kijken", "zoeken", "wassen", "koken", "sturen",
+]);
+
+/** opstaan → ["op", "staan"] when the remainder is a known verb base. */
 function splitSeparable(inf: string): [string, string] {
   for (const p of SEP_PREFIXES) {
-    if (inf.startsWith(p) && STRONG[inf.slice(p.length)]) {
-      return [p, inf.slice(p.length)];
+    if (!inf.startsWith(p)) continue;
+    const rest = inf.slice(p.length);
+    if (STRONG[rest] || WEAK_SEPARABLE_BASES.has(rest)) {
+      return [p, rest];
     }
   }
   return ["", inf];
@@ -398,7 +410,8 @@ export const NL_PRESETS: { infinitive: string; hintTr: string; hintEn: string }[
   { infinitive: "zijn", hintTr: "düzensiz", hintEn: "irregular" },
   { infinitive: "hebben", hintTr: "düzensiz", hintEn: "irregular" },
   { infinitive: "gaan", hintTr: "düzensiz (zijn ile)", hintEn: "irregular (with zijn)" },
-  { infinitive: "opstaan", hintTr: "ayrılabilir", hintEn: "separable" },
+  { infinitive: "opstaan", hintTr: "ayrılabilir (kuvvetli)", hintEn: "separable (strong)" },
+  { infinitive: "opbellen", hintTr: "ayrılabilir (zayıf)", hintEn: "separable (weak)" },
   { infinitive: "vergeten", hintTr: "ge- almaz", hintEn: "no ge-" },
 ];
 
