@@ -75,6 +75,18 @@ async function create(): Promise<BrowserDbHandle> {
   let sqlite: SqlJsDatabase;
   if (stored) {
     sqlite = new SQL.Database(stored);
+    // Additive self-heal: an image persisted by an older build may miss
+    // tables added since (e.g. vocab_entries). DDL is CREATE TABLE/INDEX
+    // only, so replaying it and swallowing "already exists" errors acts as
+    // a poor-man's forward migration. Column changes still need a proper
+    // migration + SAVE_SCHEMA_VERSION bump.
+    for (const stmt of DDL) {
+      try {
+        sqlite.run(stmt);
+      } catch {
+        /* already exists */
+      }
+    }
   } else {
     sqlite = new SQL.Database();
     for (const stmt of DDL) sqlite.run(stmt);

@@ -10,6 +10,7 @@ import type {
   GrammarTopicContent,
   SideQuestPayload,
   KanjiContent,
+  VocabContent,
 } from "@/lib/llm/schemas";
 
 const id = () => text("id").primaryKey();
@@ -257,6 +258,34 @@ export const kanjiEntries = sqliteTable(
   (t) => [uniqueIndex("kanji_char_idx").on(t.targetLanguage, t.char)]
 );
 
+export const vocabEntries = sqliteTable(
+  "vocab_entries",
+  {
+    id: id(),
+    targetLanguage: text("target_language").notNull(),
+    word: text("word").notNull(), // simplified form for zh
+    level: text("level").notNull(), // 'HSK1'..'HSK6'
+    position: integer("position").notNull().default(0),
+    // Static dictionary facts, seeded from src/lib/vocab-index/ (re-synced by
+    // ensureVocabSeeded's self-heal, never LLM-generated).
+    reading: text("reading").notNull(), // pinyin with tone marks
+    traditional: text("traditional"), // only when it differs from `word`
+    meaningsEn: text("meanings_en", { mode: "json" })
+      .notNull()
+      .$type<string[]>(),
+    classifiers: text("classifiers", { mode: "json" }).$type<string[]>(),
+    // LLM half: native-language meanings + examples, generated once on demand.
+    content: text("content", { mode: "json" }).$type<VocabContent>(),
+    status: text("status", {
+      enum: ["pending", "generating", "ready", "error"],
+    })
+      .notNull()
+      .default("pending"),
+    generatedAt: integer("generated_at", { mode: "timestamp" }),
+  },
+  (t) => [uniqueIndex("vocab_word_idx").on(t.targetLanguage, t.word)]
+);
+
 // Cached selection translations (SelectionTooltip "Çevir") so re-selecting
 // the same text never re-calls the LLM.
 export const translations = sqliteTable(
@@ -340,7 +369,15 @@ export const saveMeta = sqliteTable("save_meta", {
 export const generationJobs = sqliteTable("generation_jobs", {
   id: id(),
   jobType: text("job_type", {
-    enum: ["curriculum", "chapter", "lesson", "grammar", "side_quest", "kanji"],
+    enum: [
+      "curriculum",
+      "chapter",
+      "lesson",
+      "grammar",
+      "side_quest",
+      "kanji",
+      "vocab",
+    ],
   }).notNull(),
   refId: text("ref_id").notNull(),
   status: text("status", {

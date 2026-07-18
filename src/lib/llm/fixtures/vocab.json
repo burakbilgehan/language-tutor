@@ -1,0 +1,34 @@
+{
+  "meanings_tr": ["öğrenci"],
+  "note_tr": "Her seviyedeki öğrenci için kullanılan en genel kelime; hem günlük hem resmi bağlamda geçer.",
+  "classifier_note_tr": "İnsanlar için genel ölçü kelimesi 个[gè] kullanılır: 一个学生[yí gè xuésheng].",
+  "examples": [
+    {
+      "sentence": "我[wǒ]是[shì]学生[xuésheng]。",
+      "translation_tr": "Ben öğrenciyim."
+    },
+    {
+      "sentence": "这个[zhège]学校[xuéxiào]有[yǒu]很多[hěn duō]学生[xuésheng]。",
+      "translation_tr": "Bu okulda çok öğrenci var."
+    }
+  ],
+  "collocations": [
+    { "phrase": "大学生[dàxuéshēng]", "meaning_tr": "üniversite öğrencisi" },
+    { "phrase": "小学生[xiǎoxuéshēng]", "meaning_tr": "ilkokul öğrencisi" },
+    { "phrase": "留学生[liúxuéshēng]", "meaning_tr": "yabancı/değişim öğrencisi" }
+  ],
+  "chars": [
+    {
+      "char": "学",
+      "reading": "xué",
+      "meaning_tr": "öğrenmek",
+      "hint_tr": "Altta 子 (çocuk): öğrenen çocuk imgesi."
+    },
+    {
+      "char": "生",
+      "reading": "shēng",
+      "meaning_tr": "doğmak; kişi",
+      "hint_tr": "Topraktan filizlenen bitki: doğan/yetişen kişi."
+    }
+  ]
+}

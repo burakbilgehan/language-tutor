@@ -263,6 +263,124 @@ export async function kanjiLookupApi(text: string): Promise<KanjiLookupResult> {
   return coreK.kanjiLookup(db, profile.targetLanguage, text);
 }
 
+// ------------------------------------------------------------------ Kelime sözlüğü
+
+export interface VocabEntrySummary {
+  word: string;
+  reading: string;
+  meaningsEn: string[];
+  level: string;
+  status: "pending" | "generating" | "ready" | "error";
+}
+
+export async function vocabList(): Promise<{ entries: VocabEntrySummary[] }> {
+  if (!IS_STATIC) return fetchJson("/api/vocab");
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreV = await import("@/core/vocab");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const entries = coreV.listVocab(db, profile.targetLanguage);
+  persistSoon(); // seed yeni satır eklemiş olabilir
+  return { entries: entries as VocabEntrySummary[] };
+}
+
+export async function vocabDetail(word: string): Promise<{
+  word: string;
+  traditional: string | null;
+  reading: string;
+  meaningsEn: string[];
+  classifiers: string[] | null;
+  level: string;
+  status: string;
+  content: unknown | null;
+}> {
+  if (!IS_STATIC) return fetchJson(`/api/vocab/${encodeURIComponent(word)}`);
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreV = await import("@/core/vocab");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  let entry = coreV.findVocab(db, profile.targetLanguage, word);
+  if (!entry) {
+    // Deep link (?word=) liste yüklenmeden gelebilir — önce seed'le.
+    coreV.ensureVocabSeeded(db, profile.targetLanguage);
+    entry = coreV.findVocab(db, profile.targetLanguage, word);
+    if (entry) persistSoon();
+  }
+  if (!entry) throw new Error("Kelime bulunamadı");
+  return {
+    word: entry.word,
+    traditional: entry.traditional,
+    reading: entry.reading,
+    meaningsEn: entry.meaningsEn,
+    classifiers: entry.classifiers,
+    level: entry.level,
+    status: entry.status,
+    content: entry.status === "ready" ? entry.content : null,
+  };
+}
+
+export async function vocabGenerate(word: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch(`/api/vocab/${encodeURIComponent(word)}`, { method: "POST" });
+    return;
+  }
+  const gen = await browserGen();
+  const { db, persistSoon } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreV = await import("@/core/vocab");
+  const coreG = await import("@/core/llm-gen");
+  const profile = coreP.getActiveProfile(db);
+  if (!profile) throw new Error("Profil yok");
+  const entry = coreV.findVocab(db, profile.targetLanguage, word);
+  if (!entry) throw new Error("Kelime bulunamadı");
+  await coreG.generateVocabContent(db, gen, entry.id);
+  persistSoon();
+}
+
+export async function vocabGenerateBatch(level?: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch("/api/vocab/generate-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level }),
+    });
+    return;
+  }
+  // Statik: sıralı inline üretim (sekme açık kaldıkça sürer; UI zaten
+  // durum rozetlerini poll'luyor).
+  const gen = await browserGen();
+  const handle = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreG = await import("@/core/llm-gen");
+  const { eq, and, inArray } = await import("drizzle-orm");
+  const tables = await import("@/db/schema");
+  const profile = coreP.getActiveProfile(handle.db);
+  if (!profile) throw new Error("Profil yok");
+  const entries = handle.db
+    .select()
+    .from(tables.vocabEntries)
+    .where(
+      and(
+        eq(tables.vocabEntries.targetLanguage, profile.targetLanguage),
+        inArray(tables.vocabEntries.status, ["pending", "error"])
+      )
+    )
+    .all()
+    .filter((e) => !level || e.level === level);
+  void (async () => {
+    for (const e of entries) {
+      try {
+        await coreG.generateVocabContent(handle.db, gen, e.id);
+      } catch (err) {
+        console.warn("[batch] sözlük üretimi hata:", e.word, err);
+      }
+      handle.persistSoon();
+    }
+  })();
+}
+
 // ------------------------------------------------------------------ Overview / Chat / Çeviri
 
 export async function overview(): Promise<
@@ -663,8 +781,16 @@ export async function grammarTopics(): Promise<{ topics: GrammarTopicSummary[] }
   const coreG = await import("@/core/grammar");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  const topics = coreG.listGrammarTopics(db, profile.targetLanguage);
-  persistSoon(); // ensureSeeded yeni satır eklemiş olabilir
+  let topics = coreG.listGrammarTopics(db, profile.targetLanguage);
+  // Boş konuları paketlenmiş seed'den doldur (LLM'siz tam gramer).
+  if (topics.some((t) => t.status === "pending" || t.status === "error")) {
+    const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
+    const seed = await fetchGrammarSeed(profile.targetLanguage);
+    if (seed && coreG.applyGrammarSeed(db, profile.targetLanguage, seed) > 0) {
+      topics = coreG.listGrammarTopics(db, profile.targetLanguage);
+    }
+  }
+  persistSoon(); // ensureSeeded/applyGrammarSeed yazmış olabilir
   return { topics: topics as GrammarTopicSummary[] };
 }
 
@@ -676,13 +802,22 @@ export async function grammarTopic(slug: string): Promise<{
   content: unknown | null;
 }> {
   if (!IS_STATIC) return fetchJson(`/api/grammar/${slug}`);
-  const { db } = await browserDb();
+  const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/grammar");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  const topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug);
+  let topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug);
   if (!topic) throw new Error("Konu bulunamadı");
+  // Deep link (?topic=) liste yüklenmeden gelebilir — boşsa seed'den doldur.
+  if (topic.status === "pending" || topic.status === "error") {
+    const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
+    const seed = await fetchGrammarSeed(profile.targetLanguage);
+    if (seed && coreG.applyGrammarSeed(db, profile.targetLanguage, seed) > 0) {
+      topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug) ?? topic;
+      persistSoon();
+    }
+  }
   return {
     slug: topic.slug,
     titleTr: topic.titleTr,

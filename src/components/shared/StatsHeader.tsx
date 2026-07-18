@@ -12,6 +12,7 @@ const S = {
     nav: {
       lessons: "Dersler",
       grammar: "Gramer",
+      vocab: "Sözlük",
       kana: "Kana",
       stroke: "Yazım",
       conjugate: "Çekim",
@@ -29,6 +30,7 @@ const S = {
     nav: {
       lessons: "Lessons",
       grammar: "Grammar",
+      vocab: "Dictionary",
       kana: "Kana",
       stroke: "Writing",
       conjugate: "Conjugate",
@@ -89,6 +91,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/map", label: "lessons", match: ["/lesson", "/quest"] },
   { href: "/grammar", label: "grammar" },
+  // Word dictionary: index data exists for zh only (HSK word lists).
+  { href: "/vocab", label: "vocab", langs: ["zh"] },
   { href: "/pinyin", label: "pinyin", langs: ["zh"] },
   { href: "/stroke", label: "stroke", jaOnly: true },
   // ja: conjugator, zh: aspect chart, nl: conjugator — all languages covered.

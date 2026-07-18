@@ -16,5 +16,6 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-006](T-006-nl-weak-separables.md) | nl zayıf ayrılabilir fiiller | backlog | p3 | S | high |
 | [T-002](T-002-skill-tree.md) | Skill tree (dallı ders grafiği) | backlog | p3 | XL | low |
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu | backlog | p3 | S | high |
+| [T-012](T-012-zh-vocab-dictionary.md) | zh kelime sözlüğü (HSK vocab cheatsheet) | done | p2 | M | high |
 | [T-009](T-009-local-first-static.md) | Faz 2b — local-first statik build (tarayıcı SQLite + Pages) | done | p1 | XL | medium |
 | [T-010](T-010-llm-setup-wizard.md) | LLM bağlantı sihirbazı (kod bilmeyene kurulum akışı) | done | p1 | M | high |

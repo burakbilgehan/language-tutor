@@ -26,5 +26,7 @@ export const DDL: string[] = [
   "CREATE TABLE `kanji_entries` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`target_language` text NOT NULL,\n\t`char` text NOT NULL,\n\t`level` text NOT NULL,\n\t`position` integer DEFAULT 0 NOT NULL,\n\t`onyomi` text NOT NULL,\n\t`kunyomi` text NOT NULL,\n\t`meanings_en` text NOT NULL,\n\t`content` text,\n\t`status` text DEFAULT 'pending' NOT NULL,\n\t`generated_at` integer\n)",
   "CREATE UNIQUE INDEX `kanji_char_idx` ON `kanji_entries` (`target_language`,`char`)",
   "CREATE TABLE `translations` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`target_language` text NOT NULL,\n\t`source_text` text NOT NULL,\n\t`translation_tr` text NOT NULL,\n\t`created_at` integer NOT NULL\n)",
-  "CREATE UNIQUE INDEX `translation_text_idx` ON `translations` (`target_language`,`source_text`)"
+  "CREATE UNIQUE INDEX `translation_text_idx` ON `translations` (`target_language`,`source_text`)",
+  "CREATE TABLE `vocab_entries` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`target_language` text NOT NULL,\n\t`word` text NOT NULL,\n\t`level` text NOT NULL,\n\t`position` integer DEFAULT 0 NOT NULL,\n\t`reading` text NOT NULL,\n\t`traditional` text,\n\t`meanings_en` text NOT NULL,\n\t`classifiers` text,\n\t`content` text,\n\t`status` text DEFAULT 'pending' NOT NULL,\n\t`generated_at` integer\n)",
+  "CREATE UNIQUE INDEX `vocab_word_idx` ON `vocab_entries` (`target_language`,`word`)"
 ];

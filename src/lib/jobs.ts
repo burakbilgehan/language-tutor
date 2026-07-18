@@ -7,6 +7,7 @@ import {
   generateLessonContent,
   generateGrammarContent,
   generateKanjiContent,
+  generateVocabContent,
 } from "@/core/llm-gen";
 import {
   generateChapter,
@@ -129,6 +130,21 @@ export function recoverStaleJobs() {
       db.update(tables.kanjiEntries)
         .set({ status: "error" })
         .where(eq(tables.kanjiEntries.id, k.id))
+        .run();
+    });
+
+  const vocabLive = liveRefs("vocab");
+  db.query.vocabEntries
+    .findMany({
+      where: eq(tables.vocabEntries.status, "generating"),
+      columns: { id: true },
+    })
+    .sync()
+    .filter((v) => !vocabLive.has(v.id))
+    .forEach((v) => {
+      db.update(tables.vocabEntries)
+        .set({ status: "error" })
+        .where(eq(tables.vocabEntries.id, v.id))
         .run();
     });
 
@@ -364,6 +380,8 @@ export async function runJob(jobId: string) {
       await runGrammarJob(job.refId);
     } else if (job.jobType === "kanji") {
       await runKanjiJob(job.refId);
+    } else if (job.jobType === "vocab") {
+      await runVocabJob(job.refId);
     } else {
       throw new Error(`Bilinmeyen job tipi: ${job.jobType}`);
     }
@@ -396,6 +414,10 @@ async function runGrammarJob(topicId: string) {
 
 async function runKanjiJob(entryId: string) {
   await generateKanjiContent(db, getProvider(), entryId);
+}
+
+async function runVocabJob(entryId: string) {
+  await generateVocabContent(db, getProvider(), entryId);
 }
 
 /**
