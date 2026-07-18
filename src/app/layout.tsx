@@ -3,6 +3,7 @@ import { Fraunces, Nunito_Sans } from "next/font/google";
 import { SelectionTooltip } from "@/components/shared/SelectionTooltip";
 import { FloatingOverview } from "@/components/shared/FloatingOverview";
 import { CommandPalette } from "@/components/shared/CommandPalette";
+import { FeedbackButton } from "@/components/shared/FeedbackButton";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -41,6 +42,7 @@ export default function RootLayout({
         <SelectionTooltip />
         <FloatingOverview />
         <CommandPalette />
+        <FeedbackButton />
       </body>
     </html>
   );
