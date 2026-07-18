@@ -311,11 +311,20 @@ export async function generateChapter(
     const basePosition =
       basePositionRow.length > 0 ? basePositionRow[0].position + 1 : 0;
     const chainTail = findChainTail(db, curriculumId);
+    // BU curriculum'da yan görev var mı — global bakmak diğer profillerin
+    // görevlerini sayıp yeni dilin görevlerini hiç oluşturmamaya yol açar
+    // (ja görevleri nl/zh'yi bastırıyordu).
     const hasSideQuests =
       db
-        .select()
+        .select({ id: tables.nodes.id })
         .from(tables.nodes)
-        .where(eq(tables.nodes.nodeType, "side_quest"))
+        .innerJoin(tables.units, eq(tables.nodes.unitId, tables.units.id))
+        .where(
+          and(
+            eq(tables.nodes.nodeType, "side_quest"),
+            eq(tables.units.curriculumId, curriculumId)
+          )
+        )
         .limit(1)
         .get() != null;
 

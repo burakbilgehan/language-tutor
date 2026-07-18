@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
-import { llmConfigGet, llmConfigPut, llmTest } from "@/lib/client-api";
+import { IS_STATIC, llmConfigGet, llmConfigPut, llmTest } from "@/lib/client-api";
 import { PRESET_LIST, PRESETS, type PresetId } from "@/lib/llm/presets";
+import { LlmSetupWizard } from "./LlmSetupWizard";
 
 const S = {
   tr: {
@@ -38,6 +39,7 @@ const S = {
     serverUnreachable: "❌ Sunucuya ulaşılamadı",
     cliHintBefore: "Sorun yaşarsan terminalde",
     cliHintAfter: "çalıştırıp giriş yaptığından emin ol.",
+    openWizard: "🪄 Kurulum sihirbazı",
   },
   en: {
     title: "LLM Provider",
@@ -69,6 +71,7 @@ const S = {
     serverUnreachable: "❌ Could not reach the server",
     cliHintBefore: "If you run into issues, run",
     cliHintAfter: "in a terminal and make sure you're logged in.",
+    openWizard: "🪄 Setup wizard",
   },
 };
 
@@ -104,11 +107,14 @@ export function LlmProviderSection() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
 
   useEffect(() => {
     llmConfigGet()
       .then((d: ConfigDto) => {
         setConfig(d);
+        // Statik modda hiç yapılandırma yoksa rehberli akışla başla.
+        if (IS_STATIC && d.mode === "none" && !d.hasKey) setShowWizard(true);
         setMode(d.mode);
         setBaseUrl(d.baseUrl ?? "");
         setModels({
@@ -199,6 +205,35 @@ export function LlmProviderSection() {
 
   if (!config) return null;
 
+  if (showWizard) {
+    return (
+      <LlmSetupWizard
+        onDone={() => {
+          setShowWizard(false);
+          // Sihirbazın kaydettiği config'i forma yansıt.
+          llmConfigGet()
+            .then((d: ConfigDto) => {
+              setConfig(d);
+              setMode(d.mode);
+              setBaseUrl(d.baseUrl ?? "");
+              setModels({
+                fast: d.models?.fast ?? "",
+                balanced: d.models?.balanced ?? "",
+                deep: d.models?.deep ?? "",
+              });
+              setJsonMode(d.jsonMode ?? false);
+              const match = PRESET_LIST.find(
+                (p) => p.baseUrl && p.baseUrl === d.baseUrl
+              );
+              if (match) setPreset(match.id);
+              else if (d.baseUrl) setPreset("custom");
+            })
+            .catch(() => {});
+        }}
+      />
+    );
+  }
+
   const modeOptions: { value: Mode; label: string; desc: string }[] = [
     ...(config.cliAllowed
       ? [{ value: "cli" as Mode, label: t.modeCli, desc: t.modeCliDesc }]
@@ -216,7 +251,16 @@ export function LlmProviderSection() {
 
   return (
     <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-      <h2 className="mb-1 font-semibold">{t.title}</h2>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h2 className="font-semibold">{t.title}</h2>
+        <button
+          type="button"
+          onClick={() => setShowWizard(true)}
+          className="text-xs font-semibold text-ink-soft hover:text-ink"
+        >
+          {t.openWizard}
+        </button>
+      </div>
       <p className="mb-4 text-sm text-ink-soft">{t.desc}</p>
 
       <div className="flex flex-col gap-2">

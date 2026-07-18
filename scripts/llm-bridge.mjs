@@ -238,7 +238,12 @@ const server = http.createServer(async (req, res) => {
       try {
         const parsed = JSON.parse(body);
         const { system, prompt } = messagesToPrompt(parsed.messages ?? []);
-        const spec = adapter.build(prompt, system, parsed.model);
+        // Tier adları model seçilmemiş demek — CLI'ya geçirme, backend
+        // kendi varsayılanını kullansın (codex/gemini bilinmeyen modelde patlar).
+        const model = ["fast", "balanced", "deep"].includes(parsed.model)
+          ? undefined
+          : parsed.model;
+        const spec = adapter.build(prompt, system, model);
         const stdout = await serialize(() => runCli(spec));
         const { text, usage } = adapter.parse(stdout);
         const secs = ((Date.now() - started) / 1000).toFixed(1);
