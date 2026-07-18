@@ -65,6 +65,9 @@ export async function roadmap(): Promise<import("@/core/roadmap").Roadmap> {
 
 export interface ProfileData {
   profile: import("@/core/profile").Profile | null;
+  /** Müfredatı olan diller — onboarding'in "bu dil kullanımda" kilidi.
+   * (Eski sunucularda alan yok; çağıran fallback'ler.) */
+  usedLanguages?: string[];
   profiles: {
     id: string;
     displayName: string;
@@ -81,6 +84,7 @@ export async function profileData(): Promise<ProfileData> {
   return {
     profile: core.getActiveProfile(db),
     profiles: core.listProfiles(db),
+    usedLanguages: core.languagesWithCurriculum(db),
   };
 }
 
@@ -611,15 +615,15 @@ export async function createProfileApi(
   }
   const handle = await browserDb();
   const core = await import("@/core/profile");
-  if (core.findProfileByLanguage(handle.db, String(input.targetLanguage))) {
+  const { profile, duplicate } = core.createOrReuseProfile(
+    handle.db,
+    input as Parameters<typeof core.createOrReuseProfile>[1]
+  );
+  if (duplicate) {
     throw new Error(
       "Bu dil için zaten bir profil var. Ayarlardan geçiş yapabilirsin."
     );
   }
-  const profile = core.createProfile(
-    handle.db,
-    input as Parameters<typeof core.createProfile>[1]
-  );
   await handle.persistNow();
   return { profile };
 }

@@ -7,6 +7,8 @@ import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import { GeneratingScreen } from "./GeneratingScreen";
 import { pick } from "@/lib/i18n";
 import { profileData, createProfileApi, curriculumGenerate } from "@/lib/client-api";
+import { useLlmStatus } from "@/lib/llm-status";
+import { LlmSetupWizard } from "@/components/settings/LlmSetupWizard";
 import {
   GOAL_OPTIONS,
   INTEREST_OPTIONS,
@@ -42,6 +44,8 @@ const S = {
     profileSaveFailed: "Profil kaydedilemedi",
     curriculumStartFailed: "Müfredat üretimi başlatılamadı",
     genericError: "Bir şeyler ters gitti",
+    llmNeeded:
+      "Müfredatını üretmek için bir yapay zekâ bağlantısı gerekiyor — yolculuğa başlamadan önce bağlayalım:",
     step0Title: "Merhaba! 🌸",
     step0Subtitle:
       "Ben Kumo. Sana özel bir dil yolculuğu hazırlayacağım. Önce tanışalım — adın ne, hangi dili öğreniyoruz?",
@@ -72,6 +76,8 @@ const S = {
     profileSaveFailed: "Could not save the profile",
     curriculumStartFailed: "Could not start curriculum generation",
     genericError: "Something went wrong",
+    llmNeeded:
+      "Generating your curriculum needs an AI connection — let's set it up before starting the journey:",
     step0Title: "Hello! 🌸",
     step0Subtitle:
       "I'm Kumo. I'll craft a language journey just for you. First, let's meet — what's your name, and which language are we learning?",
@@ -118,6 +124,10 @@ export function OnboardingWizard() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Statikte ilk açılışta LLM bağlı değildir; son adımda sihirbazı gömerek
+  // submit'ten önce bağlanma şansı ver (atlanabilir — hata mesajı yol gösterir).
+  const llm = useLlmStatus();
+  const [llmDone, setLlmDone] = useState(false);
 
   const t = pick(S, draft.uiLanguage);
 
@@ -141,12 +151,12 @@ export function OnboardingWizard() {
   useEffect(() => {
     const saved = localStorage.getItem("curriculumJobId");
     if (saved) setJobId(saved);
-    fetch("/api/profile")
-      .then((r) => r.json())
+    profileData()
       .then((d) => {
-        const used: string[] = (d.profiles ?? []).map(
-          (p: { targetLanguage: string }) => p.targetLanguage
-        );
+        // Müfredatı olan diller kilitlenir; yarım kalmış (müfredatsız) profil
+        // dili yeniden onboard edilebilir. Eski sunucu DTO'suna fallback.
+        const used =
+          d.usedLanguages ?? (d.profiles ?? []).map((p) => p.targetLanguage);
         setUsedLanguages(used);
         const free = LANGUAGES.find((l) => !used.includes(l.code));
         setDraft((prev) => ({
@@ -351,6 +361,14 @@ export function OnboardingWizard() {
               placeholder={t.motivationPlaceholder}
               className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
             />
+            {!llm.configured && !llmDone && (
+              <div className="mt-6">
+                <p className="mb-3 rounded-xl bg-accent-soft/40 px-4 py-3 text-sm">
+                  {t.llmNeeded}
+                </p>
+                <LlmSetupWizard onDone={() => setLlmDone(true)} />
+              </div>
+            )}
           </StepShell>
         )}
 
