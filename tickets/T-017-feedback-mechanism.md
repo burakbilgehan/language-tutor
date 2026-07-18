@@ -1,7 +1,7 @@
 ---
 id: T-017
 title: Kullanıcı feedback mekanizması (sorun tarifi + öneri + screenshot)
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: medium
@@ -31,3 +31,16 @@ seçenekler arası fark UX, mimari değil.
 Not: screenshot çekimi (html2canvas veya `getDisplayMedia`) statik modda
 çalışır; LLM konfigürasyonu/kişisel veri sızmasın diye ekran görüntüsünde
 settings sayfası uyarısı göster.
+
+---
+Uygulama (2026-07-18): seçenek 1 (GitHub Issues prefill).
+`FeedbackButton.tsx` (layout'ta global, sol alt): tür seçimi + açıklama +
+viewport screenshot → panoya (clipboard yoksa PNG indirme fallback) →
+prefill'li issue sayfası. `html2canvas-pro` kullanıldı — Tailwind 4'ün
+color-mix()/oklch çıktıları klasik html2canvas'ı kırıyor. Modal/buton
+`data-feedback-ignore` ile capture dışı; /settings'te kişisel veri uyarısı.
+Metadata: sayfa, mod (static/server), hedef dil, UA. Repo'da `feedback`
+label'ı oluşturuldu (URL'deki labels= sadece yazma yetkisi olanda otomatik
+uygulanır; anonim kullanıcıda düşer, sorun değil). Next dev indicator
+sol alttan sağ alta taşındı (next.config `devIndicators.position`).
+Hacim artarsa Cloudflare Worker'a geçiş hâlâ açık seçenek.

@@ -24,6 +24,7 @@
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.44.7",
     "hanzi-writer": "^3.7.3",
+    "html2canvas-pro": "^2.2.4",
     "nanoid": "^5.1.16",
     "next": "15.5.20",
     "react": "19.1.0",
