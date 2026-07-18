@@ -88,6 +88,21 @@ test("non-infinitive input is rejected", () => {
   }
 });
 
+test("weak separable verbs", () => {
+  assert.equal(val("opbellen", "past-sg"), "belde op");
+  assert.equal(val("opbellen", "participle"), "opgebeld");
+  assert.equal(val("opbellen", "ik"), "bel op");
+  assert.equal(val("aanraken", "past-sg"), "raakte aan");
+  assert.equal(val("aanraken", "participle"), "aangeraakt");
+});
+
+test("coincidental prefix is not split (false-positive guard)", () => {
+  assert.equal(val("opperen", "past-sg"), "oppeerde");
+  assert.equal(val("opperen", "participle"), "geoppeerd");
+  assert.equal(val("openen", "past-sg"), "opeende");
+  assert.equal(val("openen", "participle"), "geopeend");
+});
+
 test("inseparable prefix over strong base", () => {
   assert.equal(val("vertrekken", "past-sg"), "vertrok");
   assert.equal(val("vertrekken", "participle"), "vertrokken");
