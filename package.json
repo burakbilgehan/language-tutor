@@ -15,6 +15,7 @@
     "llm:smoke": "tsx scripts/llm-smoke.ts",
     "llm:bridge": "node scripts/llm-bridge.mjs",
     "seed:fixtures": "tsx scripts/seed-fixtures.ts",
+    "seed:grammar": "tsx scripts/export-grammar-seed.ts",
     "test": "tsx --test src/lib/*.test.ts"
   },
   "dependencies": {

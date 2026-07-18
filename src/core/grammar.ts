@@ -1,7 +1,8 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { grammarIndexFor } from "@/lib/grammar-index";
+import type { GrammarTopicContent } from "@/lib/llm/schemas";
 import type { AppDb } from "./db-types";
 
 // Gramer cheatsheet'inin ortam-bağımsız okuma yüzeyi. Konu İÇERİĞİ üretimi
@@ -50,6 +51,40 @@ export function ensureSeeded(db: AppDb, targetLanguage: string) {
         .run();
     }
   });
+}
+
+/**
+ * Fill still-empty topics from the packaged seed (public/grammar-seed/<lang>.json,
+ * exported from the owner's DB by scripts/export-grammar-seed.ts). Only rows
+ * with status pending/error are touched — user-generated content always wins.
+ * Returns how many topics were filled.
+ */
+export function applyGrammarSeed(
+  db: AppDb,
+  targetLanguage: string,
+  seed: Record<string, GrammarTopicContent>
+): number {
+  const empty = db
+    .select({ id: tables.grammarTopics.id, slug: tables.grammarTopics.slug })
+    .from(tables.grammarTopics)
+    .where(
+      and(
+        eq(tables.grammarTopics.targetLanguage, targetLanguage),
+        inArray(tables.grammarTopics.status, ["pending", "error"])
+      )
+    )
+    .all();
+  let filled = 0;
+  for (const row of empty) {
+    const content = seed[row.slug];
+    if (!content) continue;
+    db.update(tables.grammarTopics)
+      .set({ content, status: "ready", generatedAt: new Date() })
+      .where(eq(tables.grammarTopics.id, row.id))
+      .run();
+    filled++;
+  }
+  return filled;
 }
 
 export function listGrammarTopics(db: AppDb, targetLanguage: string) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatsHeader } from "@/components/shared/StatsHeader";
+import { CenteredPage } from "@/components/shared/CenteredPage";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { roadmap, profileData, curriculumExtend } from "@/lib/client-api";
@@ -191,17 +192,17 @@ export function RoadmapView() {
 
   if (error) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 text-center px-6">
+      <CenteredPage>
         <div className="text-4xl">🍂</div>
         <p className="text-ink-soft">{error}</p>
-      </div>
+      </CenteredPage>
     );
   }
   if (!data) {
     return (
-      <div className="flex min-h-dvh items-center justify-center text-ink-soft">
-        {t.loading}
-      </div>
+      <CenteredPage>
+        <p className="text-ink-soft">{t.loading}</p>
+      </CenteredPage>
     );
   }
 

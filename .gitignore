@@ -43,3 +43,6 @@ next-env.d.ts
 # local data
 data/
 public/strokes-data
+
+# claude code local state (settings + worktrees)
+.claude/
