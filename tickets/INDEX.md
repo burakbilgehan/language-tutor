@@ -11,11 +11,11 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-011](T-011-sidequest-backfill.md) | Mevcut nl/zh profillerine yan görev backfill | **todo** | p2 | S | high |
 | [T-001](T-001-inburgering-mock-exams.md) | Inburgering deneme bölümleri | backlog | p2 | M | medium |
 | [T-005](T-005-zh-stroke-dictionary.md) | zh yazım + hanzi sözlüğü (CEDICT) | backlog | p2 | L | medium |
-| [T-008](T-008-branch-hygiene.md) | Branch push / PR kararı | backlog | p2 | S | high |
 | [T-004](T-004-overview-llm-layer.md) | Overview LLM yorum katmanı | backlog | p3 | S | medium |
 | [T-006](T-006-nl-weak-separables.md) | nl zayıf ayrılabilir fiiller | backlog | p3 | S | high |
 | [T-002](T-002-skill-tree.md) | Skill tree (dallı ders grafiği) | backlog | p3 | XL | low |
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu | backlog | p3 | S | high |
 | [T-012](T-012-zh-vocab-dictionary.md) | zh kelime sözlüğü (HSK vocab cheatsheet) | done | p2 | M | high |
+| [T-008](T-008-branch-hygiene.md) | Branch push / PR kararı (main'e direkt push + Pages env fix) | done | p2 | S | high |
 | [T-009](T-009-local-first-static.md) | Faz 2b — local-first statik build (tarayıcı SQLite + Pages) | done | p1 | XL | medium |
 | [T-010](T-010-llm-setup-wizard.md) | LLM bağlantı sihirbazı (kod bilmeyene kurulum akışı) | done | p1 | M | high |
