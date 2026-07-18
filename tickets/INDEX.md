@@ -13,6 +13,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-005](T-005-zh-stroke-dictionary.md) | zh yazım + hanzi sözlüğü (CEDICT) | backlog | p2 | L | medium |
 | [T-004](T-004-overview-llm-layer.md) | Overview LLM yorum katmanı | backlog | p3 | S | medium |
 | [T-006](T-006-nl-weak-separables.md) | nl zayıf ayrılabilir fiiller | backlog | p3 | S | high |
+| [T-013](T-013-stale-nav-after-profile-add.md) | Yeni dil ekleyince header/nav bayat kalıyor | backlog | p3 | S | high |
 | [T-002](T-002-skill-tree.md) | Skill tree (dallı ders grafiği) | backlog | p3 | XL | low |
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu | backlog | p3 | S | high |
 | [T-012](T-012-zh-vocab-dictionary.md) | zh kelime sözlüğü (HSK vocab cheatsheet) | done | p2 | M | high |
