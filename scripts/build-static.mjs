@@ -3,7 +3,13 @@
 // API route'ları ve eski dinamik-segment redirect sayfaları statik export'la
 // uyumsuz — build süresince kenara alınır, bitince geri konur. Sunuculu
 // build'e (npm run build) dokunmaz.
-import { execSync } from "node:child_process";
+//
+// Crash-safety: taşıma süresince process kesilirse (Ctrl+C, kill, timeout)
+// route'lar diskte "silinmiş" kalıyordu (bkz. T-017 incident'ı ve tekrarı).
+// execSync sinyal işleyicilerini bloklar; o yüzden async spawn + SIGINT/
+// SIGTERM/SIGHUP + exit üzerinde geri-koyma. SIGKILL'e karşı da açılıştaki
+// stash-recovery duruyor.
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 
 const ASIDE = ["src/app/api"];
@@ -27,22 +33,53 @@ for (const p of ASIDE) {
   }
 }
 
+let restored = false;
+function restore() {
+  if (restored) return;
+  restored = true;
+  for (const [p, dst] of moved) {
+    if (fs.existsSync(dst) && !fs.existsSync(p)) fs.renameSync(dst, p);
+  }
+  fs.rmSync(STASH, { recursive: true, force: true });
+}
+
+let activeChild = null;
+process.on("exit", restore);
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(sig, () => {
+    if (activeChild) activeChild.kill(sig);
+    restore();
+    process.exit(1);
+  });
+}
+
+function run(cmd, args, extraEnv = {}) {
+  return new Promise((resolve, reject) => {
+    const c = spawn(cmd, args, {
+      stdio: "inherit",
+      env: { ...process.env, ...extraEnv },
+    });
+    activeChild = c;
+    c.on("error", reject);
+    c.on("exit", (code) => {
+      activeChild = null;
+      if (code === 0) resolve();
+      else reject(new Error(`${cmd} exited with ${code}`));
+    });
+  });
+}
+
 let failed = false;
 try {
-  execSync("node scripts/sync-assets.mjs", { stdio: "inherit" });
-  execSync("next build --turbopack", {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      NEXT_PUBLIC_STATIC_BUILD: "1",
-      STATIC_EXPORT: "1",
-    },
+  await run("node", ["scripts/sync-assets.mjs"]);
+  await run("npx", ["next", "build", "--turbopack"], {
+    NEXT_PUBLIC_STATIC_BUILD: "1",
+    STATIC_EXPORT: "1",
   });
 } catch {
   failed = true;
 } finally {
-  for (const [p, dst] of moved) fs.renameSync(dst, p);
-  fs.rmSync(STASH, { recursive: true, force: true });
+  restore();
 }
 
 if (failed) process.exit(1);
