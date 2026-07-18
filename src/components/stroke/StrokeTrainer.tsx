@@ -7,6 +7,7 @@ import { GOJUON, DAKUTEN, GOJUON_HEADERS, STROKE_KANA, type KanaCell } from "@/l
 import type { KanjiContent } from "@/lib/llm/schemas";
 import { withBase } from "@/lib/base-path";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useListFocus } from "@/lib/use-list-focus";
 import {
   kanjiList as kanjiList$,
   kanjiDetail,
@@ -115,6 +116,30 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
 
   const [kanjiList, setKanjiList] = useState<KanjiListItem[] | null>(null);
   const [detail, setDetail] = useState<KanjiDetail | null>(null);
+
+  // Deep-link list focus: open the level group of the target kanji (closing
+  // the others), scroll its tile into view, flash it.
+  const flashChar = useListFocus(
+    initialChar,
+    tab === "kanji" && !!kanjiList?.length,
+    (c) => document.getElementById(`kanji-tile-${c}`),
+    (c) => {
+      // Section open? The <details> are uncontrolled — DOM is the truth.
+      const level = kanjiList?.find((k) => k.char === c)?.level;
+      return !!document.querySelector<HTMLDetailsElement>(
+        `details[data-kanji-level="${level}"]`,
+      )?.open;
+    },
+    (c) => {
+      const level = kanjiList?.find((k) => k.char === c)?.level;
+      if (!level) return;
+      document
+        .querySelectorAll<HTMLDetailsElement>("details[data-kanji-level]")
+        .forEach((d) => {
+          d.open = d.dataset.kanjiLevel === level;
+        });
+    },
+  );
 
   const boxRef = useRef<HTMLDivElement>(null);
   const writerRef = useRef<HanziWriter | null>(null);
@@ -371,7 +396,12 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
             const ready = items.filter((k) => k.status === "ready").length;
             const generating = items.some((k) => k.status === "generating");
             return (
-              <details key={lvl} open={lvl === "N5"} className="mb-2">
+              <details
+                key={lvl}
+                open={lvl === "N5"}
+                data-kanji-level={lvl}
+                className="mb-2"
+              >
                 <summary className="mb-1.5 cursor-pointer font-bold">
                   {lvl}{" "}
                   <span className="text-xs font-normal text-ink-soft">
@@ -399,10 +429,13 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
                   {items.map((k) => (
                     <button
                       key={k.char}
+                      id={`kanji-tile-${k.char}`}
                       lang="ja"
                       onClick={() => pick("kanji", k.char)}
                       title={k.meaningsEn.join(", ")}
                       className={`aspect-square rounded-xl text-lg transition-colors ${
+                        flashChar === k.char ? "ring-2 ring-accent " : ""
+                      }${
                         selected === k.char
                           ? "bg-accent-soft font-semibold"
                           : k.status === "ready"
