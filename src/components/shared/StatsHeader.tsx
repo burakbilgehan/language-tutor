@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { stats as stats$ } from "@/lib/client-api";
+import { useShortcutLabel } from "@/components/shared/CommandPalette";
 
 const S = {
   tr: {
@@ -23,7 +24,7 @@ const S = {
     },
     streak: "Seri",
     settings: "Ayarlar",
-    search: "Ara (⌘K)",
+    search: "Ara",
     costTitle: (today: string, calls: number, total: string) =>
       `Bugün: $${today} (${calls} çağrı) · Toplam: $${total}`,
   },
@@ -42,7 +43,7 @@ const S = {
     },
     streak: "Streak",
     settings: "Settings",
-    search: "Search (⌘K)",
+    search: "Search",
     costTitle: (today: string, calls: number, total: string) =>
       `Today: $${today} (${calls} calls) · Total: $${total}`,
   },
@@ -76,6 +77,25 @@ function CostBadge() {
     >
       💸 ${stats.todayUsd.toFixed(2)}
     </span>
+  );
+}
+
+/** Global search trigger: opens the cmd+K palette, shows the shortcut. */
+function SearchButton({ title }: { title: string }) {
+  const shortcut = useShortcutLabel();
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event("palette:open"))}
+      title={title}
+      aria-label={title}
+      className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm shadow-cozy transition-colors hover:bg-surface-2"
+    >
+      🔍
+      <kbd className="hidden font-sans text-xs text-ink-soft sm:inline">
+        {shortcut}
+      </kbd>
+    </button>
   );
 }
 
@@ -153,15 +173,7 @@ export function StatsHeader({
               </span>
             )}
             <CostBadge />
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event("palette:open"))}
-              title={t.search}
-              aria-label={t.search}
-              className="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-surface-2"
-            >
-              🔍
-            </button>
+            <SearchButton title={t.search} />
             <Link
               href="/settings"
               title={t.settings}
