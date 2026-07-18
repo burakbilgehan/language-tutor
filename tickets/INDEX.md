@@ -7,7 +7,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
-| [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | **todo** | p2 | M | medium |
+| [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | done | p2 | M | medium |
 | [T-017](T-017-feedback-mechanism.md) | Kullanıcı feedback mekanizması (+screenshot) | backlog | p2 | M | medium |
 | [T-015](T-015-mobile-friendly.md) | Mobil uyumluluk geçişi | backlog | p2 | L | medium |
 | [T-001](T-001-inburgering-mock-exams.md) | Inburgering deneme bölümleri | backlog | p2 | M | medium |
@@ -45,7 +45,7 @@ merge sırası: küçük olan önce, ikinci merge eden rebase edip conflict çö
 | 2c | T-020 | paralel ok | sonnet | globals.css + font/lang attribute — **done** |
 | 3 | T-019 | done | sonnet | Seed altyapısı bitti (export scripti + applyVocabSeed, dört bağlantı noktası grammar'la birebir). İçerik blast'ta arka planda doluyor; tam re-export ops adımı 3'te. |
 | 4a | T-021 + T-006 | paralel ok | opus | Aynı dosyalar (conjugation/*), tek session; içerik ağır — **done**. Not: T-021 içerik zaten f587ab9'da şevkedilmişti (ticket metni bayatmış, sadece kapatıldı); T-006 tek gerçek iş — `splitSeparable` curated `WEAK_SEPARABLE_BASES` listesiyle genişletildi (açık heuristik değil — opperen/openen gibi tesadüfen op- ile başlayan basit fiiller yanlış bölünürdü) |
-| 4b | T-016 | paralel ok | opus | Tasarım kararı açık (global arama MVP); header'a dokunur, T-015'ten önce bitmeli |
+| 4b | T-016 | paralel ok | opus | Global arama MVP (cmd+K palette) — **done**. Karar: kapsam sadece dizinler; kanji sonucu için `/stroke?char=` deep-link eklendi (ayrı kanji route yok). Katman 2 (cmd+F intercept) yapılmadı. |
 | 5 | T-017 | seri | sonnet | MVP: GitHub issue prefill + html2canvas |
 | 6 | T-015 | en son | sonnet | Tüm UI oturduktan sonra responsive pass; sayfa sayfa commit |
 

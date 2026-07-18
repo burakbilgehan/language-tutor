@@ -23,6 +23,7 @@ const S = {
     },
     streak: "Seri",
     settings: "Ayarlar",
+    search: "Ara (⌘K)",
     costTitle: (today: string, calls: number, total: string) =>
       `Bugün: $${today} (${calls} çağrı) · Toplam: $${total}`,
   },
@@ -41,6 +42,7 @@ const S = {
     },
     streak: "Streak",
     settings: "Settings",
+    search: "Search (⌘K)",
     costTitle: (today: string, calls: number, total: string) =>
       `Today: $${today} (${calls} calls) · Total: $${total}`,
   },
@@ -151,6 +153,15 @@ export function StatsHeader({
               </span>
             )}
             <CostBadge />
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("palette:open"))}
+              title={t.search}
+              aria-label={t.search}
+              className="rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-surface-2"
+            >
+              🔍
+            </button>
             <Link
               href="/settings"
               title={t.settings}
