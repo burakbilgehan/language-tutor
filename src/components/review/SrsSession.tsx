@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
+import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { srsDue, srsReview } from "@/lib/client-api";
@@ -83,15 +84,15 @@ export function SrsSession() {
 
   if (!cards) {
     return (
-      <div className="flex min-h-dvh items-center justify-center text-ink-soft">
-        {t.loading}
-      </div>
+      <CenteredPage title={t.headerTitle}>
+        <p className="text-ink-soft">{t.loading}</p>
+      </CenteredPage>
     );
   }
 
   if (cards.length === 0 || idx >= cards.length) {
     return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
+      <CenteredPage title={t.headerTitle}>
         <div className="text-6xl">{reviewed > 0 ? "🌸" : "🍵"}</div>
         <h1 className="text-2xl font-semibold">
           {reviewed > 0 ? t.doneTitle : t.emptyTitle}
@@ -100,7 +101,7 @@ export function SrsSession() {
           {reviewed > 0 ? t.doneBody(reviewed) : t.emptyBody}
         </p>
         <CozyButton onClick={() => router.push("/map")}>{t.backToMap}</CozyButton>
-      </div>
+      </CenteredPage>
     );
   }
 

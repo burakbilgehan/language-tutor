@@ -6,6 +6,7 @@ import Link from "next/link";
 import { JpMarkdown } from "@/components/shared/JpMarkdown";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
+import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
@@ -610,12 +611,9 @@ function Centered({
   children: React.ReactNode;
   embedded?: boolean;
 }) {
+  if (!embedded) return <CenteredPage>{children}</CenteredPage>;
   return (
-    <div
-      className={`mx-auto flex max-w-md flex-col items-center justify-center gap-4 px-6 text-center ${
-        embedded ? "min-h-[70dvh] py-10" : "min-h-dvh"
-      }`}
-    >
+    <div className="mx-auto flex max-w-md flex-col items-center justify-center gap-4 px-6 text-center min-h-[70dvh] py-10">
       {children}
     </div>
   );

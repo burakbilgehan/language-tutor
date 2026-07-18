@@ -1,10 +1,31 @@
+import fs from "node:fs";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
-import { listGrammarTopics } from "@/core/grammar";
+import { applyGrammarSeed, listGrammarTopics } from "@/core/grammar";
 import { recoverStaleJobs } from "@/lib/jobs";
+import type { GrammarTopicContent } from "@/lib/llm/schemas";
 
 export const runtime = "nodejs";
+
+// Paketlenmiş seed (public/grammar-seed/<lang>.json) sunuculu modda da yeni
+// profilleri besler. Dosya profil başına en fazla bir kez okunur.
+const seedCache = new Map<string, Record<string, GrammarTopicContent> | null>();
+function loadSeed(lang: string) {
+  if (!seedCache.has(lang)) {
+    try {
+      const raw = fs.readFileSync(
+        path.join(process.cwd(), "public", "grammar-seed", `${lang}.json`),
+        "utf8"
+      );
+      seedCache.set(lang, JSON.parse(raw).topics ?? null);
+    } catch {
+      seedCache.set(lang, null);
+    }
+  }
+  return seedCache.get(lang) ?? null;
+}
 
 export async function GET() {
   recoverStaleJobs();
@@ -12,7 +33,12 @@ export async function GET() {
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
-  return NextResponse.json({
-    topics: listGrammarTopics(db, profile.targetLanguage),
-  });
+  let topics = listGrammarTopics(db, profile.targetLanguage);
+  if (topics.some((t) => t.status === "pending" || t.status === "error")) {
+    const seed = loadSeed(profile.targetLanguage);
+    if (seed && applyGrammarSeed(db, profile.targetLanguage, seed) > 0) {
+      topics = listGrammarTopics(db, profile.targetLanguage);
+    }
+  }
+  return NextResponse.json({ topics });
 }
