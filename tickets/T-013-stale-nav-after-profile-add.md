@@ -1,7 +1,7 @@
 ---
 id: T-013
 title: Yeni dil ekleyince header/nav eski profilde kalıyor
-status: backlog
+status: done
 priority: p3
 effort: S
 confidence: high
@@ -21,3 +21,9 @@ Fix yönü: profil oluşturma/switch sonrası cache'i invalidate et (module
 cache'i sıfırlayan bir `invalidateProfileMeta()` export'u + ilgili akışların
 çağırması) YA DA switch akışındaki `window.location` kalıbını yeni-dil
 akışına da uygula. İkincisi daha ucuz ve mevcut varsayımı korur.
+
+Fix: `OnboardingWizard.tsx`'teki iki `router.push("/map")` (inline üretim
+biten statik mod + `GeneratingScreen.onDone`) `window.location.href =
+withBase("/map")`'e çevrildi — switch akışıyla aynı kalıp, full reload
+cache'i tazeler. `useRouter` artık kullanılmadığı için import/decl silindi.
+T-014 ile aynı commit'te (basePath fix'i zaten `withBase` import ediyordu).
