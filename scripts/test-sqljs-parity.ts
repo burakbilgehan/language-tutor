@@ -214,6 +214,70 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   }
 }
 
+// 10. Bölüm (chapter) üretimi — statik onboarding/auto-extend'in çekirdeği
+{
+  const fsx = await import("node:fs");
+  const { generateChapter, topChapterLevel } = await import("@/core/curriculum-gen");
+  const { nextLevelFor } = await import("@/lib/curriculum/levels");
+  const schema = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const fixture = fsx.readFileSync("src/lib/llm/fixtures/curriculum.json", "utf8");
+  const mockGen = {
+    async generateJson(o: { schema: { parse: (x: unknown) => unknown } }) {
+      return o.schema.parse(JSON.parse(fixture));
+    },
+    async generateText() {
+      return "mock";
+    },
+  } as never;
+
+  // Statik onboarding yolunun kendisi: sıfırdan profil + ilk bölüm (levelArg
+  // null → şemanın ilk seviyesi). In-memory kopya — gerçek DB'ye dokunmaz.
+  const { createProfile } = await import("@/core/profile");
+  const fresh = createProfile(db as never, {
+    displayName: "parity-test",
+    targetLanguage: "nl",
+    selfLevel: "beginner",
+    nativeLanguage: "tr",
+    uiLanguage: "tr",
+    goals: ["seyahat"],
+    interests: ["muzik"],
+    minutesPerWeek: 120,
+  } as never);
+  check("createProfile (yeni nl)", !!fresh);
+
+  await generateChapter(db as never, mockGen, fresh!.id, null, {
+    modelUsed: "fixture",
+  });
+
+  const cur = db.select().from(schema.curricula)
+    .where(eq(schema.curricula.profileId, fresh!.id)).limit(1).get();
+  const top = cur ? topChapterLevel(db as never, cur.id, "nl") : null;
+  check("generateChapter ilk bölüm", top === "A1", `→ chapter=${top}`);
+  check("A2'ye uzayabilir", nextLevelFor("nl", top ?? "") === "A2");
+
+  const unitIds = new Set(
+    db.select().from(schema.units).all()
+      .filter((u) => u.curriculumId === cur?.id).map((u) => u.id)
+  );
+  const mains = db.select().from(schema.nodes).all()
+    .filter((n) => n.nodeType === "main" && n.unitId && unitIds.has(n.unitId));
+  const quests = db.select().from(schema.nodes).all()
+    .filter((n) => n.nodeType === "side_quest" && n.unitId && unitIds.has(n.unitId));
+  // Prereq zinciri tek parça mı: tam bir baş olmalı, gerisi zincirde.
+  const ids = new Set(mains.map((n) => n.id));
+  const heads = mains.filter((n) => !n.prereqNodeId || !ids.has(n.prereqNodeId));
+  check("üniteler + nodelar yazıldı", unitIds.size > 0 && mains.length > 0,
+    `→ ${unitIds.size} ünite, ${mains.length} node, ${quests.length} yan görev`);
+  check("prereq zinciri tek parça", heads.length === 1, `→ ${heads.length} baş`);
+
+  // Gramer indeksi dil-geneli (profil başına değil) — nl konuları mevcut olmalı.
+  const gtopics = db.select().from(schema.grammarTopics).all()
+    .filter((g) => g.targetLanguage === "nl");
+  check("gramer iskeleti (nl, dil-geneli)", gtopics.length > 0, `→ ${gtopics.length} konu`);
+}
+
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);
 process.exit(fail ? 1 : 0);
 

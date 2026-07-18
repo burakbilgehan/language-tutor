@@ -1,7 +1,7 @@
 ---
 id: T-009
 title: Faz 2b — local-first statik build (tarayıcı SQLite + GitHub Pages)
-status: todo
+status: done
 priority: p1
 effort: XL
 confidence: medium
@@ -33,3 +33,11 @@ Keşif verdicti (2026-07-17, ayrıntı konuşma geçmişinde):
 
 Öneri: dikey dilim POC ile başla (review/SRS akışı uçtan uca wasm SQLite),
 sonra kalan route'ları aynı kalıpla taşı.
+
+---
+KAPANIŞ (2026-07-18): Tamamlandı. sql.js SENKRON çıktı (async dönüşüm
+gerekmedi); tüm yüzeyler src/core/* üzerinden tarayıcı DB'sinde; chapter
+üretimi dahil LLM döngüsünün tamamı statikte; GitHub Pages canlı:
+https://burakbilgehan.github.io/language-tutor/ (workflow: pages.yml,
+NEXT_PUBLIC_BASE_PATH=/language-tutor). Kurulum sihirbazı T-010'da.
+Kalan karar: main'e merge + statik-default konumlandırma (T-008).

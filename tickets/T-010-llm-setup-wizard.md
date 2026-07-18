@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: LLM bağlantı sihirbazı (kod bilmeyen kullanıcı için kurulum akışı)
-status: todo
+status: done
 priority: p1
 effort: M
 confidence: high
@@ -31,3 +31,11 @@ bölümü teknik kullanıcıya göre. Kod bilmeyen kullanıcı için rehberli ak
 
 Konumlandırma: default öneri key/Ollama (sürtünmesiz); bridge "aboneliğim
 var" kitlesi için ileri seçenek. "Default claude" varsayımı yok.
+
+---
+KAPANIŞ (2026-07-18): LlmSetupWizard.tsx — 3 yol (API key önerilen /
+Ollama önerilen-2 / abonelik+köprü: claude-codex-copilot-gemini), OS'e göre
+tek satır komutlar (köprü sitede servis, origin otomatik), CLI'sız claude.ai
+dürüst uyarısı, Safari uyarısı, test-et-ve-kaydet. Statikte config yokken
+otomatik açılır; formdan "Kurulum sihirbazı" ile erişilir. Bun tek-binary
+köprü ileri aşama olarak açık kaldı.
