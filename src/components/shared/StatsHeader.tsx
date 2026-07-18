@@ -89,7 +89,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/map", label: "lessons", match: ["/lesson", "/quest"] },
+  { href: "/map", label: "lessons", match: ["/lesson"] },
   { href: "/grammar", label: "grammar" },
   // Word dictionary: index data exists for zh only (HSK word lists).
   { href: "/vocab", label: "vocab", langs: ["zh"] },

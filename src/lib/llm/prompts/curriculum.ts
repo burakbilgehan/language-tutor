@@ -83,23 +83,17 @@ export function chapterPrompt({ profile, level, priorSummary }: ChapterPromptInp
   const jaExtras =
     profile.targetLanguage === "ja"
       ? (isFirst
-          ? `\n- Japonca'ya özgü: müfredat hiragana ile başlamalı (seviye sıfırsa), katakana erken gelmeli. KANJI'Yİ ERTELEME: en temel kanjiler (一二三, 人, 日, 月, 本...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı. side_quests içine "kana_drill" ve "kanji" türlerini ekle.`
+          ? `\n- Japonca'ya özgü: müfredat hiragana ile başlamalı (seviye sıfırsa), katakana erken gelmeli. KANJI'Yİ ERTELEME: en temel kanjiler (一二三, 人, 日, 月, 本...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı.`
           : `\n- Japonca'ya özgü: bu seviyede yeni kanjiler ve o seviyeye özgü dilbilgisi ağırlıklı ilerlesin; kana zaten öğrenildi, tekrar etme.`) + jaCore
       : profile.targetLanguage === "zh"
         ? (isFirst
-            ? `\n- Çince'ye özgü: müfredat pinyin sistemi ve dört ton ile başlamalı. HANZİ'Yİ ERTELEME: en temel hanziler (一二三, 人, 我, 你, 好, 是...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı. Bu dil için kana side quest türleri KULLANMA; "pop_quiz" ve "vocab_review" yeterli.`
+            ? `\n- Çince'ye özgü: müfredat pinyin sistemi ve dört ton ile başlamalı. HANZİ'Yİ ERTELEME: en temel hanziler (一二三, 人, 我, 你, 好, 是...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı.`
             : `\n- Çince'ye özgü: bu seviyede yeni hanziler ve o seviyeye özgü dilbilgisi ağırlıklı ilerlesin; pinyin zaten öğrenildi, tekrar etme.`) + zhCore
-        : isFirst
-          ? `\n- Bu dil için kana/kanji side quest türleri KULLANMA; "pop_quiz" ve "vocab_review" yeterli.`
-          : "";
+        : "";
 
   const priorBlock = priorSummary
     ? `\nŞU KONULAR ÖNCEKİ BÖLÜMLERDE ZATEN ÖĞRETİLDİ — TEKRARLAMA, sadece bu seviyeye özgü YENİ dilbilgisi ve kelime dağarcığını ilerlet:\n${priorSummary}\n`
     : "";
-
-  const sideQuestRule = isFirst
-    ? `- "side_quests": sürekli erişilebilir yan görev türleri.${jaExtras}`
-    : `- "side_quests": BOŞ dizi döndür ([]) — yan görevler ilk bölümde tanımlandı.${jaExtras}`;
 
   const titleRule = isFirst
     ? `- "title": tüm müfredat için kısa, motive edici bir başlık (${native} dilinde).`
@@ -125,7 +119,7 @@ Kurallar:
 - "theme" alanı kısa bir ingilizce etiket (ör: "kana", "food", "travel").
 - "objectives" her düğüm için 1-3 somut öğrenme hedefi (${native} dilinde).
 ${titleRule}
-${sideQuestRule}
+${jaExtras}
 
 Sadece şemaya uygun JSON döndür.`;
 

@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import type { LlmProvider } from "@/lib/llm/provider-types";
@@ -8,14 +8,12 @@ import {
   KanjiContentSchema,
   VocabContentSchema,
   GradeSchema,
-  SideQuestPayloadSchema,
 } from "@/lib/llm/schemas";
 import { lessonPrompt, gradingPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
 import { kanjiPrompt } from "@/lib/llm/prompts/kanji";
 import { vocabPrompt } from "@/lib/llm/prompts/vocab";
 import { chatPrompt } from "@/lib/llm/prompts/chat";
-import { sideQuestPrompt } from "@/lib/llm/prompts/side-quest";
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
 import { getStrugglesLine } from "./struggles";
 import type { AppDb } from "./db-types";
@@ -448,56 +446,6 @@ export async function freshTranslation(
       .run();
   }
   return translation;
-}
-
-/** Quest start'ın üretim bacağı: taze payload + node'a cache'leme. */
-export async function generateQuestPayload(
-  db: AppDb,
-  gen: Gen,
-  profile: Profile,
-  node: typeof tables.nodes.$inferSelect
-) {
-  const recentVocab = db
-    .select()
-    .from(tables.srsCards)
-    .where(eq(tables.srsCards.profileId, profile.id))
-    .orderBy(desc(tables.srsCards.createdAt))
-    .limit(30)
-    .all()
-    .map((c) => ({ term: c.front, meaning: c.back }));
-
-  const completedTitles = db
-    .select({ title: tables.nodes.titleTr })
-    .from(tables.nodes)
-    .where(eq(tables.nodes.status, "completed"))
-    .all()
-    .map((r) => r.title)
-    .slice(-12);
-
-  const { system, prompt } = sideQuestPrompt({
-    targetLanguage: profile.targetLanguage,
-    nativeLanguage: profile.nativeLanguage,
-    node,
-    selfLevel: profile.selfLevel,
-    recentVocab,
-    completedTitles,
-  });
-
-  const payload = await gen.generateJson({
-    system,
-    prompt,
-    schema: SideQuestPayloadSchema,
-    fixtureKey: "side_quest",
-    tier: "fast",
-    timeoutMs: 120_000,
-  });
-
-  db.update(tables.nodes)
-    .set({ sideQuestPayload: payload })
-    .where(eq(tables.nodes.id, node.id))
-    .run();
-
-  return payload;
 }
 
 /** Attempt route'un LLM değerlendirme callback'i — sunucu ve tarayıcı aynı

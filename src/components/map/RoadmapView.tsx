@@ -43,8 +43,6 @@ const S = {
 
 interface NodeDto {
   id: string;
-  nodeType: "main" | "side_quest";
-  sideQuestKind: string | null;
   lessonType: "lesson" | "checkpoint" | "boss";
   titleTr: string;
   subtitleTr: string;
@@ -64,7 +62,6 @@ interface RoadmapDto {
     level: string | null;
     nodes: NodeDto[];
   }[];
-  sideQuests: NodeDto[];
   chapters: { level: string; status: string }[];
   topLevel: string | null;
   nextLevel: string | null;
@@ -78,13 +75,6 @@ const TYPE_ICON: Record<string, string> = {
   lesson: "📖",
   checkpoint: "🏮",
   boss: "⛩️",
-};
-
-const QUEST_ICON: Record<string, string> = {
-  kana_drill: "あ",
-  kanji: "漢",
-  pop_quiz: "❓",
-  vocab_review: "🔁",
 };
 
 export function RoadmapView() {
@@ -220,8 +210,8 @@ export function RoadmapView() {
       />
 
       {/* When a lesson is open the map column slides left: right padding
-          reserves the panel's width, left padding the quest rail's. The DOM
-          (and thus body scroll position) is untouched. */}
+          reserves the panel's width, left padding the review bubble's rail.
+          The DOM (and thus body scroll position) is untouched. */}
       <div
         className={`transition-[padding] duration-500 ease-in-out ${
           lessonOpen ? "sm:pl-20 sm:pr-[var(--panel-w)]" : ""
@@ -301,20 +291,11 @@ export function RoadmapView() {
       </main>
       </div>
 
-      {/* Side quests: rail pinned to the left edge — always on screen while
-          the curriculum scrolls underneath. Labels are visible on wide
-          screens and collapse to hover-tooltips while a lesson is open. */}
+      {/* Review shortcut: rail pinned to the left edge — always on screen
+          while the curriculum scrolls underneath. Label is visible on wide
+          screens and collapses to a hover-tooltip while a lesson is open. */}
       <div className="fixed left-3 top-1/2 z-20 flex -translate-y-1/2 flex-col items-start gap-2.5 sm:left-5">
-        {data.sideQuests.map((sq) => (
-          <QuestBubble
-            key={sq.id}
-            icon={QUEST_ICON[sq.sideQuestKind ?? ""] ?? "✦"}
-            label={sq.titleTr}
-            compact={lessonOpen}
-            onClick={() => router.push(`/quest?node=${sq.id}`)}
-          />
-        ))}
-        <QuestBubble
+        <RailBubble
           icon="🔁"
           label={`${t.review}${data.dueCards ? ` (${data.dueCards})` : ""}`}
           accent
@@ -344,7 +325,7 @@ export function RoadmapView() {
   );
 }
 
-function QuestBubble({
+function RailBubble({
   icon,
   label,
   accent = false,
