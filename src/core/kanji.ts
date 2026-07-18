@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { kanjiIndexFor } from "@/lib/kanji-index";
 import { lookupWord } from "@/lib/jmdict";
+import type { KanjiContent } from "@/lib/llm/schemas";
 import type { AppDb } from "./db-types";
 
 // Kanji/hanzi yüzeyinin ortam-bağımsız çekirdeği. İçerik ÜRETİMİ (LLM)
@@ -72,6 +73,40 @@ export function ensureKanjiSeeded(db: AppDb, targetLanguage: string) {
       }
     });
   });
+}
+
+/**
+ * Fill still-empty entries from the packaged seed (public/kanji-seed/<lang>.json,
+ * exported from the owner's DB by scripts/export-kanji-seed.ts). Only rows
+ * with status pending/error are touched — user-generated content always wins.
+ * Returns how many entries were filled.
+ */
+export function applyKanjiSeed(
+  db: AppDb,
+  targetLanguage: string,
+  seed: Record<string, KanjiContent>
+): number {
+  const empty = db
+    .select({ id: tables.kanjiEntries.id, char: tables.kanjiEntries.char })
+    .from(tables.kanjiEntries)
+    .where(
+      and(
+        eq(tables.kanjiEntries.targetLanguage, targetLanguage),
+        inArray(tables.kanjiEntries.status, ["pending", "error"])
+      )
+    )
+    .all();
+  let filled = 0;
+  for (const row of empty) {
+    const content = seed[row.char];
+    if (!content) continue;
+    db.update(tables.kanjiEntries)
+      .set({ content, status: "ready", generatedAt: new Date() })
+      .where(eq(tables.kanjiEntries.id, row.id))
+      .run();
+    filled++;
+  }
+  return filled;
 }
 
 export function listKanji(db: AppDb, targetLanguage: string) {

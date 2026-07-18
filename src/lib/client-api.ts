@@ -215,8 +215,16 @@ export async function kanjiList(): Promise<{
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  const entries = coreK.listKanji(db, profile.targetLanguage);
-  persistSoon(); // seed yeni satır eklemiş olabilir
+  let entries = coreK.listKanji(db, profile.targetLanguage);
+  // Boş girişleri paketlenmiş seed'den doldur (LLM'siz dolu kanji sözlüğü).
+  if (entries.some((e) => e.status === "pending" || e.status === "error")) {
+    const { fetchKanjiSeed } = await import("@/lib/kanji-seed");
+    const seed = await fetchKanjiSeed(profile.targetLanguage);
+    if (seed && coreK.applyKanjiSeed(db, profile.targetLanguage, seed) > 0) {
+      entries = coreK.listKanji(db, profile.targetLanguage);
+    }
+  }
+  persistSoon(); // seed yeni satır eklemiş/doldurmuş olabilir
   return { entries };
 }
 
@@ -230,12 +238,26 @@ export async function kanjiDetail(char: string): Promise<{
   content: unknown | null;
 }> {
   if (!IS_STATIC) return fetchJson(`/api/kanji/${encodeURIComponent(char)}`);
-  const { db } = await browserDb();
+  const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  const entry = coreK.findKanji(db, profile.targetLanguage, char);
+  let entry = coreK.findKanji(db, profile.targetLanguage, char);
+  if (!entry) {
+    // Deep link (?char=) liste yüklenmeden gelebilir — önce seed'le.
+    coreK.ensureKanjiSeeded(db, profile.targetLanguage);
+    entry = coreK.findKanji(db, profile.targetLanguage, char);
+    if (entry) persistSoon();
+  }
+  if (entry && (entry.status === "pending" || entry.status === "error")) {
+    const { fetchKanjiSeed } = await import("@/lib/kanji-seed");
+    const seed = await fetchKanjiSeed(profile.targetLanguage);
+    if (seed && coreK.applyKanjiSeed(db, profile.targetLanguage, seed) > 0) {
+      entry = coreK.findKanji(db, profile.targetLanguage, char) ?? entry;
+      persistSoon();
+    }
+  }
   if (!entry) throw new Error("Kanji bulunamadı");
   return {
     char: entry.char,

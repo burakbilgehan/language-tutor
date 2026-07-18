@@ -1,13 +1,34 @@
+import fs from "node:fs";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
-import { listKanji } from "@/core/kanji";
+import { applyKanjiSeed, listKanji } from "@/core/kanji";
 import { queueKanjiLevel, recoverStaleJobs, topChapterLevel } from "@/lib/jobs";
 import { isJlptLevel, levelOrdinal, type JlptLevel } from "@/lib/curriculum/levels";
 import { eq } from "drizzle-orm";
 import { tables } from "@/db";
+import type { KanjiContent } from "@/lib/llm/schemas";
 
 export const runtime = "nodejs";
+
+// Paketlenmiş seed (public/kanji-seed/<lang>.json) sunuculu modda da yeni
+// profilleri besler. Dosya profil başına en fazla bir kez okunur.
+const seedCache = new Map<string, Record<string, KanjiContent> | null>();
+function loadSeed(lang: string) {
+  if (!seedCache.has(lang)) {
+    try {
+      const raw = fs.readFileSync(
+        path.join(process.cwd(), "public", "kanji-seed", `${lang}.json`),
+        "utf8"
+      );
+      seedCache.set(lang, JSON.parse(raw).chars ?? null);
+    } catch {
+      seedCache.set(lang, null);
+    }
+  }
+  return seedCache.get(lang) ?? null;
+}
 
 export async function GET() {
   recoverStaleJobs();
@@ -15,7 +36,15 @@ export async function GET() {
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
-  const entries = listKanji(db, profile.targetLanguage);
+  let entries = listKanji(db, profile.targetLanguage);
+  // Boş girişleri önce seed'den doldur — auto-fill LLM kuyruğu ancak seed'in
+  // kapatamadığı boşluklar için devreye girsin.
+  if (entries.some((e) => e.status === "pending" || e.status === "error")) {
+    const seed = loadSeed(profile.targetLanguage);
+    if (seed && applyKanjiSeed(db, profile.targetLanguage, seed) > 0) {
+      entries = listKanji(db, profile.targetLanguage);
+    }
+  }
 
   // Auto-fill: opening the kanji list starts generating the learner's current
   // level in the background so examples are ready by default. "Current" =
