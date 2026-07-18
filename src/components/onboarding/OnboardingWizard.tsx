@@ -252,7 +252,7 @@ export function OnboardingWizard() {
         ))}
       </div>
 
-      <div className="rounded-cozy bg-surface p-8 shadow-cozy">
+      <div className="rounded-cozy bg-surface p-5 shadow-cozy sm:p-8">
         {step === 0 && (
           <StepShell title={t.step0Title} subtitle={t.step0Subtitle}>
             <input
