@@ -53,6 +53,9 @@ merge sırası: küçük olan önce, ikinci merge eden rebase edip conflict çö
 (`node scripts/blast-dashboard.mjs` → :4646). Sıralı ops listesi:
 1. Sonraki kota penceresi: panelden Başlat — kalan ~570 kanji + 4989 vocab.
 2. Vocab bitince T-023'ün vocab ayağı (kanji/grammar denetimi yapıldı, temiz).
-3. `seed:grammar` + `seed:vocab` re-export → commit → Pages deploy.
+3. ✅ (2026-07-18) `seed:grammar` + `seed:vocab` + `seed:kanji` (yeni —
+   kanji için paketlenmiş seed altyapısı bu adımda eklendi) re-export →
+   commit → Pages deploy. Vocab 1400/4991 ile gönderildi (bilinçli —
+   kalan üretilince re-export yeter); kanji 2201, grammar 554 tam.
 
 Sprint dışı (sıralanmadı): T-001, T-002, T-004, T-005.
