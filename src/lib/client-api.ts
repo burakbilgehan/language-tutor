@@ -280,8 +280,16 @@ export async function vocabList(): Promise<{ entries: VocabEntrySummary[] }> {
   const coreV = await import("@/core/vocab");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  const entries = coreV.listVocab(db, profile.targetLanguage);
-  persistSoon(); // seed yeni satır eklemiş olabilir
+  let entries = coreV.listVocab(db, profile.targetLanguage);
+  // Boş girişleri paketlenmiş seed'den doldur (LLM'siz tam sözlük).
+  if (entries.some((e) => e.status === "pending" || e.status === "error")) {
+    const { fetchVocabSeed } = await import("@/lib/vocab-seed");
+    const seed = await fetchVocabSeed(profile.targetLanguage);
+    if (seed && coreV.applyVocabSeed(db, profile.targetLanguage, seed) > 0) {
+      entries = coreV.listVocab(db, profile.targetLanguage);
+    }
+  }
+  persistSoon(); // seed yeni satır eklemiş/doldurmuş olabilir
   return { entries: entries as VocabEntrySummary[] };
 }
 
@@ -307,6 +315,14 @@ export async function vocabDetail(word: string): Promise<{
     coreV.ensureVocabSeeded(db, profile.targetLanguage);
     entry = coreV.findVocab(db, profile.targetLanguage, word);
     if (entry) persistSoon();
+  }
+  if (entry && (entry.status === "pending" || entry.status === "error")) {
+    const { fetchVocabSeed } = await import("@/lib/vocab-seed");
+    const seed = await fetchVocabSeed(profile.targetLanguage);
+    if (seed && coreV.applyVocabSeed(db, profile.targetLanguage, seed) > 0) {
+      entry = coreV.findVocab(db, profile.targetLanguage, word) ?? entry;
+      persistSoon();
+    }
   }
   if (!entry) throw new Error("Kelime bulunamadı");
   return {
