@@ -88,10 +88,16 @@ function cssVar(name: string, fallback: string): string {
   return v || fallback;
 }
 
-export function StrokeTrainer() {
+export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
   const t = useStrings(S);
-  const [tab, setTab] = useState<Tab>("hira");
-  const [selected, setSelected] = useState<string>(STROKE_KANA[0].hira);
+  // Deep-link (/stroke?char=光 from the cmd+K palette): open on the kanji tab
+  // with that glyph selected. The reset effect below keys on `selectedKana`
+  // (undefined for a kanji), so a deep-linked kanji survives the async list
+  // load without being clobbered back to kanjiList[0].
+  const [tab, setTab] = useState<Tab>(initialChar ? "kanji" : "hira");
+  const [selected, setSelected] = useState<string>(
+    initialChar ?? STROKE_KANA[0].hira,
+  );
   const [mode, setMode] = useState<Mode>("idle");
   const [remaining, setRemaining] = useState<number | null>(null);
   const [mistakes, setMistakes] = useState(0);

@@ -1,6 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { StrokeTrainer } from "@/components/stroke/StrokeTrainer";
 import { useProfileMeta } from "@/lib/use-profile-meta";
@@ -21,9 +23,10 @@ const S = {
   },
 };
 
-export default function StrokePage() {
+function StrokePageInner() {
   const meta = useProfileMeta();
   const t = useStrings(S);
+  const initialChar = useSearchParams().get("char") ?? undefined;
   if (meta && meta.targetLanguage !== "ja") {
     return (
       <div className="min-h-dvh pb-16">
@@ -42,7 +45,18 @@ export default function StrokePage() {
   return (
     <div className="min-h-dvh pb-16">
       <StatsHeader title={t.title} />
-      <StrokeTrainer />
+      <StrokeTrainer initialChar={initialChar} />
     </div>
+  );
+}
+
+// Deep-link support: /stroke?char=<kanji> opens that kanji directly (from the
+// cmd+K search palette). useSearchParams needs a Suspense boundary in static
+// export.
+export default function StrokePage() {
+  return (
+    <Suspense fallback={null}>
+      <StrokePageInner />
+    </Suspense>
   );
 }
