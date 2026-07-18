@@ -126,22 +126,36 @@ export function parseFurigana(text: string): FuriganaSegment[] {
 }
 
 /**
- * Split mixed text into Japanese-script runs (kana/kanji/CJK punctuation) and
- * everything else, so JP typography (font stack, size bump) can be applied to
- * exactly the Japanese glyphs — not to Turkish prose surrounding them.
+ * Split mixed text into CJK-script runs (kana/hanzi/CJK punctuation) and
+ * everything else, so CJK typography (font stack, size bump) can be applied
+ * to exactly the CJK glyphs — not to Turkish prose surrounding them.
+ *
+ * Script alone can't tell ja kanji from zh hanzi (kanji is a subset of
+ * hanzi code points). Callers that know the profile's target language
+ * should pass `knownLang` — it wins outright. Without it, kana presence is
+ * the fallback signal: kana is ja-exclusive, so if the *whole* string has no
+ * kana anywhere, an unbracketed run is treated as zh. That fallback still
+ * mislabels an all-kanji ja run (rare — ja sentences are furigana-bracketed
+ * by prompt design, and bracketed hanzi never reaches this path; it's
+ * consumed by parseFurigana first) as zh when no caller-supplied lang is
+ * available.
  */
-export function splitJapaneseRuns(
-  s: string
-): { text: string; ja: boolean }[] {
-  const runs: { text: string; ja: boolean }[] = [];
+export function splitCjkRuns(
+  s: string,
+  knownLang?: "ja" | "zh" | null
+): { text: string; lang: "ja" | "zh" | null }[] {
+  const hasKana = /[぀-ヿ]/.test(s);
+  const fallback = knownLang ?? (hasKana ? "ja" : "zh");
+  const runs: { text: string; lang: "ja" | "zh" | null }[] = [];
   const re = /[　-〿぀-ヿ一-鿿]+/g;
   let last = 0;
   for (const m of s.matchAll(re)) {
-    if (m.index! > last) runs.push({ text: s.slice(last, m.index), ja: false });
-    runs.push({ text: m[0], ja: true });
+    if (m.index! > last)
+      runs.push({ text: s.slice(last, m.index), lang: null });
+    runs.push({ text: m[0], lang: fallback });
     last = m.index! + m[0].length;
   }
-  if (last < s.length) runs.push({ text: s.slice(last), ja: false });
+  if (last < s.length) runs.push({ text: s.slice(last), lang: null });
   return runs;
 }
 

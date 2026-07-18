@@ -7,6 +7,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useProfileMeta } from "@/lib/use-profile-meta";
 import { grammarTopic, grammarGenerate } from "@/lib/client-api";
 
 const S = {
@@ -43,6 +44,8 @@ interface TopicResponse {
 
 export function GrammarTopicView({ slug }: { slug: string }) {
   const s = useStrings(S);
+  const targetLanguage = useProfileMeta()?.targetLanguage;
+  const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
   const [topic, setTopic] = useState<TopicResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stopped = useRef(false);
@@ -104,17 +107,17 @@ export function GrammarTopicView({ slug }: { slug: string }) {
       {topic.status === "ready" && topic.content ? (
         <>
           <p className="rounded-cozy bg-surface p-5 text-ink-soft shadow-cozy">
-            <Furigana text={topic.content.intro_tr} />
+            <Furigana text={topic.content.intro_tr} lang={cjkLang} />
           </p>
           {topic.content.tables.map((t, i) => (
-            <GrammarTable key={i} table={t} />
+            <GrammarTable key={i} table={t} lang={cjkLang} />
           ))}
           <section className="rounded-cozy bg-surface p-5 shadow-cozy">
             <h2 className="mb-3 font-semibold">{s.examples}</h2>
             <div className="flex flex-col gap-3">
               {topic.content.examples.map((ex, i) => (
                 <div key={i} className="rounded-xl bg-background p-4">
-                  <div className="text-lg"><Furigana text={ex.target} /></div>
+                  <div className="text-lg"><Furigana text={ex.target} lang={cjkLang} /></div>
                   {ex.reading && (
                     <div className="text-sm text-ink-soft">{ex.reading}</div>
                   )}
