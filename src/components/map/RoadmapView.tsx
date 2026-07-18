@@ -235,7 +235,7 @@ export function RoadmapView() {
                 <NodeBubble
                   key={node.id}
                   node={node}
-                  offset={Math.sin((ui * 7 + ni) * 1.1) * 90}
+                  offsetFactor={Math.sin((ui * 7 + ni) * 1.1)}
                   onClick={() =>
                     node.status !== "locked" && openLesson(node.id)
                   }
@@ -366,11 +366,11 @@ function RailBubble({
 
 function NodeBubble({
   node,
-  offset,
+  offsetFactor,
   onClick,
 }: {
   node: NodeDto;
-  offset: number;
+  offsetFactor: number;
   onClick: () => void;
 }) {
   const locked = node.status === "locked";
@@ -381,7 +381,9 @@ function NodeBubble({
     <button
       onClick={onClick}
       disabled={locked}
-      style={{ transform: `translateX(${offset}px)` }}
+      style={{
+        transform: `translateX(calc(${offsetFactor} * min(90px, 18vw)))`,
+      }}
       className={`group relative z-[1] my-2 flex flex-col items-center cursor-pointer disabled:cursor-not-allowed`}
       title={node.subtitleTr}
     >
