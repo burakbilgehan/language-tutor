@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { withBase } from "@/lib/base-path";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import {
@@ -174,7 +175,7 @@ export function ProfileSection() {
     setSwitching(true);
     try {
       await switchProfile$(profileId);
-      window.location.href = "/map"; // full reload → fresh server reads
+      window.location.href = withBase("/map"); // full reload → fresh server reads
     } catch (err) {
       setMsg(`❌ ${err instanceof Error ? err.message : t.switchFailed}`);
       setSwitching(false);

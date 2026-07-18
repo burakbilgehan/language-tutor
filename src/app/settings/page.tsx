@@ -7,6 +7,7 @@ import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { stats, saveExportApi, saveImportApi } from "@/lib/client-api";
+import { withBase } from "@/lib/base-path";
 
 const S = {
   tr: {
@@ -128,7 +129,7 @@ export default function SettingsPage() {
     setSaveMsg(null);
     try {
       await saveImportApi(file);
-      window.location.href = "/map"; // full reload → fresh reads
+      window.location.href = withBase("/map"); // full reload → fresh reads
     } catch (err) {
       setSaveMsg(
         `❌ ${err instanceof Error ? err.message : t.saveImportFailed}`

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { withBase } from "@/lib/base-path";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import { GeneratingScreen } from "./GeneratingScreen";
@@ -108,7 +108,6 @@ const S = {
 };
 
 export function OnboardingWizard() {
-  const router = useRouter();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>({
     targetLanguage: "ja",
@@ -188,8 +187,8 @@ export function OnboardingWizard() {
 
       const gen = await curriculumGenerate(profile.id);
       if (!gen.jobId) {
-        // Statik mod: üretim inline tamamlandı — direkt haritaya.
-        router.push("/map");
+        // Statik mod: üretim inline tamamlandı — full reload, profil meta cache tazelensin (T-013).
+        window.location.href = withBase("/map");
         return;
       }
       localStorage.setItem("curriculumJobId", gen.jobId);
@@ -208,7 +207,7 @@ export function OnboardingWizard() {
         uiLanguage={draft.uiLanguage}
         onDone={() => {
           localStorage.removeItem("curriculumJobId");
-          router.push("/map");
+          window.location.href = withBase("/map");
         }}
         onRetry={() => {
           localStorage.removeItem("curriculumJobId");
