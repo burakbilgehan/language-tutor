@@ -1,7 +1,7 @@
 ---
 id: T-019
 title: zh sözlük içeriğini toplu doldurma + paketlenmiş seed
-status: backlog
+status: todo
 priority: p2
 effort: M
 confidence: high
@@ -20,12 +20,15 @@ açılışta yeniden üretmez. Yapı şemayla sabit, dolayısıyla tüm kelimele
 aynı bölümlerle gelir.
 
 İş iki parça (grammar'daki kalıbın birebir kopyası):
-1. **Toplu üretim scripti**: owner makinesinde, fast tier, kuyruğa saygılı
-   (LLM_CONCURRENCY), kaldığı yerden devam edebilen bir script — 4991
-   kelimeyi seviye sırasıyla (HSK1→6) üretip `vocab_entries`'e yazar.
-   Not: liste GET'i asla auto-queue yapmaz (T-012 kararı), üretim bu
-   script veya kullanıcı tetiklidir — o kural bozulmasın.
-   Gece/hafta sonu kotasında çalıştırılır (T-003'teki kota yaklaşımı).
+1. **Toplu üretim scripti**: ✅ YAPILDI (2026-07-18, backlog session'ında):
+   `scripts/blast-generate.ts` vocab'ı da kapsayacak şekilde genişletildi
+   (pending/error `vocab_entries` → `generateVocabContent`, position
+   sıralı = HSK1→6). Kontrol paneli: `node scripts/blast-dashboard.mjs`
+   → http://127.0.0.1:4646 (canlı izleme + dur/başlat/concurrency).
+   Concurrency 8-16 bandında tut — 100 denendi, makine boğulup çağrılar
+   120s timeout'a düştü. Kanji kuyruğu bitince vocab otomatik sıraya girer;
+   sonraki kota penceresinde koşturulacak.
+   Not: liste GET'i asla auto-queue yapmaz (T-012 kararı) — o kural duruyor.
 2. **Packaged seed**: `npm run seed:vocab` — `data/app.db`'deki ready
    girişleri `public/vocab-seed/zh.json`'a export (grammar'daki
    `seed:grammar` kalıbı); `applyVocabSeed` (core) pending satırları

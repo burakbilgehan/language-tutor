@@ -1,14 +1,21 @@
-// Tek seferlik: eksik (pending/error) gramer + kanji içeriğini yüksek
-// concurrency ile üretir. Çalıştır: LLM_CONCURRENCY=100 npx tsx --tsconfig tsconfig.json scripts/blast-generate.ts
+// Tek seferlik: eksik (pending/error) gramer + kanji + vocab içeriğini
+// yüksek concurrency ile üretir.
+// Çalıştır: LLM_CONCURRENCY=8 BLAST_CONC=8 npx tsx --tsconfig tsconfig.json scripts/blast-generate.ts
+// Not: conc=100 denendi, makine CLI süreçlerini kaldıramayıp çağrılar 120s
+// timeout'a düştü (%90 fail) — 8-16 bandında kal.
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import * as tables from "@/db/schema";
 import { getProvider } from "@/lib/llm/provider";
-import { generateGrammarContent, generateKanjiContent } from "@/core/llm-gen";
+import {
+  generateGrammarContent,
+  generateKanjiContent,
+  generateVocabContent,
+} from "@/core/llm-gen";
 
-const CONC = Number(process.env.BLAST_CONC ?? 100);
+const CONC = Number(process.env.BLAST_CONC ?? 8);
 
-type Item = { kind: "grammar" | "kanji"; id: string; label: string };
+type Item = { kind: "grammar" | "kanji" | "vocab"; id: string; label: string };
 
 async function main() {
   const gen = getProvider();
@@ -22,6 +29,12 @@ async function main() {
     .from(tables.kanjiEntries)
     .where(inArray(tables.kanjiEntries.status, ["pending", "error"]))
     .all();
+  const ve = db
+    .select()
+    .from(tables.vocabEntries)
+    .where(inArray(tables.vocabEntries.status, ["pending", "error"]))
+    .orderBy(tables.vocabEntries.position)
+    .all();
   const items: Item[] = [
     ...gt.map((t) => ({
       kind: "grammar" as const,
@@ -33,9 +46,14 @@ async function main() {
       id: k.id,
       label: `k:${k.char}`,
     })),
+    ...ve.map((v) => ({
+      kind: "vocab" as const,
+      id: v.id,
+      label: `v:${v.word}`,
+    })),
   ];
   console.log(
-    `todo: grammar=${gt.length} kanji=${ke.length} toplam=${items.length} conc=${CONC}`
+    `todo: grammar=${gt.length} kanji=${ke.length} vocab=${ve.length} toplam=${items.length} conc=${CONC}`
   );
 
   let i = 0,
@@ -50,7 +68,9 @@ async function main() {
         try {
           if (it.kind === "grammar")
             await generateGrammarContent(db as never, gen, it.id);
-          else await generateKanjiContent(db as never, gen, it.id);
+          else if (it.kind === "kanji")
+            await generateKanjiContent(db as never, gen, it.id);
+          else await generateVocabContent(db as never, gen, it.id);
           ok++;
         } catch (e) {
           fail++;

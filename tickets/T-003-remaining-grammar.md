@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: Kalan grammar üretimi (zh 99 + ja 16)
-status: todo
+status: done
 priority: p1
 effort: S
 confidence: high
@@ -17,3 +17,7 @@ yenilenince tek seferde kapat (~1 saat, c=3):
 
 Error'daki job'lar otomatik canlanmaz; batch çağrısı şart. Kanji N1
 kuyruğunu BAŞLATMA (T-007, düşük değer).
+
+**done (2026-07-18)**: Bugünkü blast koşuları kapattı — grammar_topics
+554/554 ready, pending/error sıfır. `seed:grammar` re-export bekliyor
+(arka plan pipeline, T-023 QA sonrası).
