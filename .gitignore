@@ -46,3 +46,5 @@ public/strokes-data
 
 # claude code local state (settings + worktrees)
 .claude/
+.wrangler/
+.static-build-aside/
