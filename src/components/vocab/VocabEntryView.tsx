@@ -107,12 +107,14 @@ export function VocabEntryView({ word }: { word: string }) {
         >
           {s.backToList}
         </Link>
-        <h1 className="font-display text-3xl font-bold">{entry.word}</h1>
+        <h1 className="font-display text-3xl font-bold" lang="zh-Hans">
+          {entry.word}
+        </h1>
         <div className="min-w-0">
           <div className="text-lg text-ink-soft">{entry.reading}</div>
           {entry.traditional && (
             <div className="text-xs text-ink-soft">
-              {s.traditional}: {entry.traditional}
+              {s.traditional}: <span lang="zh-Hans">{entry.traditional}</span>
             </div>
           )}
         </div>
@@ -127,6 +129,7 @@ export function VocabEntryView({ word }: { word: string }) {
           {entry.classifiers.map((c) => (
             <span
               key={c}
+              lang="zh-Hans"
               className="rounded-full bg-surface px-3 py-1 shadow-cozy"
             >
               {c}
@@ -193,7 +196,9 @@ export function VocabEntryView({ word }: { word: string }) {
                 {entry.content.chars.map((c, i) => (
                   <div key={i} className="rounded-xl bg-background p-4">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl">{c.char}</span>
+                      <span className="text-2xl" lang="zh-Hans">
+                        {c.char}
+                      </span>
                       <span className="text-sm text-ink-soft">{c.reading}</span>
                       <span className="text-sm font-medium">{c.meaning_tr}</span>
                     </div>

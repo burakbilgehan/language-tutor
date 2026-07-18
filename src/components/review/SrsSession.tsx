@@ -7,6 +7,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useProfileMeta } from "@/lib/use-profile-meta";
 import { srsDue, srsReview } from "@/lib/client-api";
 
 const S = {
@@ -54,6 +55,8 @@ const RATINGS: { value: 0 | 1 | 2 | 3; cls: string }[] = [
 export function SrsSession() {
   const t = useStrings(S);
   const router = useRouter();
+  const targetLanguage = useProfileMeta()?.targetLanguage;
+  const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
   const [cards, setCards] = useState<CardDto[] | null>(null);
   const [idx, setIdx] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -128,7 +131,7 @@ export function SrsSession() {
           className="flex min-h-72 w-full flex-col items-center justify-center gap-3 rounded-cozy bg-surface p-8 text-center shadow-cozy transition-transform active:scale-[0.99] cursor-pointer disabled:cursor-default"
         >
           <div className="text-4xl font-semibold">
-            <Furigana text={card.front} />
+            <Furigana text={card.front} lang={cjkLang} />
           </div>
           {revealed ? (
             <>
@@ -139,8 +142,8 @@ export function SrsSession() {
                 {card.back}
               </div>
               {card.example && (
-                <div lang="ja" className="text-sm text-ink-soft">
-                  {card.example}
+                <div className="text-sm text-ink-soft">
+                  <Furigana text={card.example} lang={cjkLang} />
                 </div>
               )}
             </>

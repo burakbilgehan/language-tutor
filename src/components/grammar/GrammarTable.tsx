@@ -1,7 +1,13 @@
 import type { GrammarTable as GrammarTableData } from "@/lib/llm/schemas";
 import { Furigana } from "@/components/shared/Furigana";
 
-export function GrammarTable({ table }: { table: GrammarTableData }) {
+export function GrammarTable({
+  table,
+  lang,
+}: {
+  table: GrammarTableData;
+  lang?: "ja" | "zh" | null;
+}) {
   return (
     <figure className="rounded-cozy bg-surface p-5 shadow-cozy">
       <figcaption className="mb-3 font-semibold text-accent">
@@ -16,7 +22,7 @@ export function GrammarTable({ table }: { table: GrammarTableData }) {
                   key={i}
                   className="sticky top-0 border-b-2 border-accent-soft bg-surface-2 px-3 py-2 text-left font-semibold"
                 >
-                  <Furigana text={h} />
+                  <Furigana text={h} lang={lang} />
                 </th>
               ))}
             </tr>
@@ -31,7 +37,7 @@ export function GrammarTable({ table }: { table: GrammarTableData }) {
                       ci === 0 ? "text-base font-medium" : ""
                     }`}
                   >
-                    <Furigana text={cell} />
+                    <Furigana text={cell} lang={lang} />
                   </td>
                 ))}
               </tr>
@@ -43,7 +49,7 @@ export function GrammarTable({ table }: { table: GrammarTableData }) {
         <ul className="mt-3 flex flex-col gap-1 text-xs text-ink-soft">
           {table.footnotes_tr.map((f, i) => (
             <li key={i}>
-              ※ <Furigana text={f} />
+              ※ <Furigana text={f} lang={lang} />
             </li>
           ))}
         </ul>

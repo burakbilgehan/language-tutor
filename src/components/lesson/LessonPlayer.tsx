@@ -172,6 +172,8 @@ export function LessonPlayer({
 }) {
   const t = useStrings(S);
   const router = useRouter();
+  const targetLanguage = useProfileMeta()?.targetLanguage;
+  const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
   const exit = useCallback(() => {
     if (onExit) onExit();
     else router.push("/map");
@@ -372,7 +374,7 @@ export function LessonPlayer({
                 {lesson.examples.map((ex, i) => (
                   <div key={i} className="rounded-xl bg-background p-4">
                     <div className="text-xl">
-                      <Furigana text={ex.target} />
+                      <Furigana text={ex.target} lang={cjkLang} />
                     </div>
                     {ex.reading && (
                       <div className="text-sm text-ink-soft">{ex.reading}</div>
@@ -454,6 +456,7 @@ function ExerciseCard({
     acceptAlso: string[];
   } | null>(null);
   const targetLanguage = useProfileMeta()?.targetLanguage;
+  const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
 
   const submit = async (value: string, selfVerdict?: boolean) => {
     setGrading(true);
@@ -496,7 +499,7 @@ function ExerciseCard({
       <h2 className="text-lg font-semibold">{exercise.promptTr}</h2>
       {exercise.targetText && (
         <div className="mt-3 rounded-xl bg-background p-4 text-xl">
-          <Furigana text={exercise.targetText} />
+          <Furigana text={exercise.targetText} lang={cjkLang} />
         </div>
       )}
 
@@ -519,7 +522,7 @@ function ExerciseCard({
                     : "border-surface-2 bg-background hover:border-accent-soft"
                 }`}
               >
-                <Furigana text={opt} />
+                <Furigana text={opt} lang={cjkLang} />
               </button>
             ))}
           </div>
@@ -577,7 +580,7 @@ function ExerciseCard({
               {t.selfCheckExpected}
             </div>
             <div className="mt-1 text-lg">
-              <Furigana text={selfCheck.answer} />
+              <Furigana text={selfCheck.answer} lang={cjkLang} />
             </div>
             {selfCheck.acceptAlso.length > 0 && (
               <div className="mt-2 text-sm text-ink-soft">

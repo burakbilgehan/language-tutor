@@ -152,7 +152,9 @@ export function VocabSidebar() {
       }`}
     >
       <span className="min-w-0 truncate">
-        <span className="mr-2 text-base">{v.word}</span>
+        <span className="mr-2 text-base" lang="zh-Hans">
+          {v.word}
+        </span>
         <span className="mr-2 text-xs text-ink-soft">{v.reading}</span>
         <span className="text-xs text-ink-soft">{v.meaningsEn[0]}</span>
       </span>

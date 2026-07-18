@@ -49,6 +49,10 @@
   --color-danger: var(--danger);
   --font-display: var(--font-fraunces);
   --font-sans: var(--font-nunito);
+  --font-cjk-ja: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+    "Noto Sans JP", sans-serif;
+  --font-cjk-zh: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans SC", sans-serif;
   --shadow-cozy: 0 2px 8px rgb(46 42 36 / 0.06), 0 8px 24px rgb(46 42 36 / 0.08);
   --radius-cozy: 1.25rem;
 }
@@ -83,12 +87,22 @@ h3,
   font-family: var(--font-fraunces), Georgia, serif;
 }
 
-/* Japanese text gets a JP stack, breathing room, and a size bump — kanji and
-   dakuten at Latin sizes are illegible; 1.55em keeps them readable without
-   zooming. */
+/* CJK text gets an explicit script-specific font stack, breathing room, and a
+   size bump — kanji/hanzi at Latin sizes are illegible; 1.55em keeps them
+   readable without zooming. Without an explicit stack the browser falls back
+   to whichever system font happens to cover the glyph, per element, which
+   reads as "the font keeps changing"; without lang="ja"/"zh" the same
+   Han-unified code point can render with the wrong regional glyph shape. */
 [lang="ja"] {
-  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
-    "Noto Sans JP", sans-serif;
+  font-family: var(--font-cjk-ja);
+  font-size: 1.55em;
+  line-height: 1.9;
+}
+
+[lang="zh"],
+[lang="zh-Hans"],
+[lang="zh-CN"] {
+  font-family: var(--font-cjk-zh);
   font-size: 1.55em;
   line-height: 1.9;
 }
