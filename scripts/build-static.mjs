@@ -9,6 +9,13 @@ import fs from "node:fs";
 const ASIDE = ["src/app/api"];
 const STASH = ".static-build-aside";
 
+// Önceki build yarıda kaldıysa stash'teki tek kopyayı silmeden önce geri koy.
+if (fs.existsSync(STASH)) {
+  for (const p of ASIDE) {
+    const dst = `${STASH}/${p.replace(/\//g, "__")}`;
+    if (fs.existsSync(dst) && !fs.existsSync(p)) fs.renameSync(dst, p);
+  }
+}
 fs.rmSync(STASH, { recursive: true, force: true });
 fs.mkdirSync(STASH, { recursive: true });
 const moved = [];
