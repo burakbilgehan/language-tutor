@@ -1,7 +1,7 @@
 ---
 id: T-011
 title: Mevcut nl/zh profillerine yan görev backfill
-status: todo
+status: wontfix
 priority: p2
 effort: S
 confidence: high
@@ -20,3 +20,6 @@ ya lazy self-heal (roadmap açılışında curriculum'da hiç side_quest yoksa
 ilk chapter için LLM'den üret) ya da tek seferlik script. Self-heal
 tercih — save import edilen eski kayıtları da düzeltir. LLM çağrısı
 gerektirdiği için llmConfigured gate + job dedupe şart.
+
+**wontfix (2026-07-18)**: Side quest özelliği tamamen kaldırılıyor (T-018,
+kullanıcı kararı) — backfill anlamsızlaştı.
