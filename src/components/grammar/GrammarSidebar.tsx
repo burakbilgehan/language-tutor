@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLlmStatus } from "@/lib/llm-status";
+import { useListFocus } from "@/lib/use-list-focus";
 import { grammarTopics, grammarGenerate, grammarGenerateBatch } from "@/lib/client-api";
 
 interface TopicDto {
@@ -151,6 +152,33 @@ export function GrammarSidebar() {
   const [batchBusy, setBatchBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Deep-link list focus (palette navigation): narrow the level filter to the
+  // active topic's level, scroll its row into view, flash it. A manual click
+  // on a visible row only flashes.
+  const flashSlug = useListFocus(
+    activeSlug,
+    !!topics?.length,
+    (slug) => document.getElementById(`grammar-topic-${slug}`),
+    (slug) => {
+      const level = topics?.find((t) => t.slug === slug)?.level;
+      if (!level || (levelFilter !== null && levelFilter !== level))
+        return false;
+      // Level visible; the <details> is uncontrolled — DOM is the truth.
+      return !!document.querySelector<HTMLDetailsElement>(
+        `details[data-grammar-level="${level}"]`,
+      )?.open;
+    },
+    (slug) => {
+      const level = topics?.find((t) => t.slug === slug)?.level;
+      if (!level) return;
+      setLevelFilter(level);
+      const d = document.querySelector<HTMLDetailsElement>(
+        `details[data-grammar-level="${level}"]`,
+      );
+      if (d) d.open = true;
+    },
+  );
+
   const load = useCallback(async () => {
     const d = await grammarTopics().catch(() => ({ topics: [] }));
     const list: TopicDto[] = d.topics ?? [];
@@ -264,7 +292,7 @@ export function GrammarSidebar() {
           (t) => t.status === "pending" || t.status === "error"
         ).length;
         return (
-          <details key={lvl} open>
+          <details key={lvl} open data-grammar-level={lvl}>
             <summary className="mb-2 flex cursor-pointer flex-wrap items-center gap-2 font-bold text-ink">
               <span>{s.levels[lvl] ?? lvl}</span>
               <span className="text-xs font-normal text-ink-soft">
@@ -293,8 +321,11 @@ export function GrammarSidebar() {
                   {list.map((t) => (
                     <Link
                       key={t.slug}
+                      id={`grammar-topic-${t.slug}`}
                       href={`/grammar?topic=${encodeURIComponent(t.slug)}`}
                       className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
+                        flashSlug === t.slug ? "ring-2 ring-accent " : ""
+                      }${
                         activeSlug === t.slug
                           ? "bg-accent-soft font-semibold text-ink"
                           : "bg-surface text-ink hover:bg-surface-2"

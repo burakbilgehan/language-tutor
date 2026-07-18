@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLlmStatus } from "@/lib/llm-status";
+import { useListFocus } from "@/lib/use-list-focus";
 import {
   vocabList,
   vocabGenerate,
@@ -105,6 +106,23 @@ export function VocabSidebar() {
     };
   }, [load]);
 
+  // Deep-link list focus (palette navigation): open only the level group of
+  // the active word, scroll its row into view, flash it. A manual click on a
+  // visible row only flashes — section layout stays put.
+  const flashWord = useListFocus(
+    activeWord,
+    !!entries?.length,
+    (w) => document.getElementById(`vocab-row-${w}`),
+    (w) => {
+      const level = entries?.find((v) => v.word === w)?.level;
+      return !!level && openLevels.has(level);
+    },
+    (w) => {
+      const level = entries?.find((v) => v.word === w)?.level;
+      if (level) setOpenLevels(new Set([level]));
+    },
+  );
+
   const generateOne = async (e: React.MouseEvent, v: VocabEntrySummary) => {
     e.preventDefault();
     e.stopPropagation();
@@ -144,8 +162,11 @@ export function VocabSidebar() {
   const row = (v: VocabEntrySummary) => (
     <Link
       key={v.word}
+      id={`vocab-row-${v.word}`}
       href={`/vocab?word=${encodeURIComponent(v.word)}`}
       className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
+        flashWord === v.word ? "ring-2 ring-accent " : ""
+      }${
         activeWord === v.word
           ? "bg-accent-soft font-semibold text-ink"
           : "bg-surface text-ink hover:bg-surface-2"
