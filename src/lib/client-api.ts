@@ -462,39 +462,6 @@ export async function translateText(
   return { translation: translation || null };
 }
 
-// ------------------------------------------------------------------ Quest
-
-export async function questStart(nodeId: string): Promise<{
-  node: { id: string; titleTr: string; xpReward: number };
-  quest: unknown;
-}> {
-  if (!IS_STATIC) {
-    return fetchJson(`/api/quests/${nodeId}/start`, { method: "POST" });
-  }
-  const { db } = await browserDb();
-  const coreQ = await import("@/core/quest");
-  const cached = coreQ.getQuestCached(db, nodeId);
-  if (cached.status === "notFound") throw new Error("Yan görev bulunamadı");
-  if (cached.status === "ready")
-    return { node: cached.node, quest: cached.quest };
-  const gen = await browserGen();
-  const coreP = await import("@/core/profile");
-  const coreG = await import("@/core/llm-gen");
-  const { persistSoon } = await browserDb();
-  const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
-  const payload = await coreG.generateQuestPayload(db, gen, profile, cached.node);
-  persistSoon();
-  return {
-    node: {
-      id: cached.node.id,
-      titleTr: cached.node.titleTr,
-      xpReward: cached.node.xpReward,
-    },
-    quest: payload,
-  };
-}
-
 // ------------------------------------------------------------------ Save (statik: tarayıcı imajı)
 
 export async function saveExportApi(): Promise<void> {

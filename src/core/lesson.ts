@@ -116,8 +116,8 @@ export function openNode(db: AppDb, nodeId: string): OpenNodeResult {
   };
 }
 
-/** Tamamlama akışı: node completed + ardıl unlock, side-quest payload
- * temizliği, SRS hasadı, XP. Prefetch/auto-extend çağıranda. */
+/** Tamamlama akışı: node completed + ardıl unlock, SRS hasadı, XP.
+ * Prefetch/auto-extend çağıranda. */
 export function completeNodeFlow(
   db: AppDb,
   nodeId: string,
@@ -137,15 +137,6 @@ export function completeNodeFlow(
 
   const alreadyCompleted = node.status === "completed";
   const unlockedNodeIds = alreadyCompleted ? [] : completeNode(db, nodeId);
-
-  // Side quests: clear the cached drill payload on completion so the NEXT run
-  // gets fresh content (re-opens without completing stay free).
-  if (node.nodeType === "side_quest") {
-    db.update(tables.nodes)
-      .set({ sideQuestPayload: null })
-      .where(eq(tables.nodes.id, nodeId))
-      .run();
-  }
 
   // Harvest lesson vocab into SRS cards (dedup via unique index). Yeni kart
   // sayısı sürücü-bağımsız ölçülür (better-sqlite3 `changes` döner, sql-js
@@ -187,13 +178,10 @@ export function completeNodeFlow(
   let xpAwarded = 0;
   if (!alreadyCompleted) {
     xpAwarded = node.xpReward;
-    awardXp(
-      db,
-      profileId,
-      xpAwarded,
-      node.nodeType === "side_quest" ? "side_quest" : "lesson_complete",
-      nodeId
-    );
+    // "side_quest" xpEvents.reason stays possible only for legacy quest
+    // nodes (T-018 removed side quests going forward); completeNode()
+    // above already no-ops for them, so this only fires for main nodes.
+    awardXp(db, profileId, xpAwarded, "lesson_complete", nodeId);
   }
 
   return { xpAwarded, newCards, unlockedNodeIds };

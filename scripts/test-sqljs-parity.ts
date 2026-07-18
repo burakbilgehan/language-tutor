@@ -59,7 +59,7 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   const { getStats } = await import("@/core/stats");
   const { listProfiles } = await import("@/core/profile");
   const rm = getRoadmap(db as never, profile!.id);
-  check("getRoadmap", rm !== null, `→ ${rm?.units.length} ünite, ${rm?.sideQuests.length} yan görev, xp=${rm?.xpTotal}`);
+  check("getRoadmap", rm !== null, `→ ${rm?.units.length} ünite, xp=${rm?.xpTotal}`);
   const st = getStats(db as never);
   check("getStats", st.llm.totalCalls > 0, `→ ${st.llm.totalCalls} çağrı, $${st.llm.totalUsd.toFixed(2)}`);
   const ps = listProfiles(db as never);
@@ -119,12 +119,11 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
 }
 
 
-// 8. Süpürme: overview/kanji/chat/lookup/quest-cached/translate-cached
+// 8. Süpürme: overview/kanji/chat/lookup/translate-cached
 {
   const { getOverview } = await import("@/core/overview");
   const { listKanji, kanjiLookup } = await import("@/core/kanji");
   const { chatHistory } = await import("@/core/chat");
-  const { getQuestCached } = await import("@/core/quest");
   const { cachedTranslation } = await import("@/core/translate");
   const { setActiveProfile: sap } = await import("@/core/profile");
   const schema = await import("@/db/schema");
@@ -147,12 +146,6 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
 
   const ch = chatHistory(db as never, profile!.id);
   check("chatHistory", Array.isArray(ch.messages), `→ ${ch.messages.length} mesaj`);
-
-  const questRow = db.select().from(schema.nodes).all().find((n) => n.nodeType === "side_quest" && n.sideQuestPayload);
-  if (questRow) {
-    const q = getQuestCached(db as never, questRow.id);
-    check("quest cached", q.status === "ready");
-  }
 
   const tr = db.select().from(schema.translations).limit(1).get();
   if (tr) {
@@ -315,13 +308,11 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   );
   const mains = db.select().from(schema.nodes).all()
     .filter((n) => n.nodeType === "main" && n.unitId && unitIds.has(n.unitId));
-  const quests = db.select().from(schema.nodes).all()
-    .filter((n) => n.nodeType === "side_quest" && n.unitId && unitIds.has(n.unitId));
   // Prereq zinciri tek parça mı: tam bir baş olmalı, gerisi zincirde.
   const ids = new Set(mains.map((n) => n.id));
   const heads = mains.filter((n) => !n.prereqNodeId || !ids.has(n.prereqNodeId));
   check("üniteler + nodelar yazıldı", unitIds.size > 0 && mains.length > 0,
-    `→ ${unitIds.size} ünite, ${mains.length} node, ${quests.length} yan görev`);
+    `→ ${unitIds.size} ünite, ${mains.length} node`);
   check("prereq zinciri tek parça", heads.length === 1, `→ ${heads.length} baş`);
 
   // Gramer indeksi dil-geneli (profil başına değil) — nl konuları mevcut olmalı.

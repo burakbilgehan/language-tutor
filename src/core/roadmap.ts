@@ -51,6 +51,10 @@ export function getRoadmap(
     .orderBy(asc(tables.units.position))
     .all();
 
+  // Side quests were removed (T-018); quest-typed nodes are legacy dead data
+  // (schema.ts untouched on purpose — see SideQuestPayload comment in
+  // schemas.ts). Filter them out here so old profiles with quest nodes don't
+  // show broken UI.
   const allNodes = unitRows.flatMap((u) =>
     db
       .select()
@@ -58,18 +62,13 @@ export function getRoadmap(
       .where(eq(tables.nodes.unitId, u.id))
       .orderBy(asc(tables.nodes.position))
       .all()
-  );
+  ).filter((n) => n.nodeType !== "side_quest");
 
   const mainByUnit = new Map<string, typeof allNodes>();
-  const sideQuests: typeof allNodes = [];
   for (const n of allNodes) {
-    if (n.nodeType === "side_quest") {
-      sideQuests.push(n);
-    } else {
-      const list = mainByUnit.get(n.unitId) ?? [];
-      list.push(n);
-      mainByUnit.set(n.unitId, list);
-    }
+    const list = mainByUnit.get(n.unitId) ?? [];
+    list.push(n);
+    mainByUnit.set(n.unitId, list);
   }
 
   const next = topLevel ? nextLevelFor(lang, topLevel) : null;
@@ -87,7 +86,6 @@ export function getRoadmap(
       level: u.level,
       nodes: (mainByUnit.get(u.id) ?? []).map(publicNode),
     })),
-    sideQuests: sideQuests.map(publicNode),
     chapters: chapterRows.map((c) => ({
       level: c.level,
       status: c.status,
@@ -103,8 +101,6 @@ export function getRoadmap(
 function publicNode(n: typeof tables.nodes.$inferSelect) {
   return {
     id: n.id,
-    nodeType: n.nodeType,
-    sideQuestKind: n.sideQuestKind,
     lessonType: n.lessonType,
     titleTr: n.titleTr,
     subtitleTr: n.subtitleTr,
@@ -125,7 +121,9 @@ export function completeNode(db: AppDb, nodeId: string): string[] {
     .limit(1)
     .get();
   if (!node) throw new Error("Node bulunamadı");
-  if (node.nodeType === "side_quest") return []; // side quests stay available
+  // Legacy quest-typed nodes (side quests removed, T-018): no-op guard in
+  // case a stale link/bookmark still points at one.
+  if (node.nodeType === "side_quest") return [];
 
   db.update(tables.nodes)
     .set({ status: "completed", completedAt: new Date() })
@@ -150,8 +148,9 @@ export function completeNode(db: AppDb, nodeId: string): string[] {
 
 /**
  * True if this main node is the tail of the whole curriculum chain, i.e. no
- * other main node lists it as prereq. Side quests are never a tail. Pure read;
- * used by the complete route to decide whether to auto-extend.
+ * other main node lists it as prereq. Legacy quest-typed nodes (T-018) are
+ * never a tail. Pure read; used by the complete route to decide whether to
+ * auto-extend.
  */
 export function isCurriculumTail(db: AppDb, nodeId: string): boolean {
   const node = db

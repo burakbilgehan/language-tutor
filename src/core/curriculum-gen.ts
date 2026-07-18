@@ -205,8 +205,8 @@ function buildPriorSummary(
 /**
  * Generates ONE chapter (a level of the profile's scheme: JLPT/HSK/CEFR) and
  * appends it to the profile's single curriculum. The first chapter creates
- * the curriculum + side quests; later chapters stitch onto the existing
- * prereq chain. `level: null` means the scheme's first level.
+ * the curriculum; later chapters stitch onto the existing prereq chain.
+ * `level: null` means the scheme's first level.
  */
 export async function generateChapter(
   db: AppDb,
@@ -311,22 +311,6 @@ export async function generateChapter(
     const basePosition =
       basePositionRow.length > 0 ? basePositionRow[0].position + 1 : 0;
     const chainTail = findChainTail(db, curriculumId);
-    // BU curriculum'da yan görev var mı — global bakmak diğer profillerin
-    // görevlerini sayıp yeni dilin görevlerini hiç oluşturmamaya yol açar
-    // (ja görevleri nl/zh'yi bastırıyordu).
-    const hasSideQuests =
-      db
-        .select({ id: tables.nodes.id })
-        .from(tables.nodes)
-        .innerJoin(tables.units, eq(tables.nodes.unitId, tables.units.id))
-        .where(
-          and(
-            eq(tables.nodes.nodeType, "side_quest"),
-            eq(tables.units.curriculumId, curriculumId)
-          )
-        )
-        .limit(1)
-        .get() != null;
 
     db.transaction((tx) => {
       if (isFirst) {
@@ -348,11 +332,9 @@ export async function generateChapter(
       }
 
       let prevMainNodeId: string | null = chainTail;
-      let firstUnitId: string | null = null;
 
       chapter.units.forEach((unit, ui) => {
         const unitId = nanoid();
-        firstUnitId ??= unitId;
         tx.insert(tables.units)
           .values({
             id: unitId,
@@ -389,26 +371,6 @@ export async function generateChapter(
           prevMainNodeId = nodeId;
         });
       });
-
-      // Side quests: only ever created once (first chapter / none exist yet).
-      if (isFirst && !hasSideQuests) {
-        chapter.side_quests.forEach((sq, i) => {
-          tx.insert(tables.nodes)
-            .values({
-              id: nanoid(),
-              unitId: firstUnitId!,
-              position: 1000 + i,
-              nodeType: "side_quest",
-              sideQuestKind: sq.kind,
-              titleTr: sq.title_tr,
-              subtitleTr: sq.description_tr,
-              objectives: [],
-              xpReward: 15,
-              status: "available",
-            })
-            .run();
-        });
-      }
 
       // Grammar cheatsheet skeleton (idempotent; safe every chapter).
       grammarIndexFor(profile.targetLanguage).forEach((g, i) => {

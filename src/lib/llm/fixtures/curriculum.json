@@ -113,22 +113,5 @@
         }
       ]
     }
-  ],
-  "side_quests": [
-    {
-      "kind": "kana_drill",
-      "title_tr": "Kana Antrenmanı",
-      "description_tr": "Hiragana ve katakana hız alıştırması"
-    },
-    {
-      "kind": "pop_quiz",
-      "title_tr": "Sürpriz Quiz",
-      "description_tr": "Öğrendiklerinden karışık sorular"
-    },
-    {
-      "kind": "vocab_review",
-      "title_tr": "Kelime Tekrarı",
-      "description_tr": "SRS ile kelime kartları"
-    }
   ]
 }

@@ -5,14 +5,6 @@ import { z } from "zod";
 // DB json columns and UI components consume the inferred types from here.
 // ---------------------------------------------------------------------------
 
-export const SideQuestKind = z.enum([
-  "kana_drill",
-  "kanji",
-  "pop_quiz",
-  "vocab_review",
-]);
-export type SideQuestKind = z.infer<typeof SideQuestKind>;
-
 export const LessonType = z.enum(["lesson", "checkpoint", "boss"]);
 export type LessonType = z.infer<typeof LessonType>;
 
@@ -33,19 +25,10 @@ export const CurriculumUnitSchema = z.object({
   nodes: z.array(CurriculumNodeSchema).min(3).max(10),
 });
 
-export const CurriculumSideQuestSchema = z.object({
-  kind: SideQuestKind,
-  title_tr: z.string(),
-  description_tr: z.string(),
-});
-
-// min(2)/min(0): a single appended JLPT chapter is a small block of units and
-// (for non-first chapters) emits no side quests. The initial N5 chapter still
-// produces a full journey by prompt design.
+// min(2): a single appended chapter is a small block of units.
 export const CurriculumSchema = z.object({
   title: z.string(),
   units: z.array(CurriculumUnitSchema).min(2).max(18),
-  side_quests: z.array(CurriculumSideQuestSchema).min(0),
 });
 export type Curriculum = z.infer<typeof CurriculumSchema>;
 
@@ -225,34 +208,19 @@ export const VocabContentSchema = z.object({
 });
 export type VocabContent = z.infer<typeof VocabContentSchema>;
 
-// -- Side quest payloads -----------------------------------------------------
-
-export const SideQuestItemSchema = z
-  .object({
-    type: z.enum(["mcq", "type_answer"]),
-    prompt_tr: z.string(),
-    target_text: z.string().nullish(),
-    options: z.array(z.string()).nullish(),
-    answer: z.string(),
-  })
-  .superRefine((item, ctx) => {
-    if (item.type === "mcq") {
-      if (!item.options || item.options.length < 2) {
-        ctx.addIssue({
-          code: "custom",
-          message: "mcq için options zorunlu (en az 2 seçenek).",
-        });
-      } else if (!item.options.includes(item.answer)) {
-        ctx.addIssue({
-          code: "custom",
-          message: `mcq answer, options'tan birinin AYNEN kendisi olmalı; "${item.answer}" seçeneklerde yok.`,
-        });
-      }
-    }
-  });
-
-export const SideQuestPayloadSchema = z.object({
-  title_tr: z.string(),
-  items: z.array(SideQuestItemSchema).min(5).max(20),
-});
-export type SideQuestPayload = z.infer<typeof SideQuestPayloadSchema>;
+// -- Side quest payload (legacy) ---------------------------------------------
+// Side quests were removed (T-018). `nodes.side_quest_payload` and quest-typed
+// `nodes` rows stay in the DB on purpose as dead data — dropping the column
+// would force a SAVE_SCHEMA_VERSION bump and reject old saves for no benefit.
+// This type only exists to keep that column's `.$type<...>()` annotation
+// compiling; there is no runtime schema or generator behind it anymore.
+export type SideQuestPayload = {
+  title_tr: string;
+  items: {
+    type: "mcq" | "type_answer";
+    prompt_tr: string;
+    target_text?: string | null;
+    options?: string[] | null;
+    answer: string;
+  }[];
+};
