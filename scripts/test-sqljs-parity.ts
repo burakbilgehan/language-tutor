@@ -136,6 +136,12 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   const kl = listKanji(db as never, "ja");
   check("listKanji", kl.length > 100, `→ ${kl.length} kanji`);
 
+  const { listVocab, findVocab } = await import("@/core/vocab");
+  const vl = listVocab(db as never, "zh"); // seed 4991 HSK kelimesi (in-memory)
+  check("listVocab (zh seed)", vl.length > 4000, `→ ${vl.length} kelime`);
+  const vf = findVocab(db as never, "zh", vl[0]?.word ?? "");
+  check("findVocab", !!vf && vf.reading.length > 0, `→ ${vf?.word} ${vf?.reading}`);
+
   const look = kanjiLookup(db as never, "ja", "日本");
   check("kanjiLookup", look.kanji.length > 0, `→ ${look.kanji.map(k=>k.char).join("")}, word=${!!look.word}`);
 
@@ -169,6 +175,7 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
     lesson: fsx.readFileSync("src/lib/llm/fixtures/lesson.json", "utf8"),
     grade: fsx.readFileSync("src/lib/llm/fixtures/grade.json", "utf8"),
     chat: fsx.readFileSync("src/lib/llm/fixtures/chat.txt", "utf8"),
+    vocab: fsx.readFileSync("src/lib/llm/fixtures/vocab.json", "utf8"),
   };
   const mockGen = {
     async generateJson(o: { fixtureKey: string; schema: { parse: (x: unknown) => unknown } }) {
@@ -187,6 +194,19 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
     const after = db.select().from(schema.grammarTopics)
       .where(eq(schema.grammarTopics.id, pending.id)).limit(1).get();
     check("generateGrammarContent", after?.status === "ready" && !!after.content);
+  }
+
+  // vocab üretimi
+  {
+    const { generateVocabContent } = await import("@/core/llm-gen");
+    const pendingV = db.select().from(schema.vocabEntries)
+      .where(eq(schema.vocabEntries.status, "pending")).limit(1).get();
+    if (pendingV) {
+      await generateVocabContent(db as never, mockGen, pendingV.id);
+      const after = db.select().from(schema.vocabEntries)
+        .where(eq(schema.vocabEntries.id, pendingV.id)).limit(1).get();
+      check("generateVocabContent", after?.status === "ready" && !!after.content);
+    } else check("vocab pending kaydı yok", false);
   }
 
   // lesson üretimi (lesson'sız ya da error'lu bir node bul; yoksa mevcut ready birini yeniden üret)

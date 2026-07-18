@@ -192,6 +192,39 @@ export const KanjiContentSchema = z.object({
 });
 export type KanjiContent = z.infer<typeof KanjiContentSchema>;
 
+// -- Vocab entry -------------------------------------------------------------
+
+// Word-level dictionary (HSK sözlük). Like kanji: the reading and English
+// glosses are static index facts (src/lib/vocab-index/) — the LLM only
+// produces the native-language half. Sentences/phrases use the bracket
+// reading notation (学生[xuésheng]) rendered by <Furigana>.
+export const VocabExampleSchema = z.object({
+  sentence: z.string(),
+  translation_tr: z.string(),
+});
+
+export const VocabCollocationSchema = z.object({
+  phrase: z.string(),
+  meaning_tr: z.string(),
+});
+
+export const VocabCharSchema = z.object({
+  char: z.string(),
+  reading: z.string(),
+  meaning_tr: z.string(),
+  hint_tr: z.string().nullish(),
+});
+
+export const VocabContentSchema = z.object({
+  meanings_tr: z.array(z.string()).min(1),
+  note_tr: z.string().nullish(),
+  classifier_note_tr: z.string().nullish(),
+  examples: z.array(VocabExampleSchema).min(2).max(5),
+  collocations: z.array(VocabCollocationSchema).max(6).nullish(),
+  chars: z.array(VocabCharSchema).nullish(),
+});
+export type VocabContent = z.infer<typeof VocabContentSchema>;
+
 // -- Side quest payloads -----------------------------------------------------
 
 export const SideQuestItemSchema = z

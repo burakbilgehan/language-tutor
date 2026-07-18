@@ -6,12 +6,14 @@ import {
   LessonSchema,
   GrammarTopicSchema,
   KanjiContentSchema,
+  VocabContentSchema,
   GradeSchema,
   SideQuestPayloadSchema,
 } from "@/lib/llm/schemas";
 import { lessonPrompt, gradingPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
 import { kanjiPrompt } from "@/lib/llm/prompts/kanji";
+import { vocabPrompt } from "@/lib/llm/prompts/vocab";
 import { chatPrompt } from "@/lib/llm/prompts/chat";
 import { sideQuestPrompt } from "@/lib/llm/prompts/side-quest";
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
@@ -285,6 +287,61 @@ export async function generateKanjiContent(
     db.update(tables.kanjiEntries)
       .set({ status: "error" })
       .where(eq(tables.kanjiEntries.id, entryId))
+      .run();
+    throw err;
+  }
+}
+
+/** runVocabJob'un üretim gövdesi. */
+export async function generateVocabContent(
+  db: AppDb,
+  gen: Gen,
+  entryId: string
+): Promise<void> {
+  const entry = db
+    .select()
+    .from(tables.vocabEntries)
+    .where(eq(tables.vocabEntries.id, entryId))
+    .limit(1)
+    .get();
+  if (!entry) throw new Error("Sözlük kaydı bulunamadı");
+
+  // Personalization follows the entry's language, not the active profile.
+  const profile = db
+    .select()
+    .from(tables.profiles)
+    .where(eq(tables.profiles.targetLanguage, entry.targetLanguage))
+    .limit(1)
+    .get();
+
+  db.update(tables.vocabEntries)
+    .set({ status: "generating" })
+    .where(eq(tables.vocabEntries.id, entryId))
+    .run();
+
+  try {
+    const { system, prompt } = vocabPrompt({
+      entry,
+      selfLevel: profile?.selfLevel ?? "zero",
+      interests: profile?.interests ?? [],
+      nativeLanguage: profile?.nativeLanguage,
+    });
+    const content = await gen.generateJson({
+      system,
+      prompt,
+      schema: VocabContentSchema,
+      fixtureKey: "vocab",
+      tier: "fast",
+      timeoutMs: 120_000,
+    });
+    db.update(tables.vocabEntries)
+      .set({ content, status: "ready", generatedAt: new Date() })
+      .where(eq(tables.vocabEntries.id, entryId))
+      .run();
+  } catch (err) {
+    db.update(tables.vocabEntries)
+      .set({ status: "error" })
+      .where(eq(tables.vocabEntries.id, entryId))
       .run();
     throw err;
   }
