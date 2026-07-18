@@ -69,6 +69,51 @@ export function findProfileByLanguage(db: AppDb, targetLanguage: string) {
     .get();
 }
 
+/** Müfredatı OLAN profillerin dilleri — onboarding "bu dil kullanımda"
+ * kilidi buna bakar. Müfredatsız (yarım kalmış) profil dili kilitlemez;
+ * yeniden onboard edilir (createOrReuseProfile devralır). */
+export function languagesWithCurriculum(db: AppDb): string[] {
+  const rows = db
+    .select({ targetLanguage: tables.profiles.targetLanguage })
+    .from(tables.profiles)
+    .innerJoin(
+      tables.curricula,
+      eq(tables.curricula.profileId, tables.profiles.id)
+    )
+    .all();
+  return [...new Set(rows.map((r) => r.targetLanguage))];
+}
+
+/** Onboarding submit'ini idempotent yapar: aynı dil için MÜFREDATSIZ profil
+ * varsa (yarım kalmış onboarding — profil yazıldı, müfredat üretimi LLM
+ * yokken patladı) draft'la güncelleyip yeniden kullanır; müfredatlıysa
+ * duplicate döner (409 kararı çağıranda). */
+export function createOrReuseProfile(
+  db: AppDb,
+  input: Omit<ProfileInsert, "id">
+): { profile: Profile | null; duplicate: boolean } {
+  const existing = findProfileByLanguage(db, input.targetLanguage);
+  if (existing) {
+    const hasCurriculum =
+      db
+        .select({ id: tables.curricula.id })
+        .from(tables.curricula)
+        .where(eq(tables.curricula.profileId, existing.id))
+        .limit(1)
+        .get() != null;
+    if (hasCurriculum) return { profile: null, duplicate: true };
+    // targetLanguage aynı (findProfileByLanguage bununla buldu) — patch dışı.
+    const patch: Partial<ProfileInsert> = { ...input };
+    delete patch.targetLanguage;
+    db.update(tables.profiles)
+      .set(patch)
+      .where(eq(tables.profiles.id, existing.id))
+      .run();
+    return { profile: setActiveProfile(db, existing.id), duplicate: false };
+  }
+  return { profile: createProfile(db, input), duplicate: false };
+}
+
 export function updateActiveProfile(
   db: AppDb,
   patch: Partial<Omit<Profile, "id" | "targetLanguage">>

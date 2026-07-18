@@ -3,8 +3,8 @@ import { z } from "zod";
 import { db } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import {
-  createProfile,
-  findProfileByLanguage,
+  createOrReuseProfile,
+  languagesWithCurriculum,
   listProfiles,
   updateActiveProfile,
 } from "@/core/profile";
@@ -31,7 +31,11 @@ const ProfilePatch = ProfileInput.omit({ targetLanguage: true }).partial();
 
 export async function GET() {
   const profile = getActiveProfile();
-  return NextResponse.json({ profile: profile ?? null, profiles: listProfiles(db) });
+  return NextResponse.json({
+    profile: profile ?? null,
+    profiles: listProfiles(db),
+    usedLanguages: languagesWithCurriculum(db),
+  });
 }
 
 export async function POST(req: Request) {
@@ -39,13 +43,13 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
-  if (findProfileByLanguage(db, parsed.data.targetLanguage)) {
+  const { profile, duplicate } = createOrReuseProfile(db, parsed.data);
+  if (duplicate) {
     return NextResponse.json(
       { error: "Bu dil için zaten bir profil var. Ayarlardan geçiş yapabilirsin." },
       { status: 409 }
     );
   }
-  const profile = createProfile(db, parsed.data);
   return NextResponse.json({ profile });
 }
 

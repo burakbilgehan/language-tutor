@@ -237,7 +237,7 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   const { createProfile } = await import("@/core/profile");
   const fresh = createProfile(db as never, {
     displayName: "parity-test",
-    targetLanguage: "nl",
+    targetLanguage: "ko",
     selfLevel: "beginner",
     nativeLanguage: "tr",
     uiLanguage: "tr",
@@ -245,17 +245,49 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
     interests: ["muzik"],
     minutesPerWeek: 120,
   } as never);
-  check("createProfile (yeni nl)", !!fresh);
+  check("createProfile (yeni ko/CEFR)", !!fresh);
+
+  // Yarım kalmış onboarding: müfredat yokken aynı dile tekrar submit →
+  // yeni profil DEĞİL, mevcut orphan güncellenip yeniden kullanılmalı.
+  const { createOrReuseProfile } = await import("@/core/profile");
+  const reuse = createOrReuseProfile(db as never, {
+    displayName: "parity-retry",
+    targetLanguage: "ko",
+    selfLevel: "beginner",
+    nativeLanguage: "tr",
+    uiLanguage: "tr",
+    goals: ["seyahat"],
+    interests: ["muzik"],
+    minutesPerWeek: 90,
+  } as never);
+  check(
+    "createOrReuseProfile orphan'ı devralır",
+    !reuse.duplicate && reuse.profile?.id === fresh!.id &&
+      reuse.profile?.displayName === "parity-retry"
+  );
 
   await generateChapter(db as never, mockGen, fresh!.id, null, {
     modelUsed: "fixture",
   });
 
+  // Müfredat oluştuktan sonra aynı dil gerçek duplicate'tir.
+  const dup = createOrReuseProfile(db as never, {
+    displayName: "x",
+    targetLanguage: "ko",
+    selfLevel: "beginner",
+    nativeLanguage: "tr",
+    uiLanguage: "tr",
+    goals: ["seyahat"],
+    interests: ["muzik"],
+    minutesPerWeek: 90,
+  } as never);
+  check("createOrReuseProfile müfredatlıyı korur", dup.duplicate && !dup.profile);
+
   const cur = db.select().from(schema.curricula)
     .where(eq(schema.curricula.profileId, fresh!.id)).limit(1).get();
-  const top = cur ? topChapterLevel(db as never, cur.id, "nl") : null;
+  const top = cur ? topChapterLevel(db as never, cur.id, "ko") : null;
   check("generateChapter ilk bölüm", top === "A1", `→ chapter=${top}`);
-  check("A2'ye uzayabilir", nextLevelFor("nl", top ?? "") === "A2");
+  check("A2'ye uzayabilir", nextLevelFor("ko", top ?? "") === "A2");
 
   const unitIds = new Set(
     db.select().from(schema.units).all()
