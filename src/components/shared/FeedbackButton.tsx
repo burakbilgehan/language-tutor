@@ -8,10 +8,14 @@ import { IS_STATIC } from "@/lib/client-api";
 import { CozyButton } from "./CozyButton";
 
 const REPO_URL = "https://github.com/burakbilgehan/language-tutor";
-// Cloudflare Worker proxy (workers/feedback). When set, feedback is filed
-// anonymously through it — no GitHub account needed and the screenshot is
-// attached automatically. When unset, we fall back to a prefilled issue URL.
-const FEEDBACK_ENDPOINT = process.env.NEXT_PUBLIC_FEEDBACK_URL ?? "";
+// Cloudflare Worker proxy (workers/feedback): files the issue anonymously —
+// no GitHub account needed, screenshot attached automatically. Env var only
+// overrides (e.g. wrangler dev); set it to "off" to force the prefill flow.
+const FEEDBACK_ENDPOINT =
+  process.env.NEXT_PUBLIC_FEEDBACK_URL === "off"
+    ? ""
+    : process.env.NEXT_PUBLIC_FEEDBACK_URL ||
+      "https://kumo-feedback.burakbilgehan-p.workers.dev";
 
 const S = {
   tr: {
