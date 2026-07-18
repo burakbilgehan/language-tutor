@@ -28,6 +28,9 @@ jobs:
         env:
           # Proje sitesi alt yolu: https://<user>.github.io/language-tutor/
           NEXT_PUBLIC_BASE_PATH: /language-tutor
+          # Feedback proxy (workers/feedback). Repo variable olarak set edilir;
+          # boşsa buton GitHub issue prefill fallback'ine düşer.
+          NEXT_PUBLIC_FEEDBACK_URL: ${{ vars.NEXT_PUBLIC_FEEDBACK_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out

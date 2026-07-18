@@ -1,0 +1,14 @@
+name = "kumo-feedback"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+[vars]
+GITHUB_REPO = "burakbilgehan/language-tutor"
+# Comma-separated. The Origin header must match one of these exactly.
+ALLOWED_ORIGINS = "https://burakbilgehan.github.io,http://localhost:3000,http://localhost:3457"
+ASSET_BRANCH = "feedback-assets"
+
+# Secret (set once, never in this file):
+#   npx wrangler secret put GITHUB_TOKEN
+# Fine-grained PAT, ONLY the language-tutor repo, permissions:
+#   Issues: read+write, Contents: read+write.
