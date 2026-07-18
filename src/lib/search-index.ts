@@ -3,7 +3,7 @@
 // mode too. Powers the cmd+K command palette (T-016).
 //
 // The whole point is reading-aware matching: typing "hikari" must surface 光,
-// "nihao" must surface 你好. Kanji↔reading and hanzi↔pinyin are many-to-many,
+// "pengyou" must surface 朋友. Kanji↔reading and hanzi↔pinyin are many-to-many,
 // so results are always a list, tagged by kind.
 
 import { toRomajiReading } from "@/lib/jp";
@@ -29,8 +29,12 @@ export interface SearchResult {
 
 interface Indexed {
   result: SearchResult;
-  /** Pre-folded haystack terms; a query matches if it's a substring of one. */
-  terms: string[];
+  /** Folded readings (romaji/pinyin). Matched exact > prefix > substring. */
+  readings: string[];
+  /** Folded word tokens from glosses/titles. Matched exact > prefix only —
+   *  never substring across a concatenated blob, which is what made "ma"
+   *  match "(used to forM Attribute…)". */
+  tokens: string[];
 }
 
 /** Fold a romaji/kana reading to bare lowercase latin (strips kun markers). */
@@ -40,21 +44,33 @@ function foldJaReading(s: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-/** Fold arbitrary latin query text (used for gloss/title/slug matching). */
-function foldLatin(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+/** Diacritic-insensitive latin fold (Turkish çğışöü, Dutch é…): çekim→cekim. */
+function foldWord(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/ı/g, "i")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+/** Split gloss/title text into folded word tokens. */
+function tokenize(s: string): string[] {
+  return foldWord(s)
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 1);
 }
 
 /**
  * Build the folded search index for a language once (memoize at the call
  * site — it walks ~7500 entries and folds every reading through wanakana).
+ * Entries keep source order, which is level-major in all three indexes —
+ * used as the relevance tiebreak (easier levels first).
  */
 export function buildSearchIndex(targetLanguage: string): Indexed[] {
   const out: Indexed[] = [];
 
   // --- kanji (ja) ---
   for (const k of kanjiIndexFor(targetLanguage)) {
-    const readings = [...k.on, ...k.kun];
     out.push({
       result: {
         kind: "kanji",
@@ -64,11 +80,8 @@ export function buildSearchIndex(targetLanguage: string): Indexed[] {
         level: k.level,
         href: `/stroke?char=${encodeURIComponent(k.char)}`,
       },
-      terms: [
-        k.char,
-        ...readings.map(foldJaReading),
-        ...k.en.map(foldLatin),
-      ].filter(Boolean),
+      readings: [...k.on, ...k.kun].map(foldJaReading).filter(Boolean),
+      tokens: k.en.flatMap(tokenize),
     });
   }
 
@@ -83,12 +96,8 @@ export function buildSearchIndex(targetLanguage: string): Indexed[] {
         level: v.level,
         href: `/vocab?word=${encodeURIComponent(v.word)}`,
       },
-      terms: [
-        v.word,
-        v.trad ?? "",
-        foldPinyin(v.reading),
-        ...v.en.map(foldLatin),
-      ].filter(Boolean),
+      readings: [foldPinyin(v.reading)].filter(Boolean),
+      tokens: v.en.flatMap(tokenize),
     });
   }
 
@@ -103,19 +112,60 @@ export function buildSearchIndex(targetLanguage: string): Indexed[] {
         level: g.level,
         href: `/grammar?topic=${encodeURIComponent(g.slug)}`,
       },
-      terms: [foldLatin(g.title_tr), foldLatin(g.slug)].filter(Boolean),
+      readings: [],
+      tokens: [...tokenize(g.title_tr), ...tokenize(g.slug)],
     });
   }
 
   return out;
 }
 
+// Relevance scores, lower is better. Exact reading ("ma" → 吗 má) beats
+// reading prefix ("ma" → 买 mǎi) beats gloss-word prefix ("ma" → "many")
+// beats reading substring ("kari" → hikari).
+const EXACT = 0;
+const READING_PREFIX = 1;
+const TOKEN_MATCH = 2;
+const READING_SUB = 3;
+
+function scoreEntry(
+  item: Indexed,
+  readingNeedle: string,
+  tokenNeedle: string,
+  cjkQuery: string,
+): number {
+  // Typing the glyph/word itself (的, 光, or a CJK fragment of it). Guarded
+  // to CJK queries — a latin query must not substring-match titles ("yama"
+  // is literally inside "alıkoyamamak").
+  if (cjkQuery) {
+    if (item.result.title === cjkQuery) return EXACT;
+    if (item.result.title.includes(cjkQuery)) return READING_PREFIX;
+  }
+
+  let best = Infinity;
+  if (readingNeedle) {
+    for (const r of item.readings) {
+      if (r === readingNeedle) return EXACT;
+      if (r.startsWith(readingNeedle)) best = Math.min(best, READING_PREFIX);
+      else if (r.includes(readingNeedle)) best = Math.min(best, READING_SUB);
+    }
+  }
+  if (best > TOKEN_MATCH && tokenNeedle) {
+    for (const t of item.tokens) {
+      if (t === tokenNeedle || t.startsWith(tokenNeedle)) {
+        best = Math.min(best, TOKEN_MATCH);
+        break;
+      }
+    }
+  }
+  return best;
+}
+
 /**
- * Match a query against a prebuilt index. Folds the query both as a CJK
- * reading (romaji/pinyin) and as bare latin, then substring-matches against
- * the pre-folded terms. Grammar/latin queries fall through the reading fold
- * harmlessly (idempotent on ascii). Caps results to keep the palette usable —
- * "shi" alone matches half the dictionary.
+ * Match a query against a prebuilt index, ranked by relevance: exact folded
+ * reading, then reading prefix, then gloss/title word prefix, then reading
+ * substring. Ties keep index order (level-major → easier levels first).
+ * Capped — "shi" alone still matches a lot of the dictionary.
  */
 export function searchIndex(
   index: Indexed[],
@@ -126,17 +176,16 @@ export function searchIndex(
   const raw = query.trim();
   if (!raw) return [];
 
-  const reading =
+  const readingNeedle =
     targetLanguage === "zh" ? foldPinyin(raw) : foldJaReading(raw);
-  const latin = foldLatin(raw);
-  const needles = [...new Set([reading, latin, raw])].filter(Boolean);
+  const tokenNeedle = foldWord(raw).replace(/[^a-z0-9]/g, "");
+  const cjkQuery = /[぀-ゟ゠-ヿ一-鿿]/.test(raw) ? raw : "";
 
-  const out: SearchResult[] = [];
-  for (const item of index) {
-    if (item.terms.some((t) => needles.some((n) => t.includes(n)))) {
-      out.push(item.result);
-      if (out.length >= limit) break;
-    }
+  const scored: { score: number; i: number }[] = [];
+  for (let i = 0; i < index.length; i++) {
+    const score = scoreEntry(index[i], readingNeedle, tokenNeedle, cjkQuery);
+    if (score !== Infinity) scored.push({ score, i });
   }
-  return out;
+  scored.sort((a, b) => a.score - b.score || a.i - b.i);
+  return scored.slice(0, limit).map((s) => index[s.i].result);
 }

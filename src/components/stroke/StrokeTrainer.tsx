@@ -98,6 +98,16 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
   const [selected, setSelected] = useState<string>(
     initialChar ?? STROKE_KANA[0].hira,
   );
+
+  // Palette navigation while already on /stroke only changes the query param —
+  // no remount, so follow initialChar changes too. Depends ONLY on initialChar:
+  // including `selected` would snap back the user's manual picks.
+  useEffect(() => {
+    if (initialChar) {
+      setTab("kanji");
+      setSelected(initialChar);
+    }
+  }, [initialChar]);
   const [mode, setMode] = useState<Mode>("idle");
   const [remaining, setRemaining] = useState<number | null>(null);
   const [mistakes, setMistakes] = useState(0);
