@@ -523,9 +523,16 @@ export async function saveImportApi(file: File): Promise<void> {
 
 // ------------------------------------------------------------------ LLM gerektiren aksiyonlar (statik gate)
 
-export async function regenerateLesson(nodeId: string): Promise<void> {
+export async function regenerateLesson(
+  nodeId: string,
+  feedback?: string | null
+): Promise<void> {
   if (!IS_STATIC) {
-    const res = await fetch(`/api/nodes/${nodeId}/regenerate`, { method: "POST" });
+    const res = await fetch(`/api/nodes/${nodeId}/regenerate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback: feedback ?? null }),
+    });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.message ?? body.error ?? "Yenilenemedi");
@@ -535,7 +542,7 @@ export async function regenerateLesson(nodeId: string): Promise<void> {
   const gen = await browserGen();
   const { db, persistSoon } = await browserDb();
   const coreG = await import("@/core/llm-gen");
-  await coreG.generateLessonContent(db, gen, nodeId);
+  await coreG.generateLessonContent(db, gen, nodeId, feedback);
   persistSoon();
 }
 

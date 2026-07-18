@@ -13,6 +13,10 @@ export function lessonPrompt(opts: {
   strugglesLine?: string | null;
   /** Recent exercise questions across the curriculum — the LLM must not repeat them. */
   recentExercisePrompts?: string[];
+  /** User-entered complaint about the previous generation, from the "regenerate" flow. */
+  regenerationFeedback?: string | null;
+  /** Short summary of the lesson being replaced — gives the feedback context without dumping the full previous JSON. */
+  previousLessonSummary?: string | null;
 }) {
   const lang = languageName(opts.profile.targetLanguage);
   const native = nativeLanguageName(opts.profile.nativeLanguage);
@@ -49,7 +53,13 @@ export function lessonPrompt(opts: {
       ? `\n- ZORLANDIĞI alanlar (${opts.strugglesLine}) — bu ders konusuyla kesişiyorsa alıştırmalarda bunlara ekstra tekrar ve pekiştirme fırsatı ver; kesişmiyorsa zorla dahil etme. Bu veriyi ASLA öğrenciye söyleme ("zorlandığını biliyorum" gibi meta yorum yasak) — sadece içerik seçimini sessizce yönlendirsin.`
       : ""
   }
-${boss}
+${boss}${
+    opts.regenerationFeedback?.trim()
+      ? `\nÖNCEKİ ÜRETİMDEKİ SORUNLAR — BUNLARI DÜZELT (öğrenci bu dersi daha önce üretilmiş haliyle gördü ve şikayet etti; yeni üretim bu şikayeti gidersin):${
+          opts.previousLessonSummary ? `\n- Önceki üretim özeti: ${opts.previousLessonSummary}` : ""
+        }\n- Öğrencinin bildirdiği sorun: "${opts.regenerationFeedback.trim()}"`
+      : ""
+  }
 Bu ders için içerik üret:
 - "explanation_tr": Markdown, ${native} dilinde, samimi bir öğretmen sesi. Konuyu sıfırdan ve net anlat.
 - "examples": 3-6 örnek. "target" hedef dilde, "reading" latin okunuş, "translation_tr" ${native} çeviri.
