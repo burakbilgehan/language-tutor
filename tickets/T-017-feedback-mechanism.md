@@ -44,3 +44,16 @@ label'ı oluşturuldu (URL'deki labels= sadece yazma yetkisi olanda otomatik
 uygulanır; anonim kullanıcıda düşer, sorun değil). Next dev indicator
 sol alttan sağ alta taşındı (next.config `devIndicators.position`).
 Hacim artarsa Cloudflare Worker'a geçiş hâlâ açık seçenek.
+
+Revizyon (aynı gün): prefill MVP'si yetersiz bulundu (GitHub hesabı şartı,
+screenshot elle, title=desc tekrarı) → seçenek 3 eklendi:
+`workers/feedback/` Cloudflare Worker'ı POST'u alır, sahibin fine-grained
+PAT'iyle (secret GITHUB_TOKEN) issue'yu repoya AÇAR (anonim kullanıcı, hesap
+gerekmez) ve screenshot'ı `feedback-assets` branch'ine contents API ile
+commit'leyip body'ye raw URL olarak gömer. Client: `NEXT_PUBLIC_FEEDBACK_URL`
+set ise Worker'a JSON POST (screenshot jpeg dataURL), değilse eski prefill
+fallback'i. Modala ayrı opsiyonel "Başlık" alanı eklendi; title artık
+`[Sorun] başlık|sayfa`, açıklama sadece body'de. Deploy: wrangler login +
+`secret put GITHUB_TOKEN` + deploy; Worker URL'i repo variable
+NEXT_PUBLIC_FEEDBACK_URL olarak pages.yml'e akar. Anti-abuse: origin
+allow-list + boyut limitleri (spam olursa Turnstile eklenir).

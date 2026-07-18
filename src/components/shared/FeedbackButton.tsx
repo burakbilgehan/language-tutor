@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
@@ -8,6 +8,10 @@ import { IS_STATIC } from "@/lib/client-api";
 import { CozyButton } from "./CozyButton";
 
 const REPO_URL = "https://github.com/burakbilgehan/language-tutor";
+// Cloudflare Worker proxy (workers/feedback). When set, feedback is filed
+// anonymously through it — no GitHub account needed and the screenshot is
+// attached automatically. When unset, we fall back to a prefilled issue URL.
+const FEEDBACK_ENDPOINT = process.env.NEXT_PUBLIC_FEEDBACK_URL ?? "";
 
 const S = {
   tr: {
@@ -15,19 +19,29 @@ const S = {
     title: "Geri bildirim",
     kindBug: "Sorun bildir",
     kindIdea: "Öneri",
+    titleLabel: "Başlık",
+    titlePlaceholder: "Kısa özet (boş bırakılabilir)",
     descLabel: "Anlat",
     descPlaceholderBug:
       "Ne oldu? Ne bekliyordun? Adım adım yazarsan daha hızlı çözülür.",
     descPlaceholderIdea: "Ne eksik, ne daha iyi olabilir?",
     shotTake: "Ekran görüntüsü çek",
+    shotRetake: "Yeniden çek",
     shotBusy: "Çekiliyor…",
-    shotCopied: "Panoya kopyalandı — issue açılınca metin kutusuna yapıştır (⌘V / Ctrl+V).",
+    shotAttached: "Görüntü rapora otomatik eklenecek.",
+    shotCopied:
+      "Panoya kopyalandı — issue açılınca metin kutusuna yapıştır (⌘V / Ctrl+V).",
     shotDownloaded:
       "Pano desteklenmedi, PNG indirildi — issue'ya sürükleyip bırakabilirsin.",
     shotError: "Ekran görüntüsü alınamadı.",
     settingsWarn:
       "Ayarlar sayfasındasın — görüntüde API anahtarı gibi kişisel bilgi kalmadığından emin ol.",
-    submit: "GitHub'da issue aç",
+    send: "Gönder",
+    sendBusy: "Gönderiliyor…",
+    sentMsg: "Alındı, teşekkürler! 🙏",
+    sentView: "Kaydı görüntüle",
+    sendError: "Gönderilemedi. GitHub üzerinden açmayı deneyebilirsin:",
+    submitGh: "GitHub'da issue aç",
     ghNote:
       "Gönderim GitHub üzerinden yapılır (hesap gerektirir). Form açılınca içerik hazır gelir, sadece Submit'e basman yeterli.",
     close: "Kapat",
@@ -43,19 +57,29 @@ const S = {
     title: "Feedback",
     kindBug: "Report a problem",
     kindIdea: "Suggestion",
+    titleLabel: "Title",
+    titlePlaceholder: "Short summary (optional)",
     descLabel: "Describe",
     descPlaceholderBug:
       "What happened? What did you expect? Step-by-step helps a lot.",
     descPlaceholderIdea: "What's missing, what could be better?",
     shotTake: "Capture screenshot",
+    shotRetake: "Retake",
     shotBusy: "Capturing…",
-    shotCopied: "Copied to clipboard — paste it into the issue box (⌘V / Ctrl+V).",
+    shotAttached: "The capture will be attached to the report automatically.",
+    shotCopied:
+      "Copied to clipboard — paste it into the issue box (⌘V / Ctrl+V).",
     shotDownloaded:
       "Clipboard unavailable, PNG downloaded — drag it into the issue instead.",
     shotError: "Screenshot failed.",
     settingsWarn:
       "You're on the settings page — make sure the capture shows no personal info like API keys.",
-    submit: "Open a GitHub issue",
+    send: "Send",
+    sendBusy: "Sending…",
+    sentMsg: "Received, thank you! 🙏",
+    sentView: "View the report",
+    sendError: "Sending failed. You can try opening it on GitHub instead:",
+    submitGh: "Open a GitHub issue",
     ghNote:
       "Feedback goes through GitHub (account required). The form opens pre-filled — just hit Submit.",
     close: "Close",
@@ -69,14 +93,16 @@ const S = {
 };
 
 type Kind = "bug" | "idea";
-type ShotState = "idle" | "busy" | "copied" | "downloaded" | "error";
+type ShotState = "idle" | "busy" | "ready" | "copied" | "downloaded" | "error";
+type SendState = "idle" | "busy" | "sent" | "error";
 
 /**
- * Global feedback entry (T-017). Static-deploy friendly: no backend —
- * feedback lands as a prefilled GitHub issue the user submits themselves.
- * Screenshots can't ride the URL, so we capture the viewport to the
- * clipboard (html2canvas-pro; classic html2canvas chokes on the
- * color-mix()/oklch values Tailwind 4 emits) and the user pastes it in.
+ * Global feedback entry (T-017). Two transports:
+ * - FEEDBACK_ENDPOINT set → anonymous POST to the Cloudflare Worker proxy,
+ *   which files the issue with the owner's token and uploads the screenshot.
+ * - unset → prefilled GitHub issue URL; screenshot goes to the clipboard
+ *   (html2canvas-pro; classic html2canvas chokes on the color-mix()/oklch
+ *   values Tailwind 4 emits) and the user pastes it in.
  */
 export function FeedbackButton() {
   const t = useStrings(S);
@@ -85,9 +111,13 @@ export function FeedbackButton() {
 
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("bug");
+  const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
   const [shot, setShot] = useState<ShotState>("idle");
+  const [send, setSend] = useState<SendState>("idle");
+  const [sentUrl, setSentUrl] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +127,15 @@ export function FeedbackButton() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  function reset() {
+    setTitle("");
+    setDesc("");
+    setShot("idle");
+    setSend("idle");
+    setPreview(null);
+    canvasRef.current = null;
+  }
 
   async function capture() {
     setShot("busy");
@@ -109,9 +148,20 @@ export function FeedbackButton() {
         height: window.innerHeight,
         ignoreElements: (el) => el.hasAttribute("data-feedback-ignore"),
       });
-      setPreview(canvas.toDataURL("image/png"));
+      canvasRef.current = canvas;
+      setPreview(canvas.toDataURL("image/jpeg", 0.7));
+
+      if (FEEDBACK_ENDPOINT) {
+        // The worker uploads it — nothing else to do client-side.
+        setShot("ready");
+        return;
+      }
+      // Fallback transport: hand the image to the user via clipboard.
       const blob = await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob"))), "image/png"),
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("toBlob"))),
+          "image/png",
+        ),
       );
       try {
         await navigator.clipboard.write([
@@ -119,7 +169,6 @@ export function FeedbackButton() {
         ]);
         setShot("copied");
       } catch {
-        // Clipboard image write unsupported (e.g. Firefox) → download instead.
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = "kumo-feedback.png";
@@ -132,7 +181,34 @@ export function FeedbackButton() {
     }
   }
 
-  function submit() {
+  async function submitViaWorker() {
+    setSend("busy");
+    try {
+      const res = await fetch(FEEDBACK_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          title: title.trim() || undefined,
+          desc: desc.trim(),
+          page: pathname,
+          mode: IS_STATIC ? "static" : "server",
+          lang,
+          ua: navigator.userAgent,
+          screenshot:
+            canvasRef.current?.toDataURL("image/jpeg", 0.85) ?? undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? res.status);
+      setSentUrl(typeof data.url === "string" ? data.url : null);
+      setSend("sent");
+    } catch {
+      setSend("error");
+    }
+  }
+
+  function openPrefilledIssue() {
     const meta = [
       `${t.bodyKind[kind]}`,
       `${t.bodyPage}: ${pathname}`,
@@ -141,20 +217,19 @@ export function FeedbackButton() {
       `${t.bodyBrowser}: ${navigator.userAgent}`,
     ].join(" · ");
     const body = `${desc.trim()}\n\n---\n${meta}\n`;
-    const title = `${t.titlePrefix[kind]} ${desc.trim().slice(0, 60) || pathname}`;
+    const issueTitle = `${t.titlePrefix[kind]} ${title.trim() || pathname}`;
     const url =
       `${REPO_URL}/issues/new?labels=feedback` +
-      `&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+      `&title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(body)}`;
     window.open(url, "_blank", "noopener");
     setOpen(false);
-    setDesc("");
-    setShot("idle");
-    setPreview(null);
+    reset();
   }
 
   const shotMsg = {
     idle: null,
     busy: t.shotBusy,
+    ready: t.shotAttached,
     copied: t.shotCopied,
     downloaded: t.shotDownloaded,
     error: t.shotError,
@@ -192,73 +267,140 @@ export function FeedbackButton() {
               </button>
             </div>
 
-            <div className="mb-3 flex gap-2">
-              {(["bug", "idea"] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setKind(k)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-                    kind === k
-                      ? "bg-accent text-surface"
-                      : "bg-surface-2 text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  {k === "bug" ? t.kindBug : t.kindIdea}
-                </button>
-              ))}
-            </div>
-
-            <label className="mb-1 block text-xs font-semibold tracking-wider text-accent">
-              {t.descLabel.toUpperCase()}
-            </label>
-            <textarea
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              placeholder={kind === "bug" ? t.descPlaceholderBug : t.descPlaceholderIdea}
-              rows={4}
-              className="mb-3 w-full resize-y rounded-cozy bg-background p-3 text-sm outline-none placeholder:text-ink-soft/60"
-            />
-
-            {kind === "bug" && (
-              <div className="mb-3">
-                <div className="flex items-center gap-3">
-                  <CozyButton
-                    variant="soft"
-                    className="!px-4 !py-2 text-sm"
-                    disabled={shot === "busy"}
-                    onClick={capture}
+            {send === "sent" ? (
+              <div className="flex flex-col items-start gap-2">
+                <p className="text-sm">{t.sentMsg}</p>
+                {sentUrl && (
+                  <a
+                    href={sentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-semibold text-accent underline"
                   >
-                    📸 {t.shotTake}
-                  </CozyButton>
-                  {preview && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={preview}
-                      alt=""
-                      className="h-12 rounded border border-surface-2"
-                    />
-                  )}
-                </div>
-                {shotMsg && (
-                  <p className="mt-2 text-xs text-ink-soft">{shotMsg}</p>
+                    {t.sentView}
+                  </a>
                 )}
-                {pathname === "/settings" && (
-                  <p className="mt-2 text-xs font-semibold text-danger">
-                    {t.settingsWarn}
-                  </p>
-                )}
+                <CozyButton
+                  variant="soft"
+                  className="mt-1 !px-4 !py-2 text-sm"
+                  onClick={() => {
+                    setOpen(false);
+                    reset();
+                  }}
+                >
+                  {t.close}
+                </CozyButton>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="mb-3 flex gap-2">
+                  {(["bug", "idea"] as const).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setKind(k)}
+                      className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                        kind === k
+                          ? "bg-accent text-surface"
+                          : "bg-surface-2 text-ink-soft hover:text-ink"
+                      }`}
+                    >
+                      {k === "bug" ? t.kindBug : t.kindIdea}
+                    </button>
+                  ))}
+                </div>
 
-            <CozyButton
-              className="w-full !py-2.5 text-sm"
-              disabled={!desc.trim()}
-              onClick={submit}
-            >
-              {t.submit}
-            </CozyButton>
-            <p className="mt-2 text-xs text-ink-soft">{t.ghNote}</p>
+                <label className="mb-1 block text-xs font-semibold tracking-wider text-accent">
+                  {t.titleLabel.toUpperCase()}
+                </label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={t.titlePlaceholder}
+                  maxLength={120}
+                  className="mb-3 w-full rounded-cozy bg-background p-3 text-sm outline-none placeholder:text-ink-soft/60"
+                />
+
+                <label className="mb-1 block text-xs font-semibold tracking-wider text-accent">
+                  {t.descLabel.toUpperCase()}
+                </label>
+                <textarea
+                  value={desc}
+                  onChange={(e) => setDesc(e.target.value)}
+                  placeholder={
+                    kind === "bug" ? t.descPlaceholderBug : t.descPlaceholderIdea
+                  }
+                  rows={4}
+                  className="mb-3 w-full resize-y rounded-cozy bg-background p-3 text-sm outline-none placeholder:text-ink-soft/60"
+                />
+
+                {kind === "bug" && (
+                  <div className="mb-3">
+                    <div className="flex items-center gap-3">
+                      <CozyButton
+                        variant="soft"
+                        className="!px-4 !py-2 text-sm"
+                        disabled={shot === "busy"}
+                        onClick={capture}
+                      >
+                        📸 {preview ? t.shotRetake : t.shotTake}
+                      </CozyButton>
+                      {preview && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={preview}
+                          alt=""
+                          className="h-12 rounded border border-surface-2"
+                        />
+                      )}
+                    </div>
+                    {shotMsg && (
+                      <p className="mt-2 text-xs text-ink-soft">{shotMsg}</p>
+                    )}
+                    {pathname === "/settings" && (
+                      <p className="mt-2 text-xs font-semibold text-danger">
+                        {t.settingsWarn}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {FEEDBACK_ENDPOINT ? (
+                  <>
+                    <CozyButton
+                      className="w-full !py-2.5 text-sm"
+                      disabled={!desc.trim() || send === "busy"}
+                      onClick={submitViaWorker}
+                    >
+                      {send === "busy" ? t.sendBusy : t.send}
+                    </CozyButton>
+                    {send === "error" && (
+                      <div className="mt-2 text-xs text-danger">
+                        {t.sendError}{" "}
+                        <button
+                          type="button"
+                          onClick={openPrefilledIssue}
+                          className="font-semibold underline"
+                        >
+                          {t.submitGh}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <CozyButton
+                      className="w-full !py-2.5 text-sm"
+                      disabled={!desc.trim()}
+                      onClick={openPrefilledIssue}
+                    >
+                      {t.submitGh}
+                    </CozyButton>
+                    <p className="mt-2 text-xs text-ink-soft">{t.ghNote}</p>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
