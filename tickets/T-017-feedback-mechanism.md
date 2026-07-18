@@ -55,5 +55,26 @@ set ise Worker'a JSON POST (screenshot jpeg dataURL), değilse eski prefill
 fallback'i. Modala ayrı opsiyonel "Başlık" alanı eklendi; title artık
 `[Sorun] başlık|sayfa`, açıklama sadece body'de. Deploy: wrangler login +
 `secret put GITHUB_TOKEN` + deploy; Worker URL'i repo variable
-NEXT_PUBLIC_FEEDBACK_URL olarak pages.yml'e akar. Anti-abuse: origin
+NEXT_PUBLIC_FEEDBACK_URL olarak pages.yml'e akar (ayrıca kodda default —
+env sadece override, "off" = prefill'e zorla). Anti-abuse: origin
 allow-list + boyut limitleri (spam olursa Turnstile eklenir).
+
+**PAT süresi dolarsa (belirti: feedback göndermek "Gönderilemedi" hatası
+verir, Worker `github_401` döner):**
+1. https://github.com/settings/personal-access-tokens → yeni fine-grained
+   PAT: sadece `language-tutor` repo'su, Issues: Read+Write,
+   Contents: Read+Write.
+2. `cd workers/feedback && npx wrangler secret put GITHUB_TOKEN`
+   → yeni token'ı prompt'a yapıştır. Deploy gerekmez, secret anında geçer.
+   (wrangler oturumu da düşmüşse önce `npx wrangler login`.)
+3. Test: siteden bir feedback gönder ya da
+   `curl -X POST https://kumo-feedback.burakbilgehan-p.workers.dev
+   -H 'Content-Type: application/json'
+   -H 'Origin: https://burakbilgehan.github.io'
+   -d '{"kind":"bug","desc":"token test"}'` → `{"ok":true,...}` dönmeli;
+   açılan test issue'yu kapat.
+
+Bilinen ikincil riskler (kabul edildi): CF free 10ms CPU limiti çok büyük
+(2MB+) screenshot'larda nadiren 1102 verebilir — sıklaşırsa client'ta jpeg
+kalitesi/boyut kısılır; `feedback-assets` branch'i zamanla şişer —
+silinip yeniden açılabilir (eski issue görselleri kırılır).
