@@ -1,7 +1,8 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { vocabIndexFor } from "@/lib/vocab-index";
+import type { VocabContent } from "@/lib/llm/schemas";
 import type { AppDb } from "./db-types";
 
 // Kelime sözlüğünün ortam-bağımsız çekirdeği (HSK sözlük). İçerik ÜRETİMİ
@@ -76,6 +77,40 @@ export function ensureVocabSeeded(db: AppDb, targetLanguage: string) {
       }
     });
   });
+}
+
+/**
+ * Fill still-empty entries from the packaged seed (public/vocab-seed/<lang>.json,
+ * exported from the owner's DB by scripts/export-vocab-seed.ts). Only rows
+ * with status pending/error are touched — user-generated content always wins.
+ * Returns how many entries were filled.
+ */
+export function applyVocabSeed(
+  db: AppDb,
+  targetLanguage: string,
+  seed: Record<string, VocabContent>
+): number {
+  const empty = db
+    .select({ id: tables.vocabEntries.id, word: tables.vocabEntries.word })
+    .from(tables.vocabEntries)
+    .where(
+      and(
+        eq(tables.vocabEntries.targetLanguage, targetLanguage),
+        inArray(tables.vocabEntries.status, ["pending", "error"])
+      )
+    )
+    .all();
+  let filled = 0;
+  for (const row of empty) {
+    const content = seed[row.word];
+    if (!content) continue;
+    db.update(tables.vocabEntries)
+      .set({ content, status: "ready", generatedAt: new Date() })
+      .where(eq(tables.vocabEntries.id, row.id))
+      .run();
+    filled++;
+  }
+  return filled;
 }
 
 export function listVocab(db: AppDb, targetLanguage: string) {

@@ -1,7 +1,7 @@
 ---
 id: T-019
 title: zh sözlük içeriğini toplu doldurma + paketlenmiş seed
-status: todo
+status: done
 priority: p2
 effort: M
 confidence: high
@@ -29,11 +29,26 @@ aynı bölümlerle gelir.
    120s timeout'a düştü. Kanji kuyruğu bitince vocab otomatik sıraya girer;
    sonraki kota penceresinde koşturulacak.
    Not: liste GET'i asla auto-queue yapmaz (T-012 kararı) — o kural duruyor.
-2. **Packaged seed**: `npm run seed:vocab` — `data/app.db`'deki ready
-   girişleri `public/vocab-seed/zh.json`'a export (grammar'daki
-   `seed:grammar` kalıbı); `applyVocabSeed` (core) pending satırları
-   seed'den doldurur, liste + deep-link'e iki modda da bağlanır. Böylece
-   yeni profiller/statik kullanıcılar sıfır LLM çağrısıyla dolu sözlük alır.
+2. **Packaged seed**: ✅ YAPILDI (2026-07-18). `npm run seed:vocab`
+   (`scripts/export-vocab-seed.ts`, grammar'daki `export-grammar-seed.ts`
+   kalıbının birebir kopyası) — `data/app.db`'deki ready girişleri
+   `public/vocab-seed/<lang>.json`'a export. `applyVocabSeed` (core/vocab.ts,
+   grammar'daki `applyGrammarSeed`'in aynısı, word-keyed) pending/error
+   satırları seed'den doldurur. Bağlandığı yerler (grammar ile birebir):
+   server `/api/vocab` GET liste (dosyayı process-ömrü boyunca cache'ler);
+   statik mod `client-api.ts` `vocabList` + `vocabDetail` (tarayıcıdan
+   `src/lib/vocab-seed.ts` `fetchVocabSeed` ile indirir, dil başına promise
+   cache). Server `/api/vocab/[word]` deep-link route'u grammar'ın
+   `[slug]`'ı gibi seed'e dokunmuyor (kasıtlı — pattern öyle, sadece liste
+   GET'i ve statik client-api uyguluyor).
 
-Sıralama: 1 bitmeden 2'nin export'u eksik kalır ama altyapısı paralel
-yazılabilir. Doğrulama: parity harness + statik build'de seed'den okuma.
+   Doğrulama: `npx tsc --noEmit` temiz, parity harness ALL PASS
+   (`listVocab (zh seed) → 4991 kelime` dahil), `npm run seed:vocab` gerçek
+   DB'den 2 hazır kelimeyi export etti (kalanı blast arka planda dolduruyor),
+   `applyVocabSeed` geçici DB kopyasında pending→ready dolum manuel
+   doğrulandı (bkz. session notu — filled:1, hasContent:true).
+
+Not: committed `public/vocab-seed/zh.json` şu an sadece 2 kelime (blast
+kuyruğu bitmedi) — INDEX.md ops adımı 3'te ("seed:grammar + seed:vocab
+re-export → commit → Pages deploy") tam kütüphaneyle re-export planlı,
+bu bilinçli bir eksik, unutulmuş değil.
