@@ -58,6 +58,21 @@ function readState() {
     const vocab = Object.fromEntries(
       db.prepare("SELECT status, COUNT(*) c FROM vocab_entries GROUP BY status").all().map((r) => [r.status, r.c])
     );
+    // konu bazlı ilerleme: kind -> level -> {ready, total}
+    const byLevel = { kanji: {}, vocab: {}, grammar: {} };
+    const fillByLevel = (kind, table, levelCol) => {
+      for (const r of db
+        .prepare(`SELECT ${levelCol} AS level, status, COUNT(*) c FROM ${table} GROUP BY ${levelCol}, status`)
+        .all()) {
+        const lv = r.level ?? "—";
+        byLevel[kind][lv] ??= { ready: 0, total: 0 };
+        byLevel[kind][lv].total += r.c;
+        if (r.status === "ready") byLevel[kind][lv].ready += r.c;
+      }
+    };
+    fillByLevel("kanji", "kanji_entries", "level");
+    fillByLevel("vocab", "vocab_entries", "level");
+    fillByLevel("grammar", "grammar_topics", "level");
     const generating = [
       ...db
         .prepare("SELECT char, level FROM kanji_entries WHERE status='generating' ORDER BY level, char")
@@ -140,6 +155,7 @@ function readState() {
       generating,
       events,
       progress,
+      byLevel,
       ratePerMin: Math.round((done5 / 5) * 10) / 10,
       avgDurSec: avgDur,
       buckets,
@@ -238,6 +254,14 @@ border-radius:8px;background:var(--bg);color:var(--ink)}
 .bar{height:10px;border-radius:5px;background:var(--chip);overflow:hidden}
 .bar div{height:100%;background:var(--good);transition:width .6s}
 .note{font-size:.82rem;color:var(--soft)}
+.topics{display:flex;flex-direction:column;gap:.9rem}
+.topic h3{font-size:.86rem;margin:0 0 .35rem;display:flex;justify-content:space-between;gap:.5rem}
+.topic h3 .n{font-weight:400;color:var(--soft);font-variant-numeric:tabular-nums}
+.lvrows{display:flex;flex-direction:column;gap:.28rem}
+.lvrow{display:grid;grid-template-columns:3.4rem 1fr 5.6rem;align-items:center;gap:.5rem;font-size:.78rem}
+.lvrow .lvname{color:var(--soft);font-weight:700}
+.lvrow .bar{height:7px}
+.lvrow .n{text-align:right;color:var(--soft);font-variant-numeric:tabular-nums}
 </style></head><body><main>
 <div class="row" style="justify-content:space-between">
 <h1>Blast kontrol</h1>
@@ -267,8 +291,7 @@ kill-switch'i her koşuyu keser.</span>
 <div class="card"><h2>Tempo — son 15 dk</h2>
 <div id="spark" style="display:flex;align-items:flex-end;gap:3px;height:56px"></div>
 <div class="note" style="margin-top:.3rem">Dakika başına biten içerik (kanji + sözlük, generated_at'ten)</div></div>
-<div class="card"><h2>Toplam ilerleme</h2><div class="bar"><div id="barFill" style="width:0%"></div></div>
-<div class="note" id="barLbl" style="margin-top:.4rem"></div></div>
+<div class="card"><h2>Konu bazlı ilerleme</h2><div id="topics" class="topics"></div></div>
 <div class="card"><h2>Aktif slotlar</h2><div id="slots" class="slots"></div></div>
 <div class="card"><h2>Son tamamlananlar</h2><div id="feed" class="feed"><span class="note">Henüz olay yok.</span></div></div>
 </main><script>
@@ -298,9 +321,20 @@ async function poll(){
     '<div style="flex:1;border-radius:3px 3px 0 0;background:var(--good);opacity:' +
     (b ? ".9" : ".18") + ';height:' + Math.max(6, Math.round(100 * b / max)) + '%" title="' + b + '/dk"></div>'
   ).join("");
-  const total = ready + gen + pend + err;
-  barFill.style.width = total ? (100 * ready / total).toFixed(1) + "%" : "0";
-  barLbl.textContent = ready + " / " + total + " hazır" + (s.progress?.finished ? " · koşu bitti" : "");
+  const KIND_LABEL = { kanji: "Kanji", vocab: "Sözlük", grammar: "Gramer" };
+  const topicsEl = document.getElementById("topics");
+  topicsEl.innerHTML = Object.entries(s.byLevel || {}).map(([kind, levels]) => {
+    const entries = Object.entries(levels).sort((a, b) => a[0].localeCompare(b[0]));
+    if (!entries.length) return "";
+    const kReady = entries.reduce((a, [, v]) => a + v.ready, 0);
+    const kTotal = entries.reduce((a, [, v]) => a + v.total, 0);
+    return '<div class="topic"><h3>' + KIND_LABEL[kind] + '<span class="n">' + kReady + ' / ' + kTotal + ' hazır</span></h3>' +
+      '<div class="lvrows">' + entries.map(([lv, v]) =>
+        '<div class="lvrow"><span class="lvname">' + lv + '</span><div class="bar"><div style="width:' +
+        (v.total ? (100 * v.ready / v.total).toFixed(1) : 0) + '%"></div></div><span class="n">' +
+        v.ready + ' / ' + v.total + '</span></div>'
+      ).join("") + '</div></div>';
+  }).join("");
   // slot diff + animasyon
   const cur = new Set(s.generating.map(g => g.char));
   for (const [ch, el] of slotEls) {

@@ -23,11 +23,13 @@ async function main() {
     .select()
     .from(tables.grammarTopics)
     .where(inArray(tables.grammarTopics.status, ["pending", "error"]))
+    .orderBy(tables.grammarTopics.level, tables.grammarTopics.position)
     .all();
   const ke = db
     .select()
     .from(tables.kanjiEntries)
     .where(inArray(tables.kanjiEntries.status, ["pending", "error"]))
+    .orderBy(tables.kanjiEntries.level, tables.kanjiEntries.char)
     .all();
   const ve = db
     .select()
