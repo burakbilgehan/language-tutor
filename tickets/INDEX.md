@@ -7,16 +7,16 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
-| [T-003](T-003-remaining-grammar.md) | Kalan grammar (zh 99 + ja 16) — hafta sonu kota | **todo** | p1 | S | high |
-| [T-019](T-019-vocab-bulk-fill-seed.md) | zh sözlük toplu doldurma + paketlenmiş seed | backlog | p2 | M | high |
-| [T-015](T-015-mobile-friendly.md) | Mobil uyumluluk geçişi | backlog | p2 | L | medium |
-| [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | backlog | p2 | M | medium |
+| [T-019](T-019-vocab-bulk-fill-seed.md) | zh sözlük seed altyapısı (export + applyVocabSeed) | **todo** | p2 | M | high |
+| [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | **todo** | p2 | M | medium |
 | [T-017](T-017-feedback-mechanism.md) | Kullanıcı feedback mekanizması (+screenshot) | backlog | p2 | M | medium |
+| [T-015](T-015-mobile-friendly.md) | Mobil uyumluluk geçişi | backlog | p2 | L | medium |
 | [T-001](T-001-inburgering-mock-exams.md) | Inburgering deneme bölümleri | backlog | p2 | M | medium |
 | [T-005](T-005-zh-stroke-dictionary.md) | zh yazım + hanzi sözlüğü (CEDICT) | backlog | p2 | L | medium |
 | [T-004](T-004-overview-llm-layer.md) | Overview LLM yorum katmanı | backlog | p3 | S | medium |
 | [T-002](T-002-skill-tree.md) | Skill tree (dallı ders grafiği) | backlog | p3 | XL | low |
-| [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu | backlog | p3 | S | high |
+| [T-023](T-023-haiku-content-qa.md) | Haiku içerik kalite denetimi | parked | p1 | S | high |
+| [T-003](T-003-remaining-grammar.md) | Kalan grammar (zh 99 + ja 16) — hafta sonu kota | done | p1 | S | high |
 | [T-021](T-021-conjugate-zh-nl-content.md) | Çekim cheatsheet — zh zayıf, nl boş | done | p2 | M | medium |
 | [T-006](T-006-nl-weak-separables.md) | nl zayıf ayrılabilir fiiller | done | p3 | S | high |
 | [T-022](T-022-regenerate-with-feedback.md) | Ders yeniden üretmeye feedback text box'ı | done | p2 | S | high |
@@ -29,6 +29,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-009](T-009-local-first-static.md) | Faz 2b — local-first statik build (tarayıcı SQLite + Pages) | done | p1 | XL | medium |
 | [T-010](T-010-llm-setup-wizard.md) | LLM bağlantı sihirbazı (kod bilmeyene kurulum akışı) | done | p1 | M | high |
 | [T-011](T-011-sidequest-backfill.md) | Mevcut nl/zh profillerine yan görev backfill | wontfix | p2 | S | high |
+| [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu (ops'a taşındı — blast paneli) | wontfix | p3 | S | high |
 
 ## Yol haritası (2026-07-18 sprint)
 
@@ -42,13 +43,16 @@ merge sırası: küçük olan önce, ikinci merge eden rebase edip conflict çö
 | 2a | T-022 | paralel ok | sonnet | Lesson prompt + UI — **done** |
 | 2b | T-018 | paralel ok | sonnet | Quest kodu silme — **done**. Not: "dosya kümesi ayrık" yanlış çıktı, 4 dosyada üçlü çakışma vardı (llm-gen.ts, client-api.ts, LessonPlayer.tsx, QuestPlayer.tsx modify/delete) — cherry-pick sırasıyla (T-018→T-022→T-020) çözüldü, sonraki paralel adımlarda dosya kümesi varsayımını tekrar doğrula |
 | 2c | T-020 | paralel ok | sonnet | globals.css + font/lang attribute — **done** |
-| 3 | T-019 | seri (script+core) | sonnet | Altyapı bitince toplu üretim gece/hafta sonu kotasında koşar (T-003 ile aynı kota penceresi) |
+| 3 | T-019 | **sıradaki** | sonnet | Sadece seed altyapısı kaldı (export scripti + applyVocabSeed); üretim scripti bitti, içerik arka planda doluyor. T-016 ile paralel gidebilir (dosya kümesini grep'le doğrula — 2b dersi) |
 | 4a | T-021 + T-006 | paralel ok | opus | Aynı dosyalar (conjugation/*), tek session; içerik ağır — **done**. Not: T-021 içerik zaten f587ab9'da şevkedilmişti (ticket metni bayatmış, sadece kapatıldı); T-006 tek gerçek iş — `splitSeparable` curated `WEAK_SEPARABLE_BASES` listesiyle genişletildi (açık heuristik değil — opperen/openen gibi tesadüfen op- ile başlayan basit fiiller yanlış bölünürdü) |
 | 4b | T-016 | paralel ok | opus | Tasarım kararı açık (global arama MVP); header'a dokunur, T-015'ten önce bitmeli |
 | 5 | T-017 | seri | sonnet | MVP: GitHub issue prefill + html2canvas |
 | 6 | T-015 | en son | sonnet | Tüm UI oturduktan sonra responsive pass; sayfa sayfa commit |
 
-Arka plan (kod değil, owner makinesi + LLM kotası): T-003 grammar üretimi,
-T-019'un toplu üretim koşusu, sonra `seed:grammar`/`seed:vocab` re-export.
+İçerik üretimi = ops, ticket AÇILMAZ; blast paneli üzerinden yürür
+(`node scripts/blast-dashboard.mjs` → :4646). Sıralı ops listesi:
+1. Sonraki kota penceresi: panelden Başlat — kalan ~570 kanji + 4989 vocab.
+2. Vocab bitince T-023'ün vocab ayağı (kanji/grammar denetimi yapıldı, temiz).
+3. `seed:grammar` + `seed:vocab` re-export → commit → Pages deploy.
 
-Sprint dışı (sıralanmadı): T-001, T-002, T-004, T-005, T-007.
+Sprint dışı (sıralanmadı): T-001, T-002, T-004, T-005.
