@@ -19,8 +19,11 @@ const OUT = resolve(
   "../src/lib/vocab-index/zh-data.json",
 );
 
-const MAX_GLOSSES = 4;
 const SKIP_GLOSS = /^(variant of|old variant of|used in|see [^ ]+$)/i;
+
+// Proper-noun forms carry capitalized pinyin in the dataset ("Mǎ" the
+// surname vs "mǎ" the horse).
+const isProperNoun = (f) => /^\p{Lu}/u.test(f.transcriptions?.pinyin ?? "");
 
 async function loadDataset() {
   const localPath = process.argv[2];
@@ -40,18 +43,27 @@ for (const entry of data) {
   if (oldLevels.length === 0) continue;
   const level = Math.min(...oldLevels);
 
-  // Some entries carry several forms (rare pronunciation variants); take the
-  // first one that actually has glosses.
-  const form =
-    entry.forms.find((f) => f.meanings?.length > 0) ?? entry.forms[0];
-  if (!form) continue;
+  // Entries can carry several forms (马: Mǎ the surname + mǎ the horse; 骑:
+  // qí to-ride + jì literary). The primary form — shown reading + leading
+  // glosses — is the non-proper-noun form with the most glosses; every other
+  // form's glosses are appended (lossless union) so a search on ANY meaning
+  // finds the word. (T-029: first-form-wins used to make 马 read "surname Ma"
+  // and hid it from "horse".)
+  const withMeanings = entry.forms.filter((f) => f.meanings?.length > 0);
+  if (withMeanings.length === 0) continue;
+  const common = withMeanings.filter((f) => !isProperNoun(f));
+  const pickMost = (fs) =>
+    fs.reduce((a, b) => (b.meanings.length > a.meanings.length ? b : a));
+  const form = common.length > 0 ? pickMost(common) : pickMost(withMeanings);
 
-  const glosses = (form.meanings ?? []).filter((m) => !SKIP_GLOSS.test(m));
-  const en = (glosses.length > 0 ? glosses : form.meanings ?? []).slice(
-    0,
-    MAX_GLOSSES,
-  );
-  if (en.length === 0) continue;
+  const en = [];
+  for (const f of [form, ...withMeanings.filter((f) => f !== form)]) {
+    for (const m of f.meanings) {
+      if (SKIP_GLOSS.test(m) || en.includes(m)) continue;
+      en.push(m);
+    }
+  }
+  if (en.length === 0) en.push(...form.meanings);
 
   const row = {
     word: entry.simplified,
@@ -62,7 +74,10 @@ for (const entry of data) {
   };
   if (form.traditional && form.traditional !== entry.simplified)
     row.trad = form.traditional;
-  if (form.classifiers?.length > 0) row.cls = form.classifiers;
+  const cls = [
+    ...new Set(withMeanings.flatMap((f) => f.classifiers ?? [])),
+  ];
+  if (cls.length > 0) row.cls = cls;
   if (entry.pos?.length > 0) row.pos = entry.pos;
   rows.push(row);
 }
