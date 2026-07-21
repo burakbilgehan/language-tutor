@@ -16,6 +16,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-030](T-030-ja-vocab-dictionary.md) | ja kelime sözlüğü (JMdict tabanlı) | backlog | p2 | L | medium |
 | [T-031](T-031-content-language-isolation.md) | İçerik dil izolasyonu (en'de Türkçe sızıntısı) | backlog | p2 | M | medium |
 | [T-032](T-032-save-ux-drive-sync.md) | Save teşviki + Google Drive yedekleme | backlog | p2 | L | medium |
+| [T-033](T-033-vocab-search-ranking.md) | Sözlük arama ranking'i ("ma" gürültüsü) | backlog | p1 | S | high |
 | [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | done | p2 | M | medium |
 | [T-017](T-017-feedback-mechanism.md) | Kullanıcı feedback mekanizması (+screenshot) | done | p2 | M | medium |
 | [T-015](T-015-mobile-friendly.md) | Mobil uyumluluk geçişi | done | p2 | L | medium |
@@ -39,6 +40,29 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-010](T-010-llm-setup-wizard.md) | LLM bağlantı sihirbazı (kod bilmeyene kurulum akışı) | done | p1 | M | high |
 | [T-011](T-011-sidequest-backfill.md) | Mevcut nl/zh profillerine yan görev backfill | wontfix | p2 | S | high |
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu (ops'a taşındı — blast paneli) | wontfix | p3 | S | high |
+
+## Yol haritası (2026-07-22 sprint)
+
+Kurallar öncekiyle aynı: adım = ayrı session, bitince main'e push;
+paralel adımlar ayrı worktree + branch, küçük olan önce merge, ikinci
+rebase eder. 2026-07-18 dersi geçerli: paralel başlamadan dosya kümesi
+ayrıklığını DOĞRULA, varsayma.
+
+| Adım | Ticket | Mod | Model | Not |
+|---|---|---|---|---|
+| 1a | T-033 | paralel ok | sonnet | Sözlük arama ranking'i — canlı acı, küçük; VocabSidebar + build-script tie-break |
+| 1b | T-024 | paralel ok | sonnet | Save/job kuyruğu — lib/save + lib/jobs, 1a/1c ile ayrık |
+| 1c | T-027 | paralel ok | opus | Routing hardening — teşhis + repo-geneli sweep, debug ağırlıklı iş |
+| 2a | T-025 | paralel ok | sonnet | Onboarding Load/New — T-024 bitmiş olmalı (import akışı ortak) |
+| 2b | T-028 | paralel ok | sonnet | Ayarlar çipi — StatsHeader, küçük |
+| 3 | T-031 | SERİ, tek başına | opus | İçerik dil izolasyonu — çok dosyalı sweep + mimari karar (damga yeri, seed gating); hiçbir şeyle paralel koşturma |
+| 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün arama yardımcısını kullanır |
+| 4b | T-032 | paralel ok | opus | Drive sync — save/* + yeni oauth modülü, 4a ile ayrık |
+| 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar |
+
+Lisans: bilinçli ertelendi (müşteri yok; lisanssız public = all rights
+reserved). Tek kural: lisans kararından önce dış PR kabul etme. Public
+tanıtım/ilk müşteri eşiğinde ticket açılacak (öneri: FSL-1.1-Apache-2.0).
 
 ## Yol haritası (2026-07-18 sprint)
 
