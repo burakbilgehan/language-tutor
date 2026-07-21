@@ -6,6 +6,9 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useProfileMeta } from "@/lib/use-profile-meta";
+import { languageLabel } from "@/lib/profile-options";
+import { levelDisplay } from "@/lib/curriculum/levels";
 import { roadmap, profileData, curriculumExtend } from "@/lib/client-api";
 
 const S = {
@@ -80,6 +83,7 @@ const TYPE_ICON: Record<string, string> = {
 export function RoadmapView() {
   const router = useRouter();
   const t = useStrings(S);
+  const meta = useProfileMeta();
   const [data, setData] = useState<RoadmapDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -204,7 +208,14 @@ export function RoadmapView() {
       style={{ ["--panel-w" as string]: "clamp(28rem, 64vw, 72rem)" }}
     >
       <StatsHeader
-        title={data.curriculum.title}
+        // Deterministic title: language + highest generated level. The stored
+        // curriculum.title is a one-shot LLM slogan that goes stale as soon as
+        // the map extends past its original level.
+        title={
+          meta && data.topLevel
+            ? `${languageLabel(meta.targetLanguage, meta.uiLanguage)} · ${levelDisplay(meta.targetLanguage, data.topLevel)}`
+            : data.curriculum.title
+        }
         xpTotal={data.xpTotal}
         streak={data.streak}
       />
