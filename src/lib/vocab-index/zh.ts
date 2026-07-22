@@ -20,7 +20,11 @@ export interface VocabIndexEntry {
   reading: string;
   /** English glosses (fallback shown until native-language content exists). */
   en: string[];
-  level: "HSK1" | "HSK2" | "HSK3" | "HSK4" | "HSK5" | "HSK6";
+  /** HSK level for zh, JLPT level for ja. Level strings are globally unique
+   *  across schemes (src/lib/curriculum/levels.ts), so one type is safe. */
+  level:
+    | "HSK1" | "HSK2" | "HSK3" | "HSK4" | "HSK5" | "HSK6"
+    | "N5" | "N4" | "N3" | "N2" | "N1";
   /** Measure words (量词), when the dataset provides them. */
   cls?: string[];
   /** CEDICT-style part-of-speech codes (n, v, adj, ...). */
