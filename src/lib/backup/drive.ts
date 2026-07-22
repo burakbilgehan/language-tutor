@@ -117,6 +117,10 @@ export class DriveBackend implements SaveBackend {
   private tokenExpiry = 0; // epoch ms
   private client: TokenClient | null = null;
   readonly clientId: string;
+  // The reject of the in-flight acquireToken promise, so error_callback (popup
+  // dismissed, access_denied, silent-refresh failure) can settle it — GIS routes
+  // those to error_callback, NOT callback, so without this the promise hangs.
+  private pendingReject: ((err: Error) => void) | null = null;
 
   constructor(clientId: string) {
     this.clientId = clientId;
@@ -135,6 +139,12 @@ export class DriveBackend implements SaveBackend {
         client_id: this.clientId,
         scope: SCOPE,
         callback: () => {}, // replaced per-request below
+        error_callback: (err) => {
+          // popup closed / access_denied / silent-refresh needs interaction
+          const reject = this.pendingReject;
+          this.pendingReject = null;
+          reject?.(new BackendAuthError(err.message || err.type || "auth error"));
+        },
       });
     }
     return this.client;
@@ -148,7 +158,9 @@ export class DriveBackend implements SaveBackend {
   private async acquireToken(silent: boolean): Promise<void> {
     const client = await this.ensureClient();
     return new Promise<void>((resolve, reject) => {
+      this.pendingReject = reject;
       client.callback = (resp: TokenResponse) => {
+        this.pendingReject = null;
         if (resp.error || !resp.access_token) {
           reject(new BackendAuthError(resp.error_description || resp.error));
           return;
@@ -161,6 +173,7 @@ export class DriveBackend implements SaveBackend {
       try {
         client.requestAccessToken(silent ? { prompt: "" } : undefined);
       } catch (err) {
+        this.pendingReject = null;
         reject(err instanceof Error ? err : new Error(String(err)));
       }
     });
@@ -233,7 +246,7 @@ export class DriveBackend implements SaveBackend {
       "https://www.googleapis.com/drive/v3/files" +
       "?spaces=appDataFolder" +
       "&fields=files(id,name,size,modifiedTime,appProperties)" +
-      "&pageSize=100&orderBy=modifiedTime desc";
+      "&pageSize=100"; // client-sorts by `at` below, no server orderBy needed
     const res = await this.authFetch(url, { method: "GET" }, token);
     if (!res.ok) throw new Error(`Drive list failed: ${res.status}`);
     const data = (await res.json()) as {

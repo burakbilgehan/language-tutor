@@ -129,18 +129,87 @@ export async function autoUpload(): Promise<boolean> {
   }
 }
 
+/** A Drive save worth offering to restore (id + its export time). */
+export interface RestoreCandidate {
+  id: string;
+  at: number;
+}
+
+/** Does the local browser DB have no profile yet (empty / freshly evicted)? */
+async function isLocalEmpty(): Promise<boolean> {
+  try {
+    const { getBrowserDb } = await import("@/db/browser");
+    const { getActiveProfile } = await import("@/core/profile");
+    const handle = await getBrowserDb();
+    return !getActiveProfile(handle.db);
+  } catch {
+    return false; // if unsure, don't claim empty (avoids clobbering real data)
+  }
+}
+
 /**
- * Interactive connect + immediate first upload. Called from the "Connect Drive"
- * button (user gesture, so the consent popup is allowed).
+ * Should we offer to restore a Drive save? Recovery direction is NOT just
+ * "remote strictly newer than lastSyncedAt" — the disaster case (IndexedDB
+ * evicted, localStorage survives) leaves lastSyncedAt == remote's timestamp,
+ * which "strictly newer" would miss. So we ALSO offer whenever the local DB is
+ * empty and Drive has any save. Returns the newest remote save to offer, or null.
  */
-export async function connectDrive(): Promise<void> {
+export async function findRestoreCandidate(): Promise<RestoreCandidate | null> {
+  const be = getDriveBackend();
+  if (!be || !be.isConnected()) return null;
+  let saves;
+  try {
+    saves = await be.list();
+  } catch {
+    return null;
+  }
+  const newest = saves[0];
+  if (!newest) return null;
+  const { isRemoteNewer } = await import("./rotate");
+  const state = readBackupState();
+  const localEmpty = await isLocalEmpty();
+  if (localEmpty || isRemoteNewer(state.lastSyncedAt, newest.at)) {
+    return { id: newest.id, at: newest.at };
+  }
+  return null;
+}
+
+/**
+ * Interactive connect. Called from the "Connect Drive" button (user gesture, so
+ * the consent popup is allowed). Returns a restore candidate if Drive already
+ * holds a save that should be offered BEFORE we upload local state — otherwise
+ * uploads the current save and returns null. This ordering is what prevents a
+ * freshly-onboarded local profile from shadowing a real save on first connect.
+ */
+export async function connectDrive(): Promise<RestoreCandidate | null> {
   const be = getDriveBackend();
   if (!be) throw new Error("no-client-id");
   await be.connect();
   const { markSyncReauthed } = await import("./sync-queue");
   markSyncReauthed();
   emit();
+  const candidate = await findRestoreCandidate();
+  if (candidate) return candidate; // let the caller offer restore first
   await autoUpload();
+  return null;
+}
+
+/**
+ * Download a Drive save and make it the live image (restore). Snapshots current
+ * state first as a safety net, records the sync point so we don't re-prompt.
+ */
+export async function restoreFromDrive(cand: RestoreCandidate): Promise<void> {
+  const be = getDriveBackend();
+  if (!be) throw new Error("no-client-id");
+  const bytes = await be.download(cand.id);
+  const { getBrowserDb } = await import("@/db/browser");
+  const handle = await getBrowserDb();
+  await handle.takeSnapshot(); // safety net before replacing
+  await handle.importBytes(bytes);
+  writeBackupState(
+    markBackedUp(readBackupState(), getLessonCount(), cand.at, { synced: true })
+  );
+  emit();
 }
 
 /** After re-auth (token restored), flush any pending upload. */

@@ -14,7 +14,14 @@ import {
   readDriveClientId,
   writeDriveClientId,
 } from "@/lib/backup/drive";
-import { connectDrive, getDriveBackend, emitBackupChange } from "@/lib/backup/controller";
+import {
+  connectDrive,
+  getDriveBackend,
+  emitBackupChange,
+  restoreFromDrive,
+  type RestoreCandidate,
+} from "@/lib/backup/controller";
+import type { RemoteSave } from "@/lib/backup/backend";
 import type { SnapshotMeta } from "@/db/browser";
 
 const S = {
@@ -42,6 +49,11 @@ const S = {
       "Bu, mevcut ilerlemeyi seçilen anlık yedekle değiştirir. Devam edilsin mi?",
     restoring: "Yükleniyor…",
     take: "Şimdi bir kopya al",
+    driveVersions: "Drive'daki sürümler",
+    driveRestoreConfirm:
+      "Bu, mevcut ilerlemeyi Drive'daki bu sürümle değiştirir. Devam edilsin mi?",
+    noDriveVersions: "Drive'da kayıt yok.",
+    refresh: "Yenile",
   },
   en: {
     driveTitle: "Google Drive Backup",
@@ -67,6 +79,11 @@ const S = {
       "This replaces your current progress with the selected snapshot. Continue?",
     restoring: "Restoring…",
     take: "Take a copy now",
+    driveVersions: "Versions on Drive",
+    driveRestoreConfirm:
+      "This replaces your current progress with this Drive version. Continue?",
+    noDriveVersions: "No saves on Drive.",
+    refresh: "Refresh",
   },
 };
 
@@ -87,11 +104,25 @@ export function BackupSection() {
   const [connecting, setConnecting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [snaps, setSnaps] = useState<SnapshotMeta[]>([]);
+  const [driveSaves, setDriveSaves] = useState<RemoteSave[] | null>(null);
   const [restoring, setRestoring] = useState(false);
 
   const loadSnaps = useCallback(async () => {
     const { listSnapshots } = await import("@/db/browser");
     setSnaps(await listSnapshots());
+  }, []);
+
+  const loadDriveSaves = useCallback(async () => {
+    const be = getDriveBackend();
+    if (!be || !be.isConnected()) {
+      setDriveSaves(null);
+      return;
+    }
+    try {
+      setDriveSaves(await be.list());
+    } catch {
+      setDriveSaves(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -100,7 +131,8 @@ export function BackupSection() {
     setSavedId(id);
     setClientId(id ?? "");
     void loadSnaps();
-  }, [loadSnaps]);
+    void loadDriveSaves();
+  }, [loadSnaps, loadDriveSaves]);
 
   const onSaveClientId = () => {
     writeDriveClientId(clientId);
@@ -109,12 +141,30 @@ export function BackupSection() {
     setMsg(t.saved);
   };
 
+  const doRestoreDrive = useCallback(async (cand: RestoreCandidate) => {
+    setRestoring(true);
+    try {
+      await restoreFromDrive(cand);
+      window.location.href = withBase("/map"); // full reload → fresh reads
+    } finally {
+      setRestoring(false);
+    }
+  }, []);
+
   const onConnect = async () => {
     setConnecting(true);
     setMsg(null);
     try {
-      await connectDrive();
+      // connectDrive returns a restore candidate when Drive already holds a save
+      // that should be offered BEFORE we upload local state (empty local / newer
+      // remote) — otherwise it uploads and returns null.
+      const candidate = await connectDrive();
+      if (candidate && window.confirm(t.driveRestoreConfirm)) {
+        await doRestoreDrive(candidate);
+        return;
+      }
       setMsg(t.connected);
+      await loadDriveSaves();
     } catch {
       setMsg(`❌ ${t.connectFailed}`);
     } finally {
@@ -124,8 +174,14 @@ export function BackupSection() {
 
   const onDisconnect = () => {
     getDriveBackend()?.disconnect();
+    setDriveSaves(null);
     emitBackupChange();
     setMsg(null);
+  };
+
+  const onRestoreDrive = async (s: RemoteSave) => {
+    if (!window.confirm(t.driveRestoreConfirm)) return;
+    await doRestoreDrive({ id: s.id, at: s.at });
   };
 
   const onTakeSnap = async () => {
@@ -197,6 +253,50 @@ export function BackupSection() {
           </div>
         )}
         {msg && <p className="mt-3 text-sm">{msg}</p>}
+
+        {backup.driveConnected && (
+          <div className="mt-5 border-t border-surface-2 pt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                {t.driveVersions}
+              </h3>
+              <button
+                type="button"
+                onClick={() => void loadDriveSaves()}
+                className="text-xs font-medium text-ink-soft hover:text-ink"
+              >
+                {t.refresh}
+              </button>
+            </div>
+            {driveSaves && driveSaves.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {driveSaves.map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-3 py-2 text-sm"
+                  >
+                    <span>
+                      {fmt(s.at)}
+                      {s.size != null && (
+                        <span className="text-ink-soft"> ({fmtSize(s.size)})</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={restoring}
+                      onClick={() => void onRestoreDrive(s)}
+                      className="rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold transition-colors hover:bg-surface disabled:opacity-60"
+                    >
+                      {restoring ? t.restoring : t.restore}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-soft">{t.noDriveVersions}</p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="rounded-cozy bg-surface p-6 shadow-cozy">

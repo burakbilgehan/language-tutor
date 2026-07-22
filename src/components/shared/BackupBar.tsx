@@ -14,7 +14,6 @@ import { useStrings } from "@/lib/i18n/use-strings";
 import { useBackup } from "@/lib/backup/use-backup";
 import { readBackupState, writeBackupState, markDismissed } from "@/lib/backup/state";
 import { emitBackupChange, flushPending, getDriveBackend } from "@/lib/backup/controller";
-import { isRemoteNewer } from "@/lib/backup/rotate";
 import { withBase } from "@/lib/base-path";
 
 const S = {
@@ -57,14 +56,16 @@ export function BackupBar() {
     void (async () => {
       await silentReconnect();
       emitBackupChange(); // reflect a restored session in the UI
-      const found = await checkDriveNewer();
+      const { findRestoreCandidate, getLessonCount, autoUpload } = await import(
+        "@/lib/backup/controller"
+      );
+      // Offer restore when Drive has a newer save OR the local DB is empty
+      // (IndexedDB evicted but localStorage — and Drive — survived).
+      const found = await findRestoreCandidate();
       setNewer(found);
-      // A live session, no newer remote, and unsynced local progress → push it
-      // up so other devices see it. Skip if nothing changed since last backup.
+      // No restore to offer + unsynced local progress → push it up so other
+      // devices see it. Skip if nothing changed since the last backup.
       if (!found) {
-        const { getLessonCount, autoUpload } = await import(
-          "@/lib/backup/controller"
-        );
         const st = readBackupState();
         if (getLessonCount() > st.lastBackupLessonCount) {
           void autoUpload().catch(() => {});
@@ -102,21 +103,8 @@ export function BackupBar() {
     if (!newer) return;
     setBusy(true);
     try {
-      const be = getDriveBackend();
-      if (!be) return;
-      const bytes = await be.download(newer.id);
-      const { getBrowserDb } = await import("@/db/browser");
-      const handle = await getBrowserDb();
-      await handle.takeSnapshot(); // safety net before replacing
-      await handle.importBytes(bytes);
-      // Record the sync point so we don't re-prompt for the same save.
-      const { markBackedUp } = await import("@/lib/backup/state");
-      const { getLessonCount } = await import("@/lib/backup/controller");
-      writeBackupState(
-        markBackedUp(readBackupState(), getLessonCount(), newer.at, {
-          synced: true,
-        })
-      );
+      const { restoreFromDrive } = await import("@/lib/backup/controller");
+      await restoreFromDrive(newer);
       window.location.href = withBase("/map"); // full reload → fresh reads
     } finally {
       setBusy(false);
@@ -218,25 +206,5 @@ async function requestPersist(): Promise<void> {
     await navigator.storage.persist();
   } catch {
     /* best-effort */
-  }
-}
-
-/**
- * On startup, if Drive is connected and its newest save is strictly newer than
- * what we last synced locally, return it so the UI can offer "load?". Silent on
- * any failure (no client id, dead token, offline).
- */
-async function checkDriveNewer(): Promise<{ id: string; at: number } | null> {
-  try {
-    const be = getDriveBackend();
-    if (!be || !be.isConnected()) return null;
-    const saves = await be.list();
-    const newest = saves[0];
-    if (!newest) return null;
-    const { readBackupState: read } = await import("@/lib/backup/state");
-    if (!isRemoteNewer(read().lastSyncedAt, newest.at)) return null;
-    return { id: newest.id, at: newest.at };
-  } catch {
-    return null;
   }
 }
