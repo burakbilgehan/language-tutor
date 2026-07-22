@@ -1,7 +1,7 @@
 ---
 id: T-035
 title: SRS kart arkası + chat geçmişi dil damgası (T-031 kapsam dışı kalanlar)
-status: backlog
+status: done
 priority: p2
 effort: S
 confidence: medium
@@ -39,3 +39,12 @@ Doğrulama: tr kartlı profil → en'e geç → /review arka yüzler en
 görünür (çeviri cache'ten, LLM çağrısı sadece ilk sefer); tr'ye dön →
 orijinal metin; SRS due sayıları hiç değişmez; chat geçmişi bozulmadan
 etiketli.
+
+Kapanış (2026-07-22): A şıkkı uygulandı — `srs_cards.lang` + `chat_messages.lang`
+tek bump'ta (SAVE_SCHEMA_VERSION 7→8). Arka yüz reveal'da front→native çeviri
+cache'inden yeniden kurulur (cachedOnly pre-warm + miss'te tek LLM çağrısı,
+başarısızlıkta stored back'e düşer); dedupe index'i ve SRS zamanlaması
+dokunulmadı. Chat geçmişi immutable, balonlara üretim-dili etiketi. Server
+tarafında `npm run db:push` migrasyonu gerekir (browser imajları self-heal).
+Eski v7 export dosyaları v8 import'ta reddedilir — upgrade sonrası bir kez
+yeniden export yeterli.
