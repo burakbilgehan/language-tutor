@@ -71,18 +71,19 @@ adım 3 (T-031, SERİ).
 | 2c | T-028 | paralel ok | sonnet | **done** — Ayarlar çipi — StatsHeader; 2a'nın Ayarlar-İÇİ paneliyle ayrı dosya, çakışmaz |
 | 3 | T-031 | SERİ, tek başına | opus | **done** — İçerik dil izolasyonu; kapsam dışı kalan srs/chat sızıntısı → T-035 |
 | ops-1 | — | blast bitince | — | `seed:grammar` + `seed:kanji` + `seed:vocab` re-export → commit → Pages deploy. Ticket AÇILMAZ (içerik üretimi = ops kuralı). tr kütüphanesi bununla tamamlanır |
-| 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün ranking yardımcısını kullanır. NOT: bitince yeni bir üretim yüzeyi doğar → ops-2 |
-| 4b | T-032 | paralel ok | opus | Drive sync — save/* + yeni oauth modülü, 4a ile ayrık. T-024 export-strip'i Drive'a giden imaj için de geçerli |
-| 4c | T-035 | paralel ok | opus | SRS arka yüz + chat dil damgası — küçük ama tasarım çatalı (şema bump A/B kararı) var; schema.ts'e tek dokunan adım bu, 4a/4b ile ayrık olduğunu başlamadan doğrula |
-| ops-2 | — | T-030 sonrası | — | ja vocab blast (yeni index'in LLM yarısı) + `seed:vocab` ja re-export → deploy. Ayrı tören değil: T-030 merge'i ja satırlarını ekler, mevcut aralıklı blast döngüsü sonraki turda otomatik kapsar |
+| 4a | T-030 | paralel ok | opus | **REVERTED** — ja sözlük merge edildi, 2 fix turuna rağmen içerik kalitesi kabul edilemez (entry eşleşme hatası), söküldü. Yeniden deneme Burak kararına bağlı; önkoşul: Jisho-tarzı sunum prototipi onayı, sonra veri. ops-2 bununla düştü |
+| 4b | T-032 | paralel ok | opus | **done** — Drive sync + save UX iki faz komple. Açık ops: Google Cloud client ID + gerçek bağla-yedekle-geri-yükle turu (Burak) |
+| 4c | T-035 | paralel ok | opus | **done** — A şıkkı (lang kolonları), SAVE_SCHEMA_VERSION 7→8. Açık ops: v8 save re-export (Burak) |
+| 4.5a | T-036 | paralel ok | sonnet | Atıf sayfası — SAAT İŞLİYOR: deploy JMdict alt kümesini (kanji lookup) hâlâ taşıyor, EDRDG atıf şartı ja sözlük söküldükten sonra da aktif. T-026'dan ÖNCE: tarama son hali görsün |
+| 4.5b | T-037 | paralel ok | sonnet | Vocab index lazy import (~692 KB zh eager bundle) — kod değişikliği olduğu için T-026'dan önce bitmeli |
+| 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar. Kapsama dahil: T-034 cancel route'ları, T-032 Drive OAuth/token yolu, T-025 onboarding import'u |
 
 Dalga 4 / blast birlikte yaşama notları (2026-07-22): blast aralıklı
 koşuyor (başlat/kes), dalga 4'ü beklemiyor. (1) Kota: blast + opus
 session'ları aynı Max aboneliğini paylaşır — aynı ana denk getirme.
-(2) T-035 şema bump'lı biterse (A şıkkı) merge+migration sırasında
-blast'ı durdur, sonra devam. (3) ops-1 kısmi içerikle de yapılabilir
-(vocab 1400/4991 emsali) — blast'ın bitmesini beklemek zorunda değil.
-| 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar (depends güncellendi: T-034 dahil). T-034'ün cancel route'ları da tarama kapsamında |
+(2) T-035 v8 migration'ı lokale uygulandı; blast'la çakışma kalmadı.
+(3) ops-1 kısmi içerikle de yapılabilir (vocab 1400/4991 emsali) —
+blast'ın bitmesini beklemek zorunda değil.
 
 Lisans: bilinçli ertelendi (müşteri yok; lisanssız public = all rights
 reserved). Tek kural: lisans kararından önce dış PR kabul etme. Public

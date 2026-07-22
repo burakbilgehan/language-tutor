@@ -5,7 +5,7 @@ status: backlog
 priority: p1
 effort: L
 confidence: medium
-depends: [T-025, T-028, T-030, T-031, T-032, T-034, T-035]
+depends: [T-032, T-034, T-035, T-036, T-037]
 created: 2026-07-22
 ---
 Proje bir noktada public'e açılıp monetize edilebilir hale gelmeli (Burak,
