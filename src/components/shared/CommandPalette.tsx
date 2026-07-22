@@ -11,6 +11,8 @@ import {
   type SearchResult,
 } from "@/lib/search-index";
 
+type Indexed = Awaited<ReturnType<typeof buildSearchIndex>>;
+
 const S = {
   tr: {
     // Examples must match the profile's target language — a Dutch learner
@@ -22,6 +24,7 @@ const S = {
     },
     empty: "Sonuç yok.",
     hint: "Aramak için yazmaya başla",
+    loading: "Yükleniyor…",
     kinds: { kanji: "kanji", vocab: "kelime", grammar: "gramer" } as Record<
       SearchKind,
       string
@@ -35,6 +38,7 @@ const S = {
     },
     empty: "No results.",
     hint: "Start typing to search",
+    loading: "Loading…",
     kinds: { kanji: "kanji", vocab: "word", grammar: "grammar" } as Record<
       SearchKind,
       string
@@ -70,11 +74,32 @@ export function CommandPalette() {
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Built once per language; the source indexes are static imports.
-  const index = useMemo(() => buildSearchIndex(lang), [lang]);
+  // Built once per language, lazily (T-037): the vocab half of the index is
+  // a per-language dynamic import(), so the dictionary JSON only loads once
+  // the palette is actually opened, and only for languages that have one.
+  // Kept as state (not useMemo) because building it is now async.
+  const [index, setIndex] = useState<Indexed | null>(null);
+  const [indexLang, setIndexLang] = useState<string | null>(null);
+  const loading = open && (index === null || indexLang !== lang);
+
+  useEffect(() => {
+    if (!open || indexLang === lang) return;
+    let cancelled = false;
+    buildSearchIndex(lang).then((built) => {
+      // Race guard: ignore a stale resolution if `lang` changed (profile
+      // switch) or the palette closed/reopened while the import was in flight.
+      if (cancelled) return;
+      setIndex(built);
+      setIndexLang(lang);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, lang, indexLang]);
+
   const results = useMemo(
-    () => searchIndex(index, query, lang),
-    [index, query, lang],
+    () => (index && indexLang === lang ? searchIndex(index, query, lang) : []),
+    [index, indexLang, query, lang],
   );
 
   // cmd/ctrl-K toggles. The header search button dispatches a "palette:open"
@@ -182,7 +207,11 @@ export function CommandPalette() {
           </kbd>
         </div>
         <div className="max-h-[55vh] overflow-y-auto">
-          {query.trim() === "" ? (
+          {loading ? (
+            <p className="px-4 py-6 text-center text-sm text-ink-soft">
+              {t.loading}
+            </p>
+          ) : query.trim() === "" ? (
             <p className="px-4 py-6 text-center text-sm text-ink-soft">
               {t.hint}
             </p>

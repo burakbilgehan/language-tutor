@@ -9,7 +9,7 @@
 import { toRomajiReading } from "@/lib/jp";
 import { foldPinyin } from "@/lib/zh";
 import { kanjiIndexFor } from "@/lib/kanji-index";
-import { vocabIndexFor } from "@/lib/vocab-index";
+import { vocabIndexForAsync } from "@/lib/vocab-index/async";
 import { grammarIndexFor } from "@/lib/grammar-index";
 
 export type SearchKind = "kanji" | "vocab" | "grammar";
@@ -70,8 +70,15 @@ export function isCjkQuery(s: string): boolean {
  * site — it walks ~7500 entries and folds every reading through wanakana).
  * Entries keep source order, which is level-major in all three indexes —
  * used as the relevance tiebreak (easier levels first).
+ *
+ * Async (T-037): the vocab half is loaded via a per-language dynamic
+ * import() so a profile with no vocab dictionary (nl, ja) never pulls the
+ * zh dictionary JSON into its first-load JS. Kanji/grammar stay static
+ * imports — lazifying those is a separate ticket.
  */
-export function buildSearchIndex(targetLanguage: string): Indexed[] {
+export async function buildSearchIndex(
+  targetLanguage: string,
+): Promise<Indexed[]> {
   const out: Indexed[] = [];
 
   // --- kanji (ja) ---
@@ -91,7 +98,7 @@ export function buildSearchIndex(targetLanguage: string): Indexed[] {
   }
 
   // --- vocab (zh) ---
-  for (const v of vocabIndexFor(targetLanguage)) {
+  for (const v of await vocabIndexForAsync(targetLanguage)) {
     out.push({
       result: {
         kind: "vocab",
