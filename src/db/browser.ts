@@ -11,6 +11,7 @@ import { drizzle, type SQLJsDatabase as DrizzleSqlJs } from "drizzle-orm/sql-js"
 import * as schema from "./schema";
 import { DDL } from "./ddl";
 import { withBase } from "@/lib/base-path";
+import { stampAndSerialize, validateSaveImage } from "@/lib/backup/save-image";
 
 export type BrowserDb = DrizzleSqlJs<typeof schema>;
 
@@ -57,6 +58,91 @@ async function idbPut(bytes: Uint8Array): Promise<void> {
   });
 }
 
+// ---------------------------------------------------------------- snapshots
+// Last-K automatic local snapshots (T-032 Faz 1). Stored as EXTRA KEYS in the
+// SAME object store as the live image — "snapshot-<epochMs>" — so no IndexedDB
+// version bump / new object store / migration on existing users. They protect
+// against bad-import / wrong-click (NOT against the browser wiping IndexedDB;
+// that's what Drive sync is for). Rotation keeps the newest K.
+
+export const SNAPSHOT_PREFIX = "snapshot-";
+export const SNAPSHOT_KEEP = 5;
+
+export interface SnapshotMeta {
+  key: string;
+  at: number;
+  /** Byte size if cheaply known (only the just-taken snapshot); else null. */
+  size: number | null;
+}
+
+function idbAllKeys(): Promise<string[]> {
+  return idbOpen().then(
+    (dbh) =>
+      new Promise<string[]>((resolve, reject) => {
+        const tx = dbh.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).getAllKeys();
+        req.onsuccess = () =>
+          resolve((req.result as IDBValidKey[]).map(String));
+        req.onerror = () => reject(req.error);
+      })
+  );
+}
+
+function idbGetKey(key: string): Promise<Uint8Array | null> {
+  return idbOpen().then(
+    (dbh) =>
+      new Promise<Uint8Array | null>((resolve, reject) => {
+        const tx = dbh.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => resolve((req.result as Uint8Array) ?? null);
+        req.onerror = () => reject(req.error);
+      })
+  );
+}
+
+function idbPutKey(key: string, bytes: Uint8Array): Promise<void> {
+  return idbOpen().then(
+    (dbh) =>
+      new Promise<void>((resolve, reject) => {
+        const tx = dbh.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(bytes, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+  );
+}
+
+function idbDeleteKey(key: string): Promise<void> {
+  return idbOpen().then(
+    (dbh) =>
+      new Promise<void>((resolve, reject) => {
+        const tx = dbh.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })
+  );
+}
+
+/**
+ * Snapshot metadata (newest first). Reads KEYS ONLY — timestamps are encoded in
+ * the key name — so listing never pulls the (large) snapshot bytes. `size` is
+ * left null; loading 5×~17MB just to show a size on the settings page isn't
+ * worth it.
+ */
+export async function listSnapshots(): Promise<SnapshotMeta[]> {
+  const keys = (await idbAllKeys()).filter((k) =>
+    k.startsWith(SNAPSHOT_PREFIX)
+  );
+  return keys
+    .map((key) => ({
+      key,
+      at: Number(key.slice(SNAPSHOT_PREFIX.length)) || 0,
+      size: null as number | null,
+    }))
+    .sort((a, b) => b.at - a.at);
+}
+
 interface BrowserDbHandle {
   /** Canlı drizzle örneğine delege eden Proxy — import sonrası da geçerli
    * kalır (sunucudaki lazy `db` Proxy kalıbının aynısı). */
@@ -70,6 +156,10 @@ interface BrowserDbHandle {
   exportBytes: () => Uint8Array;
   /** Save import: imajı değiştir (replace-all) + kalıcılaştır. */
   importBytes: (bytes: Uint8Array) => Promise<void>;
+  /** Otomatik yerel snapshot al (canlı imajın kopyası) + son K'ye buda. */
+  takeSnapshot: () => Promise<SnapshotMeta>;
+  /** Bir snapshot'ı canlı imaj yap (bad-import/yanlış-tık kurtarma). */
+  restoreSnapshot: (key: string) => Promise<void>;
 }
 
 let handle: BrowserDbHandle | null = null;
@@ -167,15 +257,56 @@ async function create(): Promise<BrowserDbHandle> {
       }
       await idbPut(sqlite.export());
     },
-    exportBytes: () => sqlite.export(),
+    exportBytes: () => stampAndSerialize(sqlite),
     importBytes: async (bytes: Uint8Array) => {
+      // Validate header + schema version before swapping in — a corrupt or
+      // wrong-version image must never silently replace good progress.
+      await validateSaveImage(bytes, async () => SQL);
       sqlite.close();
       sqlite = new SQL.Database(bytes);
       sqlite.run("PRAGMA foreign_keys = ON");
       live = drizzle(sqlite, { schema });
       await idbPut(bytes);
     },
+    takeSnapshot: () => doSnapshot(),
+    restoreSnapshot: async (key: string) => {
+      const bytes = await idbGetKey(key);
+      if (!bytes) throw new Error(`snapshot not found: ${key}`);
+      // Same guard as any other restore path.
+      await validateSaveImage(bytes, async () => SQL);
+      // Safety net: snapshot the CURRENT state before replacing it, so a
+      // mis-click restore is itself undoable (mirrors restoreFromDrive).
+      await doSnapshot();
+      sqlite.close();
+      sqlite = new SQL.Database(bytes);
+      sqlite.run("PRAGMA foreign_keys = ON");
+      live = drizzle(sqlite, { schema });
+      await idbPut(bytes); // snapshot becomes the live image
+    },
   };
+
+  async function doSnapshot(): Promise<SnapshotMeta> {
+    const bytes = stampAndSerialize(sqlite);
+    const at = Date.now();
+    const key = `${SNAPSHOT_PREFIX}${at}`;
+    await idbPutKey(key, bytes);
+    // Rotate: keep the newest SNAPSHOT_KEEP, delete the rest. Timestamps are
+    // encoded in the key name, so rotation reads KEYS ONLY — never the (large)
+    // snapshot bytes.
+    const keys = (await idbAllKeys()).filter((k) =>
+      k.startsWith(SNAPSHOT_PREFIX)
+    );
+    const { pruneToK } = await import("@/lib/backup/rotate");
+    const doomed = pruneToK(
+      keys.map((k) => ({
+        id: k,
+        at: Number(k.slice(SNAPSHOT_PREFIX.length)) || 0,
+      })),
+      SNAPSHOT_KEEP
+    );
+    await Promise.all(doomed.map((k) => idbDeleteKey(k)));
+    return { key, at, size: bytes.byteLength };
+  }
 }
 
 /** Tekil tarayıcı DB handle'ı (ilk çağrıda wasm + imaj yüklenir). */

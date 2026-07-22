@@ -15,7 +15,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-029](T-029-vocab-index-multiform.md) | Vocab index çok-form birleştirme (马 "horse") | done | p2 | S | high |
 | [T-030](T-030-ja-vocab-dictionary.md) | ja kelime sözlüğü (JMdict tabanlı) | done | p2 | L | medium |
 | [T-031](T-031-content-language-isolation.md) | İçerik dil izolasyonu (en'de Türkçe sızıntısı) | done | p2 | M | medium |
-| [T-032](T-032-save-ux-drive-sync.md) | Save teşviki + Google Drive yedekleme | backlog | p2 | L | medium |
+| [T-032](T-032-save-ux-drive-sync.md) | Save teşviki + Google Drive yedekleme | done | p2 | L | medium |
 | [T-033](T-033-vocab-search-ranking.md) | Sözlük arama ranking'i ("ma" gürültüsü) | done | p1 | S | high |
 | [T-034](T-034-job-queue-control-panel.md) | Job kuyruğu kontrol paneli (görünürlük + cancel + boot onay) | done | p1 | L | medium |
 | [T-035](T-035-srs-chat-language-stamp.md) | SRS arka yüz + chat dil damgası (T-031 artığı) | backlog | p2 | S | medium |

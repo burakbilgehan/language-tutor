@@ -575,6 +575,9 @@ export async function saveExportApi(): Promise<void> {
   a.download = `language-tutor-save-${stamp}.db`;
   a.click();
   URL.revokeObjectURL(url);
+  // A manual download counts as a backup — reset the reminder (T-032).
+  const { recordManualExport } = await import("@/lib/backup/controller");
+  recordManualExport();
 }
 
 export async function saveImportApi(file: File): Promise<void> {
@@ -1034,6 +1037,14 @@ export async function completeNodeApi(nodeId: string): Promise<{
         profile.targetLanguage
       );
     }
+  }
+  // Backup nudge + local snapshot + Drive auto-upload (T-032). Static only, and
+  // only for a first-time completion (re-completing an already-done node isn't
+  // new progress). Best-effort — never blocks or throws into the flow.
+  if (!wasCompleted && node?.nodeType === "main") {
+    void import("@/lib/backup/controller")
+      .then((m) => m.onLessonCompleted())
+      .catch(() => {});
   }
   return { ...flow, extendingLevel };
 }
