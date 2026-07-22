@@ -1,6 +1,30 @@
+import Database from "better-sqlite3";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { SAVE_SCHEMA_VERSION } from "./version";
+
+/**
+ * Strips in-flight generation_jobs rows (queued/running) out of a serialized
+ * SQLite image, on a throwaway second connection — never the live DB, so a
+ * batch running at export time keeps running undisturbed. If a save export is
+ * taken mid-batch, those rows would otherwise get baked into the snapshot and
+ * any session importing it would have recoverStaleJobs (src/lib/jobs.ts)
+ * adopt them as orphans and start burning LLM tokens on its own. done/error
+ * rows (job history) are left alone.
+ */
+function stripJobQueue(buffer: Buffer): Buffer {
+  const copy = new Database(buffer);
+  try {
+    copy
+      .prepare(
+        `DELETE FROM generation_jobs WHERE status IN ('queued', 'running')`
+      )
+      .run();
+    return copy.serialize();
+  } finally {
+    copy.close();
+  }
+}
 
 /**
  * Produces a self-contained SQLite snapshot of the whole database as a Buffer,
@@ -26,7 +50,7 @@ export function exportSave(): { buffer: Buffer; filename: string } {
 
   // Fold WAL contents into the main image so the snapshot is complete.
   db.$client.pragma("wal_checkpoint(TRUNCATE)");
-  const buffer = db.$client.serialize();
+  const buffer = stripJobQueue(db.$client.serialize());
 
   const stamp = new Date()
     .toISOString()

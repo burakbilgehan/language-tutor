@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
-import { db, resetDb, DB_PATH } from "@/db";
+import { inArray } from "drizzle-orm";
+import { db, tables, resetDb, DB_PATH } from "@/db";
 import { SAVE_SCHEMA_VERSION } from "./version";
 
 export class SaveImportError extends Error {}
@@ -84,4 +85,20 @@ export function importSave(bytes: Buffer): void {
   // sure it's back in WAL mode (a serialized image may carry a different
   // journal mode).
   db.$client.pragma("journal_mode = WAL");
+
+  // Belt-and-suspenders: exportSave (src/lib/save/export.ts) already strips
+  // in-flight generation_jobs rows, but saves taken before that fix are still
+  // out there. Any queued/running job surviving into an import would get
+  // adopted by recoverStaleJobs on next boot and start burning LLM tokens
+  // unasked — cancel them here instead. Reusing the "error" status (no
+  // "cancelled" value exists, and adding one would be a schema churn for no
+  // real gain); the message makes clear this isn't a generation failure.
+  db.update(tables.generationJobs)
+    .set({
+      status: "error",
+      error: "İçe aktarılan kayıttan iptal edildi.",
+      finishedAt: new Date(),
+    })
+    .where(inArray(tables.generationJobs.status, ["queued", "running"]))
+    .run();
 }
