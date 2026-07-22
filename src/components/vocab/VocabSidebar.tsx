@@ -12,6 +12,7 @@ import {
   vocabGenerateBatch,
   type VocabEntrySummary,
 } from "@/lib/client-api";
+import { rankVocab } from "@/lib/vocab-search";
 
 const STATUS_ICONS: Record<VocabEntrySummary["status"], string> = {
   ready: "📖",
@@ -70,14 +71,6 @@ const S = {
     clickToGenerate: (status: string) => `${status} — click to generate`,
   },
 };
-
-/** Diacritic-insensitive lowercase ("xué" matches "xue"). */
-function fold(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "");
-}
 
 export function VocabSidebar() {
   const s = useStrings(S);
@@ -197,15 +190,11 @@ export function VocabSidebar() {
     </Link>
   );
 
-  // Arama modu: tüm seviyelerde düz filtre, DOM'u küçük tutmak için CAP'li.
+  // Arama modu: katmanlı skorlu sıralama (T-033), DOM'u küçük tutmak için
+  // CAP'li. rankVocab zaten position sırasını (seviye-major + frekans) katman
+  // içi eşitlik bozucu olarak koruyor — entries burada ekstra sıralanmıyor.
   if (query.trim()) {
-    const q = fold(query.trim());
-    const matches = entries.filter(
-      (v) =>
-        v.word.includes(query.trim()) ||
-        fold(v.reading).includes(q) ||
-        v.meaningsEn.some((m) => fold(m).includes(q))
-    );
+    const matches = rankVocab(entries, query);
     return (
       <div className="flex flex-col gap-3 p-4">
         <input

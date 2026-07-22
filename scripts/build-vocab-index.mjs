@@ -25,6 +25,11 @@ const SKIP_GLOSS = /^(variant of|old variant of|used in|see [^ ]+$)/i;
 // surname vs "mǎ" the horse).
 const isProperNoun = (f) => /^\p{Lu}/u.test(f.transcriptions?.pinyin ?? "");
 
+// A pinyin transcription with no tone diacritic — the neutral-tone spelling
+// particles are conventionally written with (吗→ma, 得→de, 了→le, 的→de).
+const TONE_MARKS = /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/;
+const isToneless = (f) => !TONE_MARKS.test(f.transcriptions?.pinyin ?? "");
+
 async function loadDataset() {
   const localPath = process.argv[2];
   if (localPath) return JSON.parse(readFileSync(localPath, "utf8"));
@@ -49,12 +54,26 @@ for (const entry of data) {
   // form's glosses are appended (lossless union) so a search on ANY meaning
   // finds the word. (T-029: first-form-wins used to make 马 read "surname Ma"
   // and hid it from "horse".)
+  //
+  // Exception (T-033): particles/interjections (吗/得/了/着/吧/呢/的/...) carry
+  // a toneless "neutral tone" form ALONGSIDE a toned reading-form that
+  // happens to have more glosses (得 dé "to obtain" has 12 meanings vs de's
+  // 1) — pickMost would show the toned reading as primary, which is wrong
+  // for how these words are actually taught/used (得→de, not dé). When a
+  // toneless form exists among the common candidates, it wins regardless of
+  // gloss count.
   const withMeanings = entry.forms.filter((f) => f.meanings?.length > 0);
   if (withMeanings.length === 0) continue;
   const common = withMeanings.filter((f) => !isProperNoun(f));
   const pickMost = (fs) =>
     fs.reduce((a, b) => (b.meanings.length > a.meanings.length ? b : a));
-  const form = common.length > 0 ? pickMost(common) : pickMost(withMeanings);
+  const tonelessCommon = common.filter(isToneless);
+  const form =
+    tonelessCommon.length > 0
+      ? pickMost(tonelessCommon)
+      : common.length > 0
+        ? pickMost(common)
+        : pickMost(withMeanings);
 
   const en = [];
   for (const f of [form, ...withMeanings.filter((f) => f !== form)]) {

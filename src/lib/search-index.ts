@@ -45,7 +45,7 @@ function foldJaReading(s: string): string {
 }
 
 /** Diacritic-insensitive latin fold (Turkish çğışöü, Dutch é…): çekim→cekim. */
-function foldWord(s: string): string {
+export function foldWord(s: string): string {
   return s
     .toLowerCase()
     .replace(/ı/g, "i")
@@ -54,10 +54,15 @@ function foldWord(s: string): string {
 }
 
 /** Split gloss/title text into folded word tokens. */
-function tokenize(s: string): string[] {
+export function tokenize(s: string): string[] {
   return foldWord(s)
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 1);
+}
+
+/** Any hanzi/kana in the string — used to gate CJK-exact/prefix layers. */
+export function isCjkQuery(s: string): boolean {
+  return /[぀-ゟ゠-ヿ一-鿿]/.test(s);
 }
 
 /**
@@ -179,7 +184,7 @@ export function searchIndex(
   const readingNeedle =
     targetLanguage === "zh" ? foldPinyin(raw) : foldJaReading(raw);
   const tokenNeedle = foldWord(raw).replace(/[^a-z0-9]/g, "");
-  const cjkQuery = /[぀-ゟ゠-ヿ一-鿿]/.test(raw) ? raw : "";
+  const cjkQuery = isCjkQuery(raw) ? raw : "";
 
   const scored: { score: number; i: number }[] = [];
   for (let i = 0; i < index.length; i++) {
