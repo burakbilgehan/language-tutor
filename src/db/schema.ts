@@ -380,8 +380,14 @@ export const generationJobs = sqliteTable("generation_jobs", {
     ],
   }).notNull(),
   refId: text("ref_id").notNull(),
+  // NOTE: this enum is a TypeScript-level constraint only — drizzle emits the
+  // column as a bare `text`, no SQL CHECK. Adding values ("cancelled",
+  // "pending_approval") produces byte-identical DDL, so NO db:push and NO
+  // SAVE_SCHEMA_VERSION bump (same precedent as attempts.gradedBy "self").
+  // An older app reading these new values is safe: its recoverStaleJobs only
+  // acts on "queued"/"running", so it ignores them rather than mis-running.
   status: text("status", {
-    enum: ["queued", "running", "done", "error"],
+    enum: ["queued", "running", "done", "error", "cancelled", "pending_approval"],
   })
     .notNull()
     .default("queued"),

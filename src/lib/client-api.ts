@@ -407,12 +407,21 @@ export async function vocabGenerateBatch(level?: string): Promise<void> {
     )
     .all()
     .filter((e) => !level || e.level === level);
+  const { startJob, newBatchId } = await import("@/lib/jobs-store");
+  const batchId = newBatchId();
   void (async () => {
     for (const e of entries) {
+      const j = startJob("vocab", e.id, batchId);
+      if (j.signal.aborted) {
+        j.fail(new Error("iptal edildi"));
+        break;
+      }
       try {
         await coreG.generateVocabContent(handle.db, gen, e.id);
+        j.done();
       } catch (err) {
         console.warn("[batch] sözlük üretimi hata:", e.word, err);
+        j.fail(err);
       }
       handle.persistSoon();
     }
@@ -664,14 +673,25 @@ export async function grammarGenerateBatch(level?: string): Promise<void> {
     )
     .all()
     .filter((t) => !level || t.level === level);
-  for (const t of topics) {
-    try {
-      await coreG.generateGrammarContent(handle.db, gen, t.id);
-    } catch (err) {
-      console.warn("[batch] gramer üretimi hata:", t.slug, err);
+  const { startJob, newBatchId } = await import("@/lib/jobs-store");
+  const batchId = newBatchId();
+  void (async () => {
+    for (const t of topics) {
+      const j = startJob("grammar", t.id, batchId);
+      if (j.signal.aborted) {
+        j.fail(new Error("iptal edildi"));
+        break;
+      }
+      try {
+        await coreG.generateGrammarContent(handle.db, gen, t.id);
+        j.done();
+      } catch (err) {
+        console.warn("[batch] gramer üretimi hata:", t.slug, err);
+        j.fail(err);
+      }
+      handle.persistSoon();
     }
-    handle.persistSoon();
-  }
+  })();
 }
 
 export async function kanjiGenerate(char: string): Promise<void> {
@@ -719,12 +739,21 @@ export async function kanjiGenerateBatch(level: string): Promise<{ queued: numbe
       )
     )
     .all();
+  const { startJob, newBatchId } = await import("@/lib/jobs-store");
+  const batchId = newBatchId();
   void (async () => {
     for (const e of entries) {
+      const j = startJob("kanji", e.id, batchId);
+      if (j.signal.aborted) {
+        j.fail(new Error("iptal edildi"));
+        break;
+      }
       try {
         await coreG.generateKanjiContent(handle.db, gen, e.id);
+        j.done();
       } catch (err) {
         console.warn("[batch] kanji üretimi hata:", e.char, err);
+        j.fail(err);
       }
       handle.persistSoon();
     }
@@ -1072,4 +1101,83 @@ export async function llmTest(): Promise<{ ok: boolean; ms?: number; error?: str
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+// ------------------------------------------------------------------ Job kuyruğu (T-034)
+// Pop + panel için ortak seam. Sunuculu: GET/POST /api/jobs*. Statik: iş
+// tablosu yok — tarayıcı-içi store (src/lib/jobs-store.ts) beslendiği için
+// aynı UI iki modda da çalışır. onJobsChange, mod ayrımını UI'dan gizler:
+// sunucuda 4s poll (roadmap kalıbı), statikte store aboneliği.
+
+export async function jobsList(): Promise<import("@/core/jobs").JobsSnapshot> {
+  if (!IS_STATIC) return fetchJson("/api/jobs");
+  const { snapshotJobs } = await import("@/lib/jobs-store");
+  return snapshotJobs();
+}
+
+export async function cancelJobApi(jobId: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: "POST",
+    });
+    return;
+  }
+  const { cancelJobLocal } = await import("@/lib/jobs-store");
+  cancelJobLocal(jobId);
+}
+
+export async function cancelAllJobsApi(includeSystem = false): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch("/api/jobs/cancel-all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ includeSystem }),
+    });
+    return;
+  }
+  const { cancelAllJobsLocal } = await import("@/lib/jobs-store");
+  cancelAllJobsLocal({ userOnly: !includeSystem });
+}
+
+export async function resumePendingJobsApi(): Promise<void> {
+  if (!IS_STATIC) {
+    await fetch("/api/jobs/resume-pending", { method: "POST" });
+    return;
+  }
+  // Statikte boot-recovery kavramı yok (sekme kapanınca kuyruk zaten ölür).
+}
+
+/**
+ * Job değişikliklerini dinle; UI'yı mod ayrımından kurtarır. Sunuculu modda
+ * roadmap'in 4s poll kalıbıyla GET /api/jobs çeker; statik modda tarayıcı
+ * store'una abone olur. `cb` her güncel snapshot'ta çağrılır. Dönen fonksiyon
+ * aboneliği kapatır.
+ */
+export function onJobsChange(
+  cb: (snap: import("@/core/jobs").JobsSnapshot) => void
+): () => void {
+  if (!IS_STATIC) {
+    let stopped = false;
+    const tick = () => {
+      jobsList()
+        .then((s) => {
+          if (!stopped) cb(s);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const timer = setInterval(tick, 4000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }
+  let unsub = () => {};
+  void (async () => {
+    const { subscribeJobs } = await import("@/lib/jobs-store");
+    const push = () => void jobsList().then(cb).catch(() => {});
+    push();
+    unsub = subscribeJobs(push);
+  })();
+  return () => unsub();
 }

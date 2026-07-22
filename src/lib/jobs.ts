@@ -15,6 +15,12 @@ import {
   topChapterLevel as coreTopChapterLevel,
 } from "@/core/curriculum-gen";
 import {
+  listJobs as coreListJobs,
+  cancelJob as coreCancelJob,
+  cancelAllJobs as coreCancelAllJobs,
+  resumePendingJobs as coreResumePendingJobs,
+} from "@/core/jobs";
+import {
   CurriculumSchema,
   GrammarTopicSchema,
   KanjiContentSchema,
@@ -73,30 +79,37 @@ export function recoverStaleJobs() {
       )
     )
     .run();
-  // Adopt orphan queued jobs: their driving loop may have died with an old
-  // process. Driven sequentially, like every bulk loop.
-  const orphans = db.query.generationJobs
-    .findMany({
-      where: and(
+  // Orphan queued jobs: their driving loop may have died with an old process.
+  // BEHAVIOR CHANGE (T-034): we no longer auto-run them. Unconditionally
+  // adopting + re-driving a queued backlog is right for a crash but a nasty
+  // surprise for an imported/forgotten queue (silent token burn the user
+  // never re-triggered). Instead we mark them `pending_approval`; the control
+  // panel surfaces "N iş bekliyor — devam et?" and the user resumes manually
+  // (resumePendingJobs → back to `queued` → runJob). Crash recovery is
+  // preserved, just gated behind an explicit click. Marking (not running)
+  // still releases nothing that createJob depends on: a pending_approval row
+  // keeps the (jobType, refId) slot out of the dedupe check below, and the
+  // resource is treated as live so it isn't flipped to error underneath.
+  db.update(tables.generationJobs)
+    .set({ status: "pending_approval" })
+    .where(
+      and(
         eq(tables.generationJobs.status, "queued"),
         lt(tables.generationJobs.createdAt, PROCESS_START)
-      ),
-      columns: { id: true },
-      orderBy: [asc(tables.generationJobs.createdAt)],
-    })
-    .sync();
-  if (orphans.length > 0) {
-    void (async () => {
-      for (const o of orphans) {
-        await runJob(o.id); // no-op if another process picked it up
-      }
-    })();
-  }
+      )
+    )
+    .run();
 
   // Resources stuck 'generating' with no live job → 'error' (retryable in UI).
+  // `pending_approval` counts as live: those jobs are just awaiting the user's
+  // "devam et?", their target resource must NOT be flipped to error underneath.
   const live = db.query.generationJobs
     .findMany({
-      where: inArray(tables.generationJobs.status, ["queued", "running"]),
+      where: inArray(tables.generationJobs.status, [
+        "queued",
+        "running",
+        "pending_approval",
+      ]),
       columns: { jobType: true, refId: true },
     })
     .sync();
@@ -395,6 +408,14 @@ export async function runJob(jobId: string) {
     } else {
       throw new Error(`Bilinmeyen job tipi: ${job.jobType}`);
     }
+    // Cancel check (T-034): the CLI child can't be killed, so a job cancelled
+    // mid-run still finished its LLM call and wrote content above — but if the
+    // user hit cancel while it ran, respect that verdict and don't overwrite
+    // the "cancelled" status with "done". The sequential batch driver stops on
+    // its own: the remaining queued rows were deleted by cancelAllJobs/cancelJob
+    // and runJob no-ops on them via the status guard at the top.
+    const afterRun = getJob(jobId);
+    if (afterRun?.status === "cancelled") return;
     db.update(tables.generationJobs)
       .set({ status: "done", finishedAt: new Date() })
       .where(eq(tables.generationJobs.id, jobId))
@@ -451,4 +472,40 @@ export function ensureChaptersBackfilled() {
 /** Exposed for the extend/complete routes to find the current top level. */
 export function topChapterLevel(curriculumId: string, targetLanguage: string) {
   return coreTopChapterLevel(db, curriculumId, targetLanguage);
+}
+
+// ---------------------------------------------------------------- T-034 shells
+// Thin server bindings over the env-agnostic core (src/core/jobs.ts). Routes
+// call these; the browser (static) path calls the core directly via client-api.
+
+/** Snapshot for the pop + panel (GET /api/jobs). No LLM. */
+export function listJobs(historyLimit?: number) {
+  return coreListJobs(db, historyLimit);
+}
+
+/** Cancel one job (POST /api/jobs/[id]/cancel). */
+export function cancelJob(jobId: string) {
+  return coreCancelJob(db, jobId);
+}
+
+/** Bulk cancel (POST /api/jobs/cancel-all); user batches only by default. */
+export function cancelAllJobs(opts?: { userOnly?: boolean }) {
+  return coreCancelAllJobs(db, opts);
+}
+
+/**
+ * Resume boot-recovered `pending_approval` jobs (POST /api/jobs/resume-pending).
+ * Core flips them back to `queued`; here we drive them sequentially, exactly
+ * like every other bulk loop, so the stale sweep doesn't kill the tail.
+ */
+export function resumePendingJobs(): number {
+  const ids = coreResumePendingJobs(db);
+  if (ids.length > 0) {
+    void (async () => {
+      for (const id of ids) {
+        await runJob(id); // no-op if already picked up / re-cancelled
+      }
+    })();
+  }
+  return ids.length;
 }

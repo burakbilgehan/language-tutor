@@ -319,6 +319,37 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   const gtopics = db.select().from(schema.grammarTopics).all()
     .filter((g) => g.targetLanguage === "nl");
   check("gramer iskeleti (nl, dil-geneli)", gtopics.length > 0, `→ ${gtopics.length} konu`);
+
+  // T-034: iş kuyruğu core'u sql.js sürücüsünde query-builder ile çalışmalı.
+  const { listJobs, cancelJob, cancelAllJobs, resumePendingJobs } =
+    await import("@/core/jobs");
+  const before = listJobs(db as never).active.length;
+  db.insert(schema.generationJobs)
+    .values([
+      { id: "parity-user", jobType: "grammar", refId: "r1", status: "queued" },
+      { id: "parity-sys", jobType: "lesson", refId: "r2", status: "queued" },
+      { id: "parity-pend", jobType: "kanji", refId: "r3", status: "pending_approval" },
+    ])
+    .run();
+  const snap = listJobs(db as never);
+  check("listJobs aktifleri sınıflar",
+    snap.active.length === before + 3 && snap.counts.pendingApproval >= 1,
+    `→ ${snap.active.length} aktif, ${snap.counts.pendingApproval} onay-bekleyen`);
+  check("jobKind: grammar=user, lesson=system",
+    snap.active.find((j) => j.id === "parity-user")?.kind === "user" &&
+    snap.active.find((j) => j.id === "parity-sys")?.kind === "system");
+  check("cancelJob queued → deleted",
+    cancelJob(db as never, "parity-user") === "deleted" &&
+    !db.select().from(schema.generationJobs)
+      .where(eq(schema.generationJobs.id, "parity-user")).get());
+  const resumed = resumePendingJobs(db as never);
+  check("resumePendingJobs → queued", resumed.includes("parity-pend") &&
+    db.select().from(schema.generationJobs)
+      .where(eq(schema.generationJobs.id, "parity-pend")).get()?.status === "queued");
+  cancelAllJobs(db as never, { userOnly: false });
+  const leftover = listJobs(db as never).active
+    .filter((j) => j.id.startsWith("parity-")).length;
+  check("cancelAllJobs temizler", leftover === 0, `→ ${leftover} kaldı`);
 }
 
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);

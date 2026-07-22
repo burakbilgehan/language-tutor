@@ -5,6 +5,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
+import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { stats, saveExportApi, saveImportApi } from "@/lib/client-api";
 import { withBase } from "@/lib/base-path";
@@ -197,6 +198,8 @@ export default function SettingsPage() {
         </section>
 
         <LlmProviderSection />
+
+        <JobQueuePanel />
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">
           <h2 className="mb-1 font-semibold">{t.saveTitle}</h2>
