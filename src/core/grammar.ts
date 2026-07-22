@@ -3,7 +3,11 @@ import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { grammarIndexFor } from "@/lib/grammar-index";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
-import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import {
+  mergeLangContent,
+  readLangContent,
+  type NativeLang,
+} from "@/lib/llm/lang-content";
 import type { AppDb } from "./db-types";
 
 // Gramer cheatsheet'inin ortam-bağımsız okuma yüzeyi. Konu İÇERİĞİ üretimi
@@ -71,7 +75,11 @@ export function applyGrammarSeed(
   // user (T-031). Non-tr users generate from the LLM instead.
   if (nativeLanguage !== "tr") return 0;
   const empty = db
-    .select({ id: tables.grammarTopics.id, slug: tables.grammarTopics.slug })
+    .select({
+      id: tables.grammarTopics.id,
+      slug: tables.grammarTopics.slug,
+      content: tables.grammarTopics.content,
+    })
     .from(tables.grammarTopics)
     .where(
       and(
@@ -84,9 +92,12 @@ export function applyGrammarSeed(
   for (const row of empty) {
     const content = seed[row.slug];
     if (!content) continue;
+    // Merge, don't replace: an error/pending row may already hold the OTHER
+    // language's content (interrupted generation). Wholesale {tr: content}
+    // would wipe it permanently (T-031).
     db.update(tables.grammarTopics)
       .set({
-        content: { tr: content },
+        content: mergeLangContent(row.content, "tr", content),
         status: "ready",
         generatedAt: new Date(),
       })

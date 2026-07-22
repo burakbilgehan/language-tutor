@@ -447,6 +447,7 @@ function ExerciseCard({
   onNext: (wasCorrect: boolean) => void;
 }) {
   const t = useStrings(S);
+  const localize = useLocalizeError();
   const [response, setResponse] = useState("");
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [grading, setGrading] = useState(false);
@@ -472,11 +473,7 @@ function ExerciseCard({
       setSelfCheck(null);
       setResult(body);
     } catch (e) {
-      setGradeError(
-        e instanceof Error && e.message !== "Failed to fetch"
-          ? e.message
-          : t.gradeErrorFallback
-      );
+      setGradeError(localize(e));
     } finally {
       setGrading(false);
     }

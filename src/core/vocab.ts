@@ -3,7 +3,11 @@ import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { vocabIndexFor } from "@/lib/vocab-index";
 import type { VocabContent } from "@/lib/llm/schemas";
-import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import {
+  mergeLangContent,
+  readLangContent,
+  type NativeLang,
+} from "@/lib/llm/lang-content";
 import type { AppDb } from "./db-types";
 
 // Kelime sözlüğünün ortam-bağımsız çekirdeği (HSK sözlük). İçerik ÜRETİMİ
@@ -95,7 +99,11 @@ export function applyVocabSeed(
   // Seed content is Turkish — never apply to a non-tr profile (T-031).
   if (nativeLanguage !== "tr") return 0;
   const empty = db
-    .select({ id: tables.vocabEntries.id, word: tables.vocabEntries.word })
+    .select({
+      id: tables.vocabEntries.id,
+      word: tables.vocabEntries.word,
+      content: tables.vocabEntries.content,
+    })
     .from(tables.vocabEntries)
     .where(
       and(
@@ -108,9 +116,11 @@ export function applyVocabSeed(
   for (const row of empty) {
     const content = seed[row.word];
     if (!content) continue;
+    // Merge, not replace — an error/pending row may hold the other language's
+    // content from an interrupted generation (T-031).
     db.update(tables.vocabEntries)
       .set({
-        content: { tr: content },
+        content: mergeLangContent(row.content, "tr", content),
         status: "ready",
         generatedAt: new Date(),
       })

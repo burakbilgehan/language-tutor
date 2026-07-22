@@ -19,6 +19,21 @@ export async function POST() {
   if (!profile) {
     return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
-  const translated = await retranslateCurriculum(db, getProvider(), profile.id);
-  return NextResponse.json({ translated });
+  try {
+    const translated = await retranslateCurriculum(
+      db,
+      getProvider(),
+      profile.id
+    );
+    return NextResponse.json({ translated });
+  } catch (err) {
+    const { AppError } = await import("@/lib/errors");
+    if (err instanceof AppError) {
+      return NextResponse.json(
+        { error: err.code, params: err.params },
+        { status: 502 }
+      );
+    }
+    throw err;
+  }
 }

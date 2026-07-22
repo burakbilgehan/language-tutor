@@ -431,21 +431,23 @@ export async function vocabGenerateBatch(level?: string): Promise<void> {
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/llm-gen");
-  const { eq, and, inArray } = await import("drizzle-orm");
+  const { eq, and } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
+  const { readLangContent } = await import("@/lib/llm/lang-content");
   const profile = coreP.getActiveProfile(handle.db);
   if (!profile) throw new AppError("profile_missing");
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   const entries = handle.db
     .select()
     .from(tables.vocabEntries)
-    .where(
-      and(
-        eq(tables.vocabEntries.targetLanguage, profile.targetLanguage),
-        inArray(tables.vocabEntries.status, ["pending", "error"])
-      )
-    )
+    .where(eq(tables.vocabEntries.targetLanguage, profile.targetLanguage))
     .all()
-    .filter((e) => !level || e.level === level);
+    // Not ready IN THE CURRENT native language (mirrors the server route, T-031).
+    .filter(
+      (e) =>
+        (!level || e.level === level) &&
+        (e.status !== "ready" || !readLangContent(e.content, nativeLang))
+    );
   const { startJob, newBatchId } = await import("@/lib/jobs-store");
   const batchId = newBatchId();
   void (async () => {
@@ -709,21 +711,23 @@ export async function grammarGenerateBatch(level?: string): Promise<void> {
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/llm-gen");
-  const { eq, and, inArray } = await import("drizzle-orm");
+  const { eq, and } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
+  const { readLangContent } = await import("@/lib/llm/lang-content");
   const profile = coreP.getActiveProfile(handle.db);
   if (!profile) throw new AppError("profile_missing");
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   const topics = handle.db
     .select()
     .from(tables.grammarTopics)
-    .where(
-      and(
-        eq(tables.grammarTopics.targetLanguage, profile.targetLanguage),
-        inArray(tables.grammarTopics.status, ["pending", "error"])
-      )
-    )
+    .where(eq(tables.grammarTopics.targetLanguage, profile.targetLanguage))
     .all()
-    .filter((t) => !level || t.level === level);
+    // Not ready IN THE CURRENT native language (mirrors the server route, T-031).
+    .filter(
+      (t) =>
+        (!level || t.level === level) &&
+        (t.status !== "ready" || !readLangContent(t.content, nativeLang))
+    );
   const { startJob, newBatchId } = await import("@/lib/jobs-store");
   const batchId = newBatchId();
   void (async () => {
@@ -775,21 +779,26 @@ export async function kanjiGenerateBatch(level: string): Promise<{ queued: numbe
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/llm-gen");
-  const { eq, and, inArray } = await import("drizzle-orm");
+  const { eq, and } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
+  const { readLangContent } = await import("@/lib/llm/lang-content");
   const profile = coreP.getActiveProfile(handle.db);
   if (!profile) throw new AppError("profile_missing");
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   const entries = handle.db
     .select()
     .from(tables.kanjiEntries)
     .where(
       and(
         eq(tables.kanjiEntries.targetLanguage, profile.targetLanguage),
-        eq(tables.kanjiEntries.level, level),
-        inArray(tables.kanjiEntries.status, ["pending", "error"])
+        eq(tables.kanjiEntries.level, level)
       )
     )
-    .all();
+    .all()
+    // Not ready IN THE CURRENT native language (mirrors the server route, T-031).
+    .filter(
+      (e) => e.status !== "ready" || !readLangContent(e.content, nativeLang)
+    );
   const { startJob, newBatchId } = await import("@/lib/jobs-store");
   const batchId = newBatchId();
   void (async () => {

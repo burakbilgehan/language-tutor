@@ -4,7 +4,11 @@ import * as tables from "@/db/schema";
 import { kanjiIndexFor } from "@/lib/kanji-index";
 import { lookupWord } from "@/lib/jmdict";
 import type { KanjiContent } from "@/lib/llm/schemas";
-import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import {
+  mergeLangContent,
+  readLangContent,
+  type NativeLang,
+} from "@/lib/llm/lang-content";
 import type { AppDb } from "./db-types";
 
 // Kanji/hanzi yüzeyinin ortam-bağımsız çekirdeği. İçerik ÜRETİMİ (LLM)
@@ -91,7 +95,11 @@ export function applyKanjiSeed(
   // Seed content is Turkish — never apply to a non-tr profile (T-031).
   if (nativeLanguage !== "tr") return 0;
   const empty = db
-    .select({ id: tables.kanjiEntries.id, char: tables.kanjiEntries.char })
+    .select({
+      id: tables.kanjiEntries.id,
+      char: tables.kanjiEntries.char,
+      content: tables.kanjiEntries.content,
+    })
     .from(tables.kanjiEntries)
     .where(
       and(
@@ -104,9 +112,11 @@ export function applyKanjiSeed(
   for (const row of empty) {
     const content = seed[row.char];
     if (!content) continue;
+    // Merge, not replace — an error/pending row may hold the other language's
+    // content from an interrupted generation (T-031).
     db.update(tables.kanjiEntries)
       .set({
-        content: { tr: content },
+        content: mergeLangContent(row.content, "tr", content),
         status: "ready",
         generatedAt: new Date(),
       })

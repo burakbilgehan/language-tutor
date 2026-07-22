@@ -4,6 +4,7 @@ import * as tables from "@/db/schema";
 import { CurriculumSchema } from "@/lib/llm/schemas";
 import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
 import { grammarIndexFor } from "@/lib/grammar-index";
+import { AppError } from "@/lib/errors";
 import {
   isLevelOf,
   levelOrdinal,
@@ -511,15 +512,15 @@ export async function retranslateCurriculum(
   // titles stay in the old language → the exact leak this feature closes
   // (T-031). So refuse a partial result: leave contentLang unchanged (mismatch
   // stays, titles stay suppressed) and surface an error so the user retries.
-  // This also makes fixture mode ({items:[]}) a clean no-op instead of a leak.
+  // NOTE: in fixture mode the fixture returns {items:[]}, so with a non-empty
+  // curriculum every id is missing and this throws — retranslate is a real-LLM
+  // action, not exercised by the token-free dev loop.
   const missing = items.filter((it) => {
     const v = byId.get(it.id);
     return !v || !v.trim();
   });
   if (missing.length > 0) {
-    throw new Error(
-      `Müfredat çevirisi eksik döndü (${missing.length}/${items.length} çevrilemedi)`
-    );
+    throw new AppError("curriculum_translate_failed");
   }
 
   db.transaction((tx) => {
