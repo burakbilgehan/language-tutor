@@ -9,7 +9,11 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 |---|---|---|---|---|---|
 | [T-024](T-024-save-job-queue-leak.md) | Save'e job kuyruğu sızması (import token yakıyor) — geçici fix; kalıcı çözüm T-034 | done | p1 | S | high |
 | [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | done | p2 | M | high |
-| [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | backlog | p1 | L | medium |
+| [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | done | p1 | L | medium |
+| [T-039](T-039-bridge-csrf-rebinding.md) | Bridge CSRF quota-burn + DNS-rebinding exfil (frame A, CONFIRMED) | backlog | p1 | S | high |
+| [T-040](T-040-server-mode-auth-gate.md) | Server modu auth katmanı (frame B, public blocker) | backlog | p1 | L | high |
+| [T-041](T-041-save-import-hardening.md) | Save import sertleştirme (kötücül trigger + statik boyut cap) | backlog | p2 | M | high |
+| [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | backlog | p3 | S | high |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
 | [T-029](T-029-vocab-index-multiform.md) | Vocab index çok-form birleştirme (马 "horse") | done | p2 | S | high |
@@ -76,7 +80,39 @@ adım 3 (T-031, SERİ).
 | 4c | T-035 | paralel ok | opus | **done** — A şıkkı (lang kolonları), SAVE_SCHEMA_VERSION 7→8. Açık ops: v8 save re-export (Burak) |
 | 4.5a | T-036 | paralel ok | sonnet | Atıf sayfası — SAAT İŞLİYOR: deploy JMdict alt kümesini (kanji lookup) hâlâ taşıyor, EDRDG atıf şartı ja sözlük söküldükten sonra da aktif. T-026'dan ÖNCE: tarama son hali görsün |
 | 4.5b | T-037 | paralel ok | sonnet | Vocab index lazy import (~692 KB zh eager bundle) — kod değişikliği olduğu için T-026'dan önce bitmeli |
-| 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar. Kapsama dahil: T-034 cancel route'ları, T-032 Drive OAuth/token yolu, T-025 onboarding import'u |
+| 5 | T-026 | EN SON | opus | **done** — Security review tamam (aşağıda). |
+
+### Dalga 5 sonucu (2026-07-22, T-026 security review)
+
+Yöntem: 6 paralel read-only keşif agent'ı (8 saldırı yüzeyi) → her
+actionable bulgu fable-verifier'dan geçti (görev: çürüt) → 2 empirik test
+orchestrator'da koşuldu. Blast kapalı, testler scratchpad'de temp DB, ikinci
+build/dev yok (mevcut `out/` okundu). Verdict'ler: bridge exploit zinciri +
+save/key bulguları CONFIRMED/PLAUSIBLE olarak stamp'lendi.
+
+Bulgu → ticket eşlemesi:
+- **T-039** (p1, frame A, CONFIRMED) — Bridge CSRF quota-burn + DNS-rebinding
+  exfil. Üç POST varyantı empirik ateşlendi, hepsi CLI'ya ulaştı. **Bugün
+  exploit** (bridge çalıştıran kullanıcı için). Dalga 5.1 önerisi.
+- **T-040** (p1, frame B) — Server modu auth boşluğu (export/import + tüm
+  mutating route'lar auth'suz, tek global DB). Bugün exploit DEĞİL (deploy
+  statik, server localhost); public pivot'un blocker'ı. "Go public"
+  milestone'una gate'li, 5.1 değil.
+- **T-041** (p2, frame A) — Save import: kötücül trigger post-swap çalışıyor
+  (empirik, SQL-only, RCE yok) + statik import boyut cap yok + S2 magic-header.
+- **T-042** (p3, frame A/B) — Save export raw_output → LLM key sızma yolu (yalnız
+  custom/bridge endpoint Authorization echo'larsa).
+
+Kabul edilen riskler (T-026'ya işlendi, ticket açılmadı): job route IDOR
+(shipped build'lerde exploit değil), feedback screenshot uyarısı /settings'e
+scoped (bugün güvenli, password-field masking), npm audit high'ları
+(drizzle-orm SQLi erişilemez; esbuild/sharp/postcss dev/build-only).
+
+CLEAN (bulgu yok, doğrulandı): statik `out/` sızıntı yok + owner-sub wiring
+yok (import-graph + bundle grep); LLM çıktısı → UI XSS yok (react-markdown
+rehype-raw'suz, hepsi React-escaped — payload testi empirik inert); Drive
+OAuth (token memory-only, appdata scope, client-id/secret gömülü değil,
+exfil yok).
 
 Dalga 4 / blast birlikte yaşama notları (2026-07-22): blast aralıklı
 koşuyor (başlat/kes), dalga 4'ü beklemiyor. (1) Kota: blast + opus
