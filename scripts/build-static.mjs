@@ -71,6 +71,8 @@ function run(cmd, args, extraEnv = {}) {
 
 let failed = false;
 try {
+  // Routing regression guard (T-027): no bare path to raw history/location API.
+  await run("node", ["scripts/audit-routing.mjs"]);
   await run("node", ["scripts/sync-assets.mjs"]);
   await run("npx", ["next", "build", "--turbopack"], {
     NEXT_PUBLIC_STATIC_BUILD: "1",

@@ -1,13 +1,38 @@
 ---
 id: T-027
 title: Routing hardening — dil değişimi hataları + .txt'ye düşen linkler
-status: backlog
+status: done
 priority: p1
 effort: M
 confidence: medium
 depends: []
 created: 2026-07-22
 ---
+Fix (2026-07-22): Kök neden tekti — `RoadmapView.tsx openLesson` basePath'siz
+`pushState("/map?lesson=")` adres çubuğunu köke yeniden yazıyordu. Statik
+build'de tüm `<Link>`/`router.push|replace` zaten basePath-farkında (next.config
+`basePath`); sadece ham `window.history.*` ve `window.location.href =` atlar.
+Tek düzeltme: `withBase(\`/map?lesson=${id}\`)`. Süpürme: repo genelinde beş ham
+nav noktası `withBase`-sarılı, biri (`client-api.ts` /api/save/export) yalnız
+sunucu modunda (`!IS_STATIC`, basePath yok) — `audit-routing:allow` işaretli.
+Ham `<a href="/...">` yok (elemeyle tek kök neden doğrulandı).
+
+Nav standardı (değişmedi, teyit edildi): profil/dil switch = tam reload
+(`window.location.href = withBase("/map")`), üç switch/oluşturma bitiş noktası
+uyuyor; add-language formuna giriş client nav (henüz switch yok) — doğru.
+
+`.txt` kökeni (canlı chrome + basePath-sadık serve ile DOĞRULANDI): bozuk
+(basePath'siz) adresten RSC `.txt` prefetch'i köke çözülüyor
+(`/map` → `grammar.txt` = `/grammar.txt` 404; doğrusu `/language-tutor/grammar.txt`
+200), 404'te App Router `.txt`'ye düz doküman navigasyonuna düşüyor. Yani #1 ve
+#2 aynı kök nedenden. (Next-internal 404→flat-nav ADIMI kod+resolve kanıtıyla
+çıkarım; canlı tıklama repro'su profil gerektirdiğinden mekanizma JS ile
+doğrulandı, uçtan uca tıklama değil.)
+
+Regresyon koruması: `scripts/audit-routing.mjs` (kaynak-seviyesi grep, ham
+history/location API'sine çıplak path yasağı) build-static'e bağlandı. Not:
+guard yalnız history/location'ı tarar, ham `<a href>`'i değil (Next zaten onu
+prefix'lemez) — o vektör manuel grep'le temiz.
 Semptomlar (canlı = GitHub Pages statik build):
 1. Canlıda dil değiştirince routing hatası (T-013/T-014 ailesinin devamı —
    ikisi de "done" ama semptom sürüyor, demek ki süpürme eksik kaldı).
