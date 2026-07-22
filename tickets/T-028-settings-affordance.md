@@ -1,7 +1,7 @@
 ---
 id: T-028
 title: Ayarlar butonu köşede kalsın ama amacını belli etsin
-status: backlog
+status: done
 priority: p3
 effort: S
 confidence: high

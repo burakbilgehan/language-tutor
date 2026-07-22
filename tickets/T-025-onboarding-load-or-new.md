@@ -1,7 +1,7 @@
 ---
 id: T-025
 title: Onboarding'e "Kayıt yükle / Yeni başla" giriş ekranı
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: high

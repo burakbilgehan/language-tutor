@@ -8,10 +8,10 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
 | [T-024](T-024-save-job-queue-leak.md) | Save'e job kuyruğu sızması (import token yakıyor) — geçici fix; kalıcı çözüm T-034 | done | p1 | S | high |
-| [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | backlog | p2 | M | high |
+| [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | done | p2 | M | high |
 | [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | backlog | p1 | L | medium |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
-| [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | backlog | p3 | S | high |
+| [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
 | [T-029](T-029-vocab-index-multiform.md) | Vocab index çok-form birleştirme (马 "horse") | done | p2 | S | high |
 | [T-030](T-030-ja-vocab-dictionary.md) | ja kelime sözlüğü (JMdict tabanlı) | backlog | p2 | L | medium |
 | [T-031](T-031-content-language-isolation.md) | İçerik dil izolasyonu (en'de Türkçe sızıntısı) | backlog | p2 | M | medium |
