@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { stats as stats$ } from "@/lib/client-api";
+import { stats as stats$, saveExportApi } from "@/lib/client-api";
 import { useShortcutLabel } from "@/components/shared/CommandPalette";
 import { useLlmStatus } from "@/lib/llm-status";
+import { useBackup } from "@/lib/backup/use-backup";
 
 const S = {
   tr: {
@@ -27,6 +28,9 @@ const S = {
     settings: "Ayarlar",
     settingsUnconfigured: "Ayarlar — LLM yapılandırılmadı",
     search: "Ara",
+    save: "Yedekle",
+    saveTitle: "İlerlemeni indir / yedekle",
+    saveNudge: "İlerlemeni yedeklemeyi unutma",
     costTitle: (today: string, calls: number, total: string) =>
       `Bugün: $${today} (${calls} çağrı) · Toplam: $${total}`,
   },
@@ -47,6 +51,9 @@ const S = {
     settings: "Settings",
     settingsUnconfigured: "Settings — LLM not configured",
     search: "Search",
+    save: "Back up",
+    saveTitle: "Download / back up your progress",
+    saveNudge: "Don't forget to back up your progress",
     costTitle: (today: string, calls: number, total: string) =>
       `Today: $${today} (${calls} calls) · Total: $${total}`,
   },
@@ -80,6 +87,38 @@ function CostBadge() {
     >
       💸 ${stats.todayUsd.toFixed(2)}
     </span>
+  );
+}
+
+/** Header-level save/backup affordance (T-032): one tap downloads the save;
+ * an attention dot appears when the "back up your progress" nudge is due. */
+function SaveButton({
+  label,
+  title,
+  nudgeTitle,
+}: {
+  label: string;
+  title: string;
+  nudgeTitle: string;
+}) {
+  const backup = useBackup();
+  return (
+    <button
+      type="button"
+      onClick={() => void saveExportApi()}
+      title={backup.remind ? nudgeTitle : title}
+      aria-label={backup.remind ? nudgeTitle : title}
+      className="relative flex min-h-11 items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold shadow-cozy transition-colors hover:bg-surface-2"
+    >
+      <span className="text-base leading-none">⬇︎</span>
+      <span className="hidden sm:inline">{label}</span>
+      {backup.remind && (
+        <span
+          aria-hidden="true"
+          className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-background"
+        />
+      )}
+    </button>
   );
 }
 
@@ -177,6 +216,11 @@ export function StatsHeader({
               </span>
             )}
             <CostBadge />
+            <SaveButton
+              label={t.save}
+              title={t.saveTitle}
+              nudgeTitle={t.saveNudge}
+            />
             <SearchButton title={t.search} />
             <Link
               href="/settings"

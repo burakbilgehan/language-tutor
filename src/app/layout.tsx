@@ -5,6 +5,7 @@ import { FloatingOverview } from "@/components/shared/FloatingOverview";
 import { JobQueuePop } from "@/components/shared/JobQueuePop";
 import { CommandPalette } from "@/components/shared/CommandPalette";
 import { FeedbackButton } from "@/components/shared/FeedbackButton";
+import { BackupBar } from "@/components/shared/BackupBar";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -45,6 +46,7 @@ export default function RootLayout({
         <FloatingOverview />
         <CommandPalette />
         <FeedbackButton />
+        <BackupBar />
       </body>
     </html>
   );

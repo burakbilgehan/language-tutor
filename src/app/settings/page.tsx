@@ -6,6 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
+import { BackupSection } from "@/components/settings/BackupSection";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { AppError } from "@/lib/errors";
@@ -235,6 +236,9 @@ export default function SettingsPage() {
           </p>
           {saveMsg && <p className="mt-3 text-sm">{saveMsg}</p>}
         </section>
+
+        {/* Drive sync + local snapshots (T-032) — static mode only. */}
+        <BackupSection />
       </main>
     </div>
   );
