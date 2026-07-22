@@ -20,6 +20,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-034](T-034-job-queue-control-panel.md) | Job kuyruğu kontrol paneli (görünürlük + cancel + boot onay) | done | p1 | L | medium |
 | [T-035](T-035-srs-chat-language-stamp.md) | SRS arka yüz + chat dil damgası (T-031 artığı) | backlog | p2 | S | medium |
 | [T-036](T-036-attribution-page.md) | Atıf/lisans sayfası (JMdict/Tanos/HSK…) | backlog | p2 | S | high |
+| [T-037](T-037-vocab-index-eager-bundle.md) | Vocab index eager bundle (~1.8 MB her profilde) | backlog | p2 | M | high |
 | [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | done | p2 | M | medium |
 | [T-017](T-017-feedback-mechanism.md) | Kullanıcı feedback mekanizması (+screenshot) | done | p2 | M | medium |
 | [T-015](T-015-mobile-friendly.md) | Mobil uyumluluk geçişi | done | p2 | L | medium |
