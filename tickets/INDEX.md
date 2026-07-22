@@ -72,7 +72,14 @@ adım 3 (T-031, SERİ).
 | 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün ranking yardımcısını kullanır. NOT: bitince yeni bir üretim yüzeyi doğar → ops-2 |
 | 4b | T-032 | paralel ok | opus | Drive sync — save/* + yeni oauth modülü, 4a ile ayrık. T-024 export-strip'i Drive'a giden imaj için de geçerli |
 | 4c | T-035 | paralel ok | opus | SRS arka yüz + chat dil damgası — küçük ama tasarım çatalı (şema bump A/B kararı) var; schema.ts'e tek dokunan adım bu, 4a/4b ile ayrık olduğunu başlamadan doğrula |
-| ops-2 | — | T-030 sonrası | — | ja vocab blast (yeni index'in LLM yarısı) + `seed:vocab` ja re-export → deploy |
+| ops-2 | — | T-030 sonrası | — | ja vocab blast (yeni index'in LLM yarısı) + `seed:vocab` ja re-export → deploy. Ayrı tören değil: T-030 merge'i ja satırlarını ekler, mevcut aralıklı blast döngüsü sonraki turda otomatik kapsar |
+
+Dalga 4 / blast birlikte yaşama notları (2026-07-22): blast aralıklı
+koşuyor (başlat/kes), dalga 4'ü beklemiyor. (1) Kota: blast + opus
+session'ları aynı Max aboneliğini paylaşır — aynı ana denk getirme.
+(2) T-035 şema bump'lı biterse (A şıkkı) merge+migration sırasında
+blast'ı durdur, sonra devam. (3) ops-1 kısmi içerikle de yapılabilir
+(vocab 1400/4991 emsali) — blast'ın bitmesini beklemek zorunda değil.
 | 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar (depends güncellendi: T-034 dahil). T-034'ün cancel route'ları da tarama kapsamında |
 
 Lisans: bilinçli ertelendi (müşteri yok; lisanssız public = all rights
