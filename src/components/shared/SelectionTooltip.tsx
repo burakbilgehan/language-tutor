@@ -303,6 +303,14 @@ export function SelectionTooltip() {
           </button>
         )}
       </div>
+      {/* EDRDG licence: on-screen acknowledgement wherever JMdict/KANJIDIC2
+          data is shown (full details on /about). ja-only — the zh path is
+          LLM-translated, not dictionary data. */}
+      {isJa && (tip.word || tip.kanji.length > 0) && (
+        <div className="mt-1 text-right text-[10px] text-background/50">
+          JMdict/KANJIDIC2 © EDRDG
+        </div>
+      )}
     </div>
   );
 }

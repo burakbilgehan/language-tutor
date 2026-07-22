@@ -37,5 +37,7 @@ Kaynak listesi doğrulanarak çıkarıldı: JMdict/KANJIDIC2 (EDRDG CC BY-SA 4.0
 SelectionTooltip hâlâ taşıyor), kanji-data (MIT araç), Tanos JLPT (CC BY, 2010 reform notuyla),
 complete-hsk-vocabulary (MIT + CC-CEDICT gloss), hanzi-writer-data-jp (KanjiVG DEĞİL —
 Make Me a Hanzi/animCJK türevi, LGPL/Arphic/Unicode) ve Hanzi Writer (MIT). KanjiVG repoda yok.
-Açık soru: EDRDG lisansı canlı sözlük işlevi için "her ekranda" atıf ister — SelectionTooltip'e
-inline atıf ayrı bir UX/hukuk kararı, bu ticket kapsamı dışında bırakıldı.
+Açık soru KAPANDI (2026-07-22, Burak onayı): SelectionTooltip'e inline atıf
+eklendi — ja modunda word/kanji sözlük verisi görünürken alt satırda
+"JMdict/KANJIDIC2 © EDRDG" (zh yolu LLM çevirisi, atıf gerektirmez;
+ayrıntı /about'ta).
