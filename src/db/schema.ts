@@ -274,17 +274,17 @@ export const vocabEntries = sqliteTable(
   {
     id: id(),
     targetLanguage: text("target_language").notNull(),
-    word: text("word").notNull(), // simplified form for zh
-    level: text("level").notNull(), // 'HSK1'..'HSK6'
+    word: text("word").notNull(), // simplified form for zh; kanji/kana surface for ja
+    level: text("level").notNull(), // 'HSK1'..'HSK6' (zh) or 'N5'..'N1' (ja)
     position: integer("position").notNull().default(0),
     // Static dictionary facts, seeded from src/lib/vocab-index/ (re-synced by
     // ensureVocabSeeded's self-heal, never LLM-generated).
-    reading: text("reading").notNull(), // pinyin with tone marks
-    traditional: text("traditional"), // only when it differs from `word`
+    reading: text("reading").notNull(), // pinyin with tone marks (zh) / kana (ja)
+    traditional: text("traditional"), // only when it differs from `word` (zh)
     meaningsEn: text("meanings_en", { mode: "json" })
       .notNull()
       .$type<string[]>(),
-    classifiers: text("classifiers", { mode: "json" }).$type<string[]>(),
+    classifiers: text("classifiers", { mode: "json" }).$type<string[]>(), // 量词, zh only
     // LLM half: native-language meanings + examples, generated once on demand.
     content: text("content", { mode: "json" }).$type<LangKeyed<VocabContent>>(),
     status: text("status", {

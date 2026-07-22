@@ -38,7 +38,7 @@ interface Indexed {
 }
 
 /** Fold a romaji/kana reading to bare lowercase latin (strips kun markers). */
-function foldJaReading(s: string): string {
+export function foldJaReading(s: string): string {
   return toRomajiReading(s.replace(/[.\-]/g, ""))
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
@@ -101,7 +101,10 @@ export function buildSearchIndex(targetLanguage: string): Indexed[] {
         level: v.level,
         href: `/vocab?word=${encodeURIComponent(v.word)}`,
       },
-      readings: [foldPinyin(v.reading)].filter(Boolean),
+      // ja readings are kana → romaji-folded; zh readings are pinyin.
+      readings: [
+        targetLanguage === "ja" ? foldJaReading(v.reading) : foldPinyin(v.reading),
+      ].filter(Boolean),
       tokens: v.en.flatMap(tokenize),
     });
   }

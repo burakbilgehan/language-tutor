@@ -12,7 +12,14 @@
 
 import type { VocabEntrySummary } from "@/lib/client-api";
 import { foldPinyin } from "@/lib/zh";
-import { foldWord, tokenize, isCjkQuery } from "@/lib/search-index";
+import { foldWord, tokenize, isCjkQuery, foldJaReading } from "@/lib/search-index";
+
+// The vocab list is single-language, so the reading's own script disambiguates:
+// kana → ja (romaji fold), otherwise pinyin. A romaji query folds identically
+// under both, so cross-fold false negatives don't arise.
+const hasKana = (s: string) => /[぀-ゟ゠-ヿ]/.test(s);
+const foldReading = (reading: string, needle: string) =>
+  hasKana(reading) ? foldJaReading(needle) : foldPinyin(needle);
 
 // Lower is better; layers per the ticket, high to low relevance.
 const CJK_EXACT = 0;
@@ -33,25 +40,26 @@ const GLOSS_SUBSTRING = 6;
  */
 function scoreVocabEntry(
   v: VocabEntrySummary,
-  readingNeedle: string,
+  rawQuery: string,
   glossNeedle: string,
   cjkNeedle: string,
   allowGlossSubstring: boolean
 ): number {
-  // a. Word (hanzi) match — only meaningful for a CJK query; a latin query
-  // must never substring-match the word itself.
+  // a. Word (hanzi/kanji) match — only meaningful for a CJK query; a latin
+  // query must never substring-match the word itself.
   if (cjkNeedle) {
     if (v.word === cjkNeedle) return CJK_EXACT;
     if (v.word.startsWith(cjkNeedle)) return CJK_PREFIX;
     if (v.word.includes(cjkNeedle)) return CJK_SUBSTRING;
   }
 
-  // b/c. Reading — toneless-folded exact syllable(s), then prefix. Exact
-  // single-syllable matches ("ma" == mǎ inside "mǎ shàng") are handled by
-  // the caller via readingHasExactSyllable, since foldPinyin joins all
-  // syllables into one run and loses the per-syllable boundary here.
+  // b/c. Reading — folded exact, then prefix. The fold matches the reading's
+  // script (kana→romaji for ja, pinyin for zh). Exact single-syllable pinyin
+  // matches ("ma" == mǎ inside "mǎ shàng") are handled by the caller via
+  // readingHasExactSyllable.
+  const readingNeedle = foldReading(v.reading, rawQuery);
   if (readingNeedle) {
-    const reading = foldPinyin(v.reading);
+    const reading = foldReading(v.reading, v.reading);
     if (reading === readingNeedle) return READING_EXACT;
     if (reading.startsWith(readingNeedle)) return READING_PREFIX;
   }
@@ -78,12 +86,14 @@ function scoreVocabEntry(
  * Also accept a per-syllable reading match: pinyin readings are stored
  * space-joined ("mǎ shàng"), so a query like "ma" should exact-match the
  * first syllable of "mashang" even though the folded whole-reading isn't
- * equal to "ma". Returns true if any individual syllable folds to `needle`.
+ * equal to "ma". Returns true if any individual syllable folds to the query.
+ * (No-op for ja: kana readings aren't space-separated, so the whole-reading
+ * exact/prefix check above already covers them.)
  */
-function readingHasExactSyllable(reading: string, needle: string): boolean {
+function readingHasExactSyllable(reading: string, rawQuery: string): boolean {
   return reading
     .split(/\s+/)
-    .some((syl) => foldPinyin(syl) === needle);
+    .some((syl) => foldReading(reading, syl) === foldReading(reading, rawQuery));
 }
 
 /**
@@ -102,19 +112,21 @@ export function rankVocab(
   if (!raw) return [];
 
   const cjkNeedle = isCjkQuery(raw) ? raw : "";
-  const readingNeedle = foldPinyin(raw);
   const glossNeedle = foldWord(raw).replace(/[^a-z0-9]/g, "");
+  // Reading folding is per-entry (fold matches each reading's script), so the
+  // raw query is threaded down and folded inside the scorer.
+  const hasReadingNeedle = /[a-z0-9]/i.test(raw) || isCjkQuery(raw);
 
   // First pass without gloss substring, to test whether layers a-d found
   // anything anywhere in the list.
   let anyUpperHit = false;
   const scored: { v: VocabEntrySummary; score: number }[] = [];
   for (const v of entries) {
-    let score = scoreVocabEntry(v, readingNeedle, glossNeedle, cjkNeedle, false);
+    let score = scoreVocabEntry(v, raw, glossNeedle, cjkNeedle, false);
     if (
-      readingNeedle &&
+      hasReadingNeedle &&
       score > READING_EXACT &&
-      readingHasExactSyllable(v.reading, readingNeedle)
+      readingHasExactSyllable(v.reading, raw)
     ) {
       score = READING_EXACT;
     }
@@ -126,13 +138,7 @@ export function rankVocab(
   // allow gloss substring (layer e).
   if (!anyUpperHit && glossNeedle.length >= 3) {
     for (const entry of scored) {
-      entry.score = scoreVocabEntry(
-        entry.v,
-        readingNeedle,
-        glossNeedle,
-        cjkNeedle,
-        true
-      );
+      entry.score = scoreVocabEntry(entry.v, raw, glossNeedle, cjkNeedle, true);
     }
   }
 

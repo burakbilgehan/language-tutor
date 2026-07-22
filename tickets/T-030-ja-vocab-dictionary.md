@@ -1,13 +1,40 @@
 ---
 id: T-030
 title: ja kelime sözlüğü (JMdict tabanlı, zh vocab kalıbının kopyası)
-status: backlog
+status: done
 priority: p2
 effort: L
 confidence: medium
 depends: [T-029]
 created: 2026-07-22
+closed: 2026-07-22
 ---
+Kapanış notu (22 Tem 2026): uygulandı. Veri: JLPT seviyeleri Jonathan
+Waller/tanos.co.uk (CC BY), Bluskyo/JLPT_Vocabulary dönüşümü üzerinden;
+okunuş+gloss JMdict/EDRDG (CC BY-SA 4.0), scriptin/jmdict-simplified
+(jmdict-eng) üzerinden. `scripts/build-ja-vocab-index.mjs` iki dosyayı
+JMdict entry id'sinde join+dedup edip → `src/lib/vocab-index/ja-data.json`
+(7584 kelime, N5→N1). Kavşak kapsamı %99.72 (8505 formdan 24'ü JMdict'te yok
+— hepsi PDF dönüşüm çöpü, düşürüldü). T-029 çok-form dersi uygulandı: aynı
+yüzeye çakışan farklı JMdict girdileri (入る=はいる/いる) tek satıra
+birleştirilir — en kolay seviye (max Tanos = N5) + o okunuş baş, tüm
+gloss'lar kayıpsız union; özel-isim sense'leri (n-pr/surname/place…) gloss
+listesinin sonuna itilir. **v1 sınırı**: birleşen bir yüzeyin alternatif
+okunuşları bağımsız aranamaz (生, 何 gibi çok-okunuşlular tek okunuşla
+listede). Seviye kaynağı Tanos 2010-öncesi listeler — modern resmi
+bölünmeyle birebir örtüşmeyebilir (N3 interpolasyonu).
+
+Kod: `vocab-index/ja.ts` + `vocabIndexFor` ja dalı, `VocabIndexEntry.level`
+N5–N1'e genişletildi (şema/save değişmedi — vocab_entries.level düz metin);
+`search-index.ts` + `vocab-search.ts` okunuş katlama dile duyarlı (kana→romaji
+`foldJaReading` / pinyin `foldPinyin`, satırın kendi scriptine göre dispatch);
+nav gate `["zh","ja"]`; UI `lang` + seviye etiketleri (VocabSidebar/EntryView)
+level prefix'inden (N*=ja) türetiliyor, EntryView `levelDisplay` kullanıyor;
+`prompts/vocab.ts` 量词 satırı zh'ye özel, ja'da düşer, örnekler furigana
+bracket. Doğrulama: "uma"/"馬"/"horse" üçü de 馬 buluyor (headless rankVocab
+testi ALL PASS), parity ALL PASS, 58 unit test, `npm run build` OK, tsc temiz.
+In-browser nav render'ı (ja gösterir/nl gizler) kodla doğrulandı, tarayıcıda
+değil. Atıf **sayfası** T-036'ya devredildi (kod başlıklarında atıf var).
 Onay (Burak, 2026-07-22): faktüel katman veri setinden, LLM sadece
 pedagoji. zh'de bu mimari çalışıyor (complete-hsk-vocabulary → index);
 ja'da vocab sözlüğü hiç yok. Jisho scrape EDİLMEZ — Jisho zaten JMdict'in
