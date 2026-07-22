@@ -21,7 +21,10 @@ const hasKana = (s: string) => /[぀-ゟ゠-ヿ]/.test(s);
 const foldReading = (reading: string, needle: string) =>
   hasKana(reading) ? foldJaReading(needle) : foldPinyin(needle);
 
-// Lower is better; layers per the ticket, high to low relevance.
+// Lower is better; layers per the ticket, high to low relevance. Each layer
+// owns a wide integer band so a within-layer subscore (added below for the
+// gloss layer) can never let an entry cross into an adjacent layer: a gloss
+// hit, however good, must always rank below every reading/CJK hit.
 const CJK_EXACT = 0;
 const CJK_PREFIX = 1;
 const CJK_SUBSTRING = 2;
@@ -29,6 +32,45 @@ const READING_EXACT = 3;
 const READING_PREFIX = 4;
 const GLOSS_WORD = 5;
 const GLOSS_SUBSTRING = 6;
+// Sub-band width reserved inside the gloss-word layer for its quality subscore
+// (see glossWordSubscore). Kept < 1 so GLOSS_WORD + subscore stays in [5, 6)
+// and never reaches GLOSS_SUBSTRING (6). Ordering within a query is what
+// matters, not the absolute value.
+const GLOSS_SUB_MAX = 0.999;
+
+/**
+ * Quality of a gloss-word match, in [0, GLOSS_SUB_MAX) — lower is better, so it
+ * adds onto GLOSS_WORD without leaving the layer. Ranks (best→worst):
+ *   1. the whole gloss IS the query ("horse" === "horse") — the word's core
+ *      meaning, not a token buried in a longer definition;
+ *   2. earlier gloss position (gloss[0] beats gloss[3] — glosses are emitted
+ *      most-common-first);
+ *   3. shorter gloss (a query token in a 2-word gloss beats the same token in a
+ *      12-word gloss).
+ * This is what makes "horse" rank 馬 (gloss[0]="horse", exact) above 引出す /
+ * 競馬 whose gloss lists merely contain a "horse" token somewhere deeper.
+ * Returns Infinity when no gloss token-matches (caller treats as non-match).
+ */
+function glossWordSubscore(
+  meaningsEn: string[],
+  glossNeedle: string
+): number {
+  let best = Infinity;
+  for (let i = 0; i < meaningsEn.length; i++) {
+    const gloss = meaningsEn[i];
+    const tokens = tokenize(gloss);
+    if (!tokens.includes(glossNeedle)) continue;
+    const exact = tokens.length === 1 && tokens[0] === glossNeedle ? 0 : 1;
+    // Position: earlier is better, saturating so deep glosses don't overtake a
+    // later tier. Length: normalized into a small residual tiebreak.
+    const position = Math.min(i, 20) / 21; // [0, ~0.95)
+    const length = Math.min(gloss.length, 100) / 100; // [0, 1)
+    // exact dominates position dominates length; all inside [0, GLOSS_SUB_MAX).
+    const sub = (exact * 0.6 + position * 0.3 + length * 0.09) * GLOSS_SUB_MAX;
+    if (sub < best) best = sub;
+  }
+  return best;
+}
 
 /**
  * Score one entry against a query. Returns Infinity when nothing matches.
@@ -65,11 +107,13 @@ function scoreVocabEntry(
   }
 
   // d. Gloss whole-word match ("horse" as a full token, never a substring
-  // like "ma" inside "make"/"small").
+  // like "ma" inside "make"/"small"). Within this layer a quality subscore
+  // (exact-gloss > earlier-position > shorter) breaks ties, so "horse" ranks
+  // 馬 (gloss[0]="horse") above entries that merely mention "horse" deeper in
+  // a long definition. The subscore stays inside [GLOSS_WORD, GLOSS_SUBSTRING).
   if (glossNeedle) {
-    for (const gloss of v.meaningsEn) {
-      if (tokenize(gloss).includes(glossNeedle)) return GLOSS_WORD;
-    }
+    const sub = glossWordSubscore(v.meaningsEn, glossNeedle);
+    if (sub !== Infinity) return GLOSS_WORD + sub;
   }
 
   // e. Gloss substring — last resort, gated by the caller.

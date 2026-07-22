@@ -152,6 +152,15 @@ export function VocabEntryView({ word }: { word: string }) {
 
       {entry.status === "ready" && entry.content ? (
         <>
+          {/* Factual gloss layer stays visible even after LLM content exists —
+              generated Turkish content supplements, never replaces, the
+              objective English glosses (T-030 defect 5). Compact + secondary. */}
+          {entry.meaningsEn.length > 0 && (
+            <p className="text-sm text-ink-soft">
+              <span className="font-semibold">{s.meaningsEnTitle}:</span>{" "}
+              {entry.meaningsEn.join("; ")}
+            </p>
+          )}
           <div className="rounded-cozy bg-surface p-5 shadow-cozy">
             <div className="text-lg font-semibold">
               {entry.content.meanings_tr.join(", ")}
