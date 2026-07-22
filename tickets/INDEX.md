@@ -13,12 +13,13 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
 | [T-029](T-029-vocab-index-multiform.md) | Vocab index çok-form birleştirme (马 "horse") | done | p2 | S | high |
-| [T-030](T-030-ja-vocab-dictionary.md) | ja kelime sözlüğü (JMdict tabanlı) | backlog | p2 | L | medium |
+| [T-030](T-030-ja-vocab-dictionary.md) | ja kelime sözlüğü (JMdict tabanlı) | done | p2 | L | medium |
 | [T-031](T-031-content-language-isolation.md) | İçerik dil izolasyonu (en'de Türkçe sızıntısı) | done | p2 | M | medium |
 | [T-032](T-032-save-ux-drive-sync.md) | Save teşviki + Google Drive yedekleme | backlog | p2 | L | medium |
 | [T-033](T-033-vocab-search-ranking.md) | Sözlük arama ranking'i ("ma" gürültüsü) | done | p1 | S | high |
 | [T-034](T-034-job-queue-control-panel.md) | Job kuyruğu kontrol paneli (görünürlük + cancel + boot onay) | done | p1 | L | medium |
 | [T-035](T-035-srs-chat-language-stamp.md) | SRS arka yüz + chat dil damgası (T-031 artığı) | backlog | p2 | S | medium |
+| [T-036](T-036-attribution-page.md) | Atıf/lisans sayfası (JMdict/Tanos/HSK…) | backlog | p2 | S | high |
 | [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | done | p2 | M | medium |
 | [T-017](T-017-feedback-mechanism.md) | Kullanıcı feedback mekanizması (+screenshot) | done | p2 | M | medium |
 | [T-015](T-015-mobile-friendly.md) | Mobil uyumluluk geçişi | done | p2 | L | medium |
