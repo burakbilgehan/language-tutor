@@ -52,11 +52,20 @@ ayrıklığını DOĞRULA, varsayma.
 Dalga 1 tamamlandı (T-033 + T-024 + T-027, 2026-07-22). Rev2: T-034
 (job kuyruğu paneli — T-024'ün kalıcı çözümü) dalga 2'ye yerleşti.
 
+Dalga 2 tamamlandı (T-034 + T-025 + T-028, 2026-07-22): 3 paralel izole
+worktree agent (2a opus, 2b/2c sonnet), dosya kümeleri fiilen ayrık
+çıktı, 3 merge de çakışmasız (sıra: 2c → 2b → 2a). Merged main'de tsc
+temiz, 58/58 test, parity ALL PASS, build:static 5/5 (ilk 2 fail
+transient çıktı — baseline'la karşılaştırılıp regresyon olmadığı
+doğrulandı). Davranış değişikliği: boot'ta orphan queued job'lar artık
+otomatik koşmuyor (pending_approval + panelde "devam et?"). Sıradaki:
+adım 3 (T-031, SERİ).
+
 | Adım | Ticket | Mod | Model | Not |
 |---|---|---|---|---|
-| 2a | T-034 | paralel ok | opus | Kuyruk paneli — core/jobs + yeni routes + iki UI yüzeyi + statik parite; L, mimari ağırlıklı. p1: token koruması, en erken slot |
-| 2b | T-025 | paralel ok | sonnet | Onboarding Load/New — import akışını çağırır (T-024 done). DİKKAT: 2a client-api.ts'e dokunuyor; başlamadan kesişimi doğrula, T-025 import'u mevcut fonksiyon üzerinden çağırıp client-api'yi düzenlemesin |
-| 2c | T-028 | paralel ok | sonnet | Ayarlar çipi — StatsHeader; 2a'nın Ayarlar-İÇİ paneliyle ayrı dosya, çakışmaz |
+| 2a | T-034 | paralel ok | opus | **done** — Kuyruk paneli — core/jobs + yeni routes + iki UI yüzeyi + statik parite; L, mimari ağırlıklı. p1: token koruması, en erken slot |
+| 2b | T-025 | paralel ok | sonnet | **done** — Onboarding Load/New — import akışını çağırır (T-024 done). DİKKAT: 2a client-api.ts'e dokunuyor; başlamadan kesişimi doğrula, T-025 import'u mevcut fonksiyon üzerinden çağırıp client-api'yi düzenlemesin |
+| 2c | T-028 | paralel ok | sonnet | **done** — Ayarlar çipi — StatsHeader; 2a'nın Ayarlar-İÇİ paneliyle ayrı dosya, çakışmaz |
 | 3 | T-031 | SERİ, tek başına | opus | İçerik dil izolasyonu — çok dosyalı sweep + mimari karar (damga yeri, seed gating); hiçbir şeyle paralel koşturma. T-034'ten SONRA olması bilinçli: iki geniş iş üst üste binmesin |
 | 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün ranking yardımcısını kullanır |
 | 4b | T-032 | paralel ok | opus | Drive sync — save/* + yeni oauth modülü, 4a ile ayrık. T-024 export-strip'i Drive'a giden imaj için de geçerli |
