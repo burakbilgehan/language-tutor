@@ -18,6 +18,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-032](T-032-save-ux-drive-sync.md) | Save teşviki + Google Drive yedekleme | backlog | p2 | L | medium |
 | [T-033](T-033-vocab-search-ranking.md) | Sözlük arama ranking'i ("ma" gürültüsü) | done | p1 | S | high |
 | [T-034](T-034-job-queue-control-panel.md) | Job kuyruğu kontrol paneli (görünürlük + cancel + boot onay) | done | p1 | L | medium |
+| [T-035](T-035-srs-chat-language-stamp.md) | SRS arka yüz + chat dil damgası (T-031 artığı) | backlog | p2 | S | medium |
 | [T-016](T-016-reading-aware-search.md) | Okuma-farkında arama (hikari → 光) | done | p2 | M | medium |
 | [T-017](T-017-feedback-mechanism.md) | Kullanıcı feedback mekanizması (+screenshot) | done | p2 | M | medium |
 | [T-015](T-015-mobile-friendly.md) | Mobil uyumluluk geçişi | done | p2 | L | medium |
@@ -66,9 +67,12 @@ adım 3 (T-031, SERİ).
 | 2a | T-034 | paralel ok | opus | **done** — Kuyruk paneli — core/jobs + yeni routes + iki UI yüzeyi + statik parite; L, mimari ağırlıklı. p1: token koruması, en erken slot |
 | 2b | T-025 | paralel ok | sonnet | **done** — Onboarding Load/New — import akışını çağırır (T-024 done). DİKKAT: 2a client-api.ts'e dokunuyor; başlamadan kesişimi doğrula, T-025 import'u mevcut fonksiyon üzerinden çağırıp client-api'yi düzenlemesin |
 | 2c | T-028 | paralel ok | sonnet | **done** — Ayarlar çipi — StatsHeader; 2a'nın Ayarlar-İÇİ paneliyle ayrı dosya, çakışmaz |
-| 3 | T-031 | SERİ, tek başına | opus | İçerik dil izolasyonu — çok dosyalı sweep + mimari karar (damga yeri, seed gating); hiçbir şeyle paralel koşturma. T-034'ten SONRA olması bilinçli: iki geniş iş üst üste binmesin |
-| 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün ranking yardımcısını kullanır |
+| 3 | T-031 | SERİ, tek başına | opus | **done** — İçerik dil izolasyonu; kapsam dışı kalan srs/chat sızıntısı → T-035 |
+| ops-1 | — | blast bitince | — | `seed:grammar` + `seed:kanji` + `seed:vocab` re-export → commit → Pages deploy. Ticket AÇILMAZ (içerik üretimi = ops kuralı). tr kütüphanesi bununla tamamlanır |
+| 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün ranking yardımcısını kullanır. NOT: bitince yeni bir üretim yüzeyi doğar → ops-2 |
 | 4b | T-032 | paralel ok | opus | Drive sync — save/* + yeni oauth modülü, 4a ile ayrık. T-024 export-strip'i Drive'a giden imaj için de geçerli |
+| 4c | T-035 | paralel ok | opus | SRS arka yüz + chat dil damgası — küçük ama tasarım çatalı (şema bump A/B kararı) var; schema.ts'e tek dokunan adım bu, 4a/4b ile ayrık olduğunu başlamadan doğrula |
+| ops-2 | — | T-030 sonrası | — | ja vocab blast (yeni index'in LLM yarısı) + `seed:vocab` ja re-export → deploy |
 | 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar (depends güncellendi: T-034 dahil). T-034'ün cancel route'ları da tarama kapsamında |
 
 Lisans: bilinçli ertelendi (müşteri yok; lisanssız public = all rights
