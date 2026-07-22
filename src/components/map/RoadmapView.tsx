@@ -10,6 +10,7 @@ import { useProfileMeta } from "@/lib/use-profile-meta";
 import { languageLabel } from "@/lib/profile-options";
 import { levelDisplay } from "@/lib/curriculum/levels";
 import { roadmap, profileData, curriculumExtend } from "@/lib/client-api";
+import { withBase } from "@/lib/base-path";
 
 const S = {
   tr: {
@@ -95,7 +96,7 @@ export function RoadmapView() {
   // drawer state is mirrored into ?lesson=<id> so the browser back button
   // closes the drawer instead of leaving the page.
   const openLesson = useCallback((id: string) => {
-    window.history.pushState(null, "", `/map?lesson=${id}`);
+    window.history.pushState(null, "", withBase(`/map?lesson=${id}`));
     setOpenLessonId(id);
   }, []);
   const closeLesson = useCallback(() => {

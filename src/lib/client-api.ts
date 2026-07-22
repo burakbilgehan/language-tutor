@@ -504,7 +504,7 @@ export async function translateText(
 
 export async function saveExportApi(): Promise<void> {
   if (!IS_STATIC) {
-    window.location.href = "/api/save/export";
+    window.location.href = "/api/save/export"; // audit-routing:allow — server-only (!IS_STATIC), no basePath
     return;
   }
   const handle = await browserDb();
