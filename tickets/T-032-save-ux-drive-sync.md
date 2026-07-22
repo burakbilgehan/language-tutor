@@ -19,6 +19,11 @@ birim testle (src/lib/backup.test.ts); npm test 73/73, build + build:static
 gerekli): bağla-yedekle-sil-geri-yükle turu, token-dolmuş sekmede sessiz
 kuyruk + re-auth akışı, iki-sekme çakışması.
 
+Karar (2026-07-22, Burak): client ID build'e GÖMÜLMEZ — owner'ın kişisel
+Google projesi public üründe herkesin trafiğini taşıyamaz. Kullanıcı kendi
+ID'sini girer (adımlar UI'da). Consent production'a alınmadı (testing modu
+tek kullanıcıya yetiyor; production = public'e açılma eşiği paketi).
+
 Serversız yaşadığımız için save dosyası TEK kalıcılık mekanizması —
 statik modda IndexedDB silinirse (tarayıcı temizliği, cihaz değişimi)
 ilerleme gider. Oyunlardaki save zihniyeti: kullandıkça ilerleme hem
