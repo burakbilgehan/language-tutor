@@ -5,13 +5,22 @@ import { getActiveProfile } from "@/lib/profile";
 import { findGrammarTopic } from "@/core/grammar";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import type { GrammarTopicContent } from "@/lib/llm/schemas";
 
 export const runtime = "nodejs";
 
 function findTopic(slug: string) {
   const profile = getActiveProfile();
   if (!profile) return null;
-  return findGrammarTopic(db, profile.targetLanguage, slug);
+  const topic = findGrammarTopic(db, profile.targetLanguage, slug);
+  if (!topic) return null;
+  const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
+  const localized =
+    topic.status === "ready"
+      ? readLangContent<GrammarTopicContent>(topic.content, nativeLang)
+      : null;
+  return { topic, localized };
 }
 
 export async function GET(
@@ -19,16 +28,17 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
-  const topic = findTopic(slug);
-  if (!topic) {
+  const found = findTopic(slug);
+  if (!found) {
     return NextResponse.json({ error: "Konu bulunamadı" }, { status: 404 });
   }
+  const { topic, localized } = found;
   return NextResponse.json({
     slug: topic.slug,
     titleTr: topic.titleTr,
     category: topic.category,
-    status: topic.status,
-    content: topic.status === "ready" ? topic.content : null,
+    status: localized ? "ready" : "pending",
+    content: localized,
   });
 }
 
@@ -39,11 +49,12 @@ export async function POST(
 ) {
   recoverStaleJobs();
   const { slug } = await params;
-  const topic = findTopic(slug);
-  if (!topic) {
+  const found = findTopic(slug);
+  if (!found) {
     return NextResponse.json({ error: "Konu bulunamadı" }, { status: 404 });
   }
-  if (topic.status === "ready") {
+  const { topic, localized } = found;
+  if (localized) {
     return NextResponse.json({ status: "ready" });
   }
   const gate = requireLlm();

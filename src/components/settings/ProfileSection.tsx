@@ -44,6 +44,8 @@ const S = {
     saving: "Kaydediliyor...",
     cancel: "Vazgeç",
     saved: "✅ Kaydedildi. Yeni dersler bu tercihlerle üretilecek.",
+    savedLangChanged:
+      "✅ Kaydedildi. Dil değişti: cache'li içerik (ders/gramer/kanji/sözlük) bu dilde olmadığı için açtıkça yeniden üretilecek. Müfredat başlıkları için harita ekranındaki \"bu dile çevir\" düğmesini kullan. Eski içerik silinmedi — dile geri dönünce aynen görünür.",
     saveFailed: "Kaydedilemedi",
     switchFailed: "Geçiş yapılamadı",
     languageTitle: "Dil",
@@ -70,6 +72,8 @@ const S = {
     saving: "Saving...",
     cancel: "Cancel",
     saved: "✅ Saved. New lessons will be generated with these preferences.",
+    savedLangChanged:
+      "✅ Saved. Language changed: cached content (lessons/grammar/kanji/dictionary) isn't in this language, so it'll be regenerated as you open it. For curriculum titles use the \"translate to this language\" button on the map screen. Old content wasn't deleted — switch back and it reappears exactly.",
     saveFailed: "Could not save",
     switchFailed: "Could not switch",
     languageTitle: "Language",
@@ -139,6 +143,8 @@ export function ProfileSection() {
     if (!draft) return;
     setSaving(true);
     setMsg(null);
+    const nativeChanged =
+      (profile?.nativeLanguage ?? "tr") !== draft.nativeLanguage;
     try {
       const body = await patchProfile({
         displayName: draft.displayName,
@@ -163,7 +169,7 @@ export function ProfileSection() {
         )
       );
       setEditing(false);
-      setMsg(t.saved);
+      setMsg(nativeChanged ? t.savedLangChanged : t.saved);
     } catch (err) {
       setMsg(`❌ ${err instanceof Error ? err.message : t.saveFailed}`);
     } finally {

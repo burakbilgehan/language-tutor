@@ -318,13 +318,18 @@ export async function generateChapter(
           .set({
             title: chapter.title,
             status: "ready",
+            // Native language these titles/descriptions are written in (T-031).
+            contentLang: profile.nativeLanguage ?? "tr",
             modelUsed: opts?.modelUsed ?? "deep",
             generatedAt: new Date(),
           })
           .where(eq(tables.curricula.id, curriculumId))
           .run();
       } else {
-        // Ensure the curriculum stays ready even if it was somehow left pending.
+        // Extend appends a level in the current native language. contentLang is
+        // left as-is: if it no longer matches nativeLanguage the roadmap display
+        // gate already flags a mismatch and the user regenerates the whole
+        // curriculum (T-031) — auto-extend only fires while languages match.
         tx.update(tables.curricula)
           .set({ status: "ready" })
           .where(eq(tables.curricula.id, curriculumId))
@@ -407,4 +412,140 @@ export async function generateChapter(
     }
     throw err;
   }
+}
+
+/**
+ * Re-translate a curriculum's titles/descriptions into the profile's CURRENT
+ * native language, in place (T-031). The curriculum structure is
+ * language-independent — only the display strings change — so we translate the
+ * existing `title`/`title_tr`/`description_tr`/`subtitle_tr` columns and UPDATE
+ * the same rows. Node ids, lessons, SRS cards and attempts are untouched, so no
+ * progress is lost. Restamps `curricula.content_lang` on success. Returns the
+ * number of strings translated (0 if already in the native language).
+ */
+export async function retranslateCurriculum(
+  db: AppDb,
+  gen: Gen,
+  profileId: string
+): Promise<number> {
+  const profile = db
+    .select()
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, profileId))
+    .limit(1)
+    .get();
+  if (!profile) throw new Error("Profil bulunamadı");
+  const nativeLanguage = profile.nativeLanguage ?? "tr";
+
+  const curriculum = db
+    .select()
+    .from(tables.curricula)
+    .where(eq(tables.curricula.profileId, profileId))
+    .limit(1)
+    .get();
+  if (!curriculum) throw new Error("Müfredat yok");
+  if ((curriculum.contentLang ?? "tr") === nativeLanguage) return 0;
+
+  const chapters = db
+    .select()
+    .from(tables.curriculumChapters)
+    .where(eq(tables.curriculumChapters.curriculumId, curriculum.id))
+    .all();
+  const units = db
+    .select()
+    .from(tables.units)
+    .where(eq(tables.units.curriculumId, curriculum.id))
+    .all();
+  const unitIds = new Set(units.map((u) => u.id));
+  const nodes = db
+    .select()
+    .from(tables.nodes)
+    .all()
+    .filter((n) => unitIds.has(n.unitId));
+
+  // Collect every display string as an opaque-id'd item. Id encodes
+  // table:field:rowId so the writer can route each translation back.
+  const items: { id: string; text: string }[] = [];
+  const push = (table: string, field: string, rowId: string, text: string) => {
+    if (text && text.trim()) items.push({ id: `${table}:${field}:${rowId}`, text });
+  };
+  push("cur", "title", curriculum.id, curriculum.title);
+  for (const c of chapters) push("chp", "titleTr", c.id, c.titleTr);
+  for (const u of units) {
+    push("unit", "titleTr", u.id, u.titleTr);
+    push("unit", "descriptionTr", u.id, u.descriptionTr);
+  }
+  for (const n of nodes) {
+    push("node", "titleTr", n.id, n.titleTr);
+    push("node", "subtitleTr", n.id, n.subtitleTr);
+  }
+  if (items.length === 0) {
+    db.update(tables.curricula)
+      .set({ contentLang: nativeLanguage })
+      .where(eq(tables.curricula.id, curriculum.id))
+      .run();
+    return 0;
+  }
+
+  const { curriculumTranslatePrompt } = await import(
+    "@/lib/llm/prompts/curriculum"
+  );
+  const { CurriculumTranslationSchema } = await import("@/lib/llm/schemas");
+  const { system, prompt } = curriculumTranslatePrompt({
+    targetLanguage: profile.targetLanguage,
+    nativeLanguage,
+    items,
+  });
+  const result = await gen.generateJson({
+    system,
+    prompt,
+    schema: CurriculumTranslationSchema,
+    fixtureKey: "curriculum-translate",
+    tier: "fast",
+    timeoutMs: 120_000,
+  });
+  const byId = new Map(result.items.map((i) => [i.id, i.text]));
+
+  db.transaction((tx) => {
+    for (const item of items) {
+      const translated = byId.get(item.id);
+      if (!translated || !translated.trim()) continue; // keep original on miss
+      const [table, field, rowId] = item.id.split(":");
+      if (table === "cur") {
+        tx.update(tables.curricula)
+          .set({ title: translated })
+          .where(eq(tables.curricula.id, rowId))
+          .run();
+      } else if (table === "chp") {
+        tx.update(tables.curriculumChapters)
+          .set({ titleTr: translated })
+          .where(eq(tables.curriculumChapters.id, rowId))
+          .run();
+      } else if (table === "unit") {
+        tx.update(tables.units)
+          .set(
+            field === "titleTr"
+              ? { titleTr: translated }
+              : { descriptionTr: translated }
+          )
+          .where(eq(tables.units.id, rowId))
+          .run();
+      } else if (table === "node") {
+        tx.update(tables.nodes)
+          .set(
+            field === "titleTr"
+              ? { titleTr: translated }
+              : { subtitleTr: translated }
+          )
+          .where(eq(tables.nodes.id, rowId))
+          .run();
+      }
+    }
+    tx.update(tables.curricula)
+      .set({ contentLang: nativeLanguage })
+      .where(eq(tables.curricula.id, curriculum.id))
+      .run();
+  });
+
+  return items.length;
 }

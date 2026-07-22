@@ -127,6 +127,17 @@ export const LessonSchema = z.object({
 });
 export type LessonContent = z.infer<typeof LessonSchema>;
 
+// -- Curriculum re-translation (T-031) ---------------------------------------
+// Curriculum titles/descriptions are plain columns (not a lang map), so when
+// the learner's native language changes they're re-translated in place. The
+// LLM receives a list of {id, text} and returns the same ids with translated
+// text — structure and IDs are preserved so no progress/SRS/attempt data is
+// touched. IDs are opaque row/field keys, echoed back verbatim.
+export const CurriculumTranslationSchema = z.object({
+  items: z.array(z.object({ id: z.string(), text: z.string() })),
+});
+export type CurriculumTranslation = z.infer<typeof CurriculumTranslationSchema>;
+
 // -- Grading -----------------------------------------------------------------
 
 export const GradeSchema = z.object({

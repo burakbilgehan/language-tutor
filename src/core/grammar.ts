@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { grammarIndexFor } from "@/lib/grammar-index";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
 import type { AppDb } from "./db-types";
 
 // Gramer cheatsheet'inin ortam-bağımsız okuma yüzeyi. Konu İÇERİĞİ üretimi
@@ -62,8 +63,13 @@ export function ensureSeeded(db: AppDb, targetLanguage: string) {
 export function applyGrammarSeed(
   db: AppDb,
   targetLanguage: string,
-  seed: Record<string, GrammarTopicContent>
+  seed: Record<string, GrammarTopicContent>,
+  nativeLanguage: NativeLang = "tr"
 ): number {
+  // Packaged seed content is Turkish (exported from the owner's tr-native DB).
+  // Applying it to a non-tr profile would show Turkish content to an English
+  // user (T-031). Non-tr users generate from the LLM instead.
+  if (nativeLanguage !== "tr") return 0;
   const empty = db
     .select({ id: tables.grammarTopics.id, slug: tables.grammarTopics.slug })
     .from(tables.grammarTopics)
@@ -79,7 +85,11 @@ export function applyGrammarSeed(
     const content = seed[row.slug];
     if (!content) continue;
     db.update(tables.grammarTopics)
-      .set({ content, status: "ready", generatedAt: new Date() })
+      .set({
+        content: { tr: content },
+        status: "ready",
+        generatedAt: new Date(),
+      })
       .where(eq(tables.grammarTopics.id, row.id))
       .run();
     filled++;
@@ -87,7 +97,11 @@ export function applyGrammarSeed(
   return filled;
 }
 
-export function listGrammarTopics(db: AppDb, targetLanguage: string) {
+export function listGrammarTopics(
+  db: AppDb,
+  targetLanguage: string,
+  nativeLanguage: NativeLang = "tr"
+) {
   ensureSeeded(db, targetLanguage);
   return db
     .select()
@@ -100,7 +114,13 @@ export function listGrammarTopics(db: AppDb, targetLanguage: string) {
       titleTr: t.titleTr,
       category: t.category,
       level: t.level,
-      status: t.status,
+      // Effective status: a row whose content isn't in the current native
+      // language reads as pending so the UI offers "Hazırla" (T-031).
+      status:
+        t.status === "ready" &&
+        !readLangContent<GrammarTopicContent>(t.content, nativeLanguage)
+          ? ("pending" as const)
+          : t.status,
     }));
 }
 

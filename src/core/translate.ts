@@ -7,11 +7,13 @@ export function normalizeTranslateText(text: string): string {
   return stripFurigana(text).replace(/\s+/g, " ").trim();
 }
 
-/** Çeviri cache okuma — (targetLanguage, sourceText) anahtarıyla. LLM yok. */
+/** Çeviri cache okuma — (targetLanguage, nativeLanguage, sourceText)
+ * anahtarıyla. LLM yok. */
 export function cachedTranslation(
   db: AppDb,
   targetLanguage: string,
-  normalizedText: string
+  normalizedText: string,
+  nativeLanguage: string = "tr"
 ): string | null {
   const cached = db
     .select()
@@ -19,6 +21,7 @@ export function cachedTranslation(
     .where(
       and(
         eq(tables.translations.targetLanguage, targetLanguage),
+        eq(tables.translations.nativeLanguage, nativeLanguage),
         eq(tables.translations.sourceText, normalizedText)
       )
     )

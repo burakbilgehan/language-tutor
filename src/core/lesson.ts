@@ -1,9 +1,11 @@
-import { asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { stripFurigana } from "@/lib/jp";
 import { answersMatchFor } from "@/lib/answers";
 import { pick } from "@/lib/i18n";
+import type { LessonContent } from "@/lib/llm/schemas";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
 import { awardXp } from "./xp";
 import { completeNode } from "./roadmap";
 import type { AppDb } from "./db-types";
@@ -60,7 +62,11 @@ export type OpenNodeResult =
 
 /** Cache'li dersi servis eder; hazır değilse needsGeneration (üretim kararı
  * çağıranda: sunucu job kuyruğuna atar, statik mod LLM katmanına gider). */
-export function openNode(db: AppDb, nodeId: string): OpenNodeResult {
+export function openNode(
+  db: AppDb,
+  nodeId: string,
+  nativeLang: NativeLang = "tr"
+): OpenNodeResult {
   const node = db
     .select()
     .from(tables.nodes)
@@ -76,14 +82,27 @@ export function openNode(db: AppDb, nodeId: string): OpenNodeResult {
     .where(eq(tables.lessons.nodeId, nodeId))
     .limit(1)
     .get();
-  if (!(lesson?.status === "ready" && lesson.content)) {
+  // Language-mismatch gate: content generated in another native language is
+  // treated as absent so the lesson regenerates in the current one (T-031).
+  const content =
+    lesson?.status === "ready"
+      ? readLangContent<LessonContent>(lesson.content, nativeLang)
+      : null;
+  if (!lesson || !content) {
     return { status: "needsGeneration" };
   }
 
   const exercises = db
     .select()
     .from(tables.exercises)
-    .where(eq(tables.exercises.lessonId, lesson.id))
+    // Only this native language's exercises — the lesson body came from
+    // content[nativeLang], so its exercises must match (T-031).
+    .where(
+      and(
+        eq(tables.exercises.lessonId, lesson.id),
+        eq(tables.exercises.lang, nativeLang)
+      )
+    )
     .orderBy(asc(tables.exercises.position))
     .all()
     .map((e) => ({
@@ -106,11 +125,11 @@ export function openNode(db: AppDb, nodeId: string): OpenNodeResult {
       status: node.status,
     },
     lesson: {
-      titleTr: lesson.content.title_tr,
-      explanationTr: lesson.content.explanation_tr,
-      examples: lesson.content.examples,
-      grammarNotes: lesson.content.grammar_notes,
-      vocab: lesson.content.vocab,
+      titleTr: content.title_tr,
+      explanationTr: content.explanation_tr,
+      examples: content.examples,
+      grammarNotes: content.grammar_notes,
+      vocab: content.vocab,
     },
     exercises,
   };
@@ -148,7 +167,17 @@ export function completeNodeFlow(
     .where(eq(tables.lessons.nodeId, nodeId))
     .limit(1)
     .get();
-  if (!alreadyCompleted && lesson?.content) {
+  const profileRow = db
+    .select({ nativeLanguage: tables.profiles.nativeLanguage })
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, profileId))
+    .limit(1)
+    .get();
+  const harvestContent = readLangContent<LessonContent>(
+    lesson?.content,
+    (profileRow?.nativeLanguage ?? "tr") as NativeLang
+  );
+  if (!alreadyCompleted && lesson && harvestContent) {
     const cardCount = () =>
       db
         .select({ n: count() })
@@ -156,7 +185,7 @@ export function completeNodeFlow(
         .where(eq(tables.srsCards.profileId, profileId))
         .get()?.n ?? 0;
     const before = cardCount();
-    for (const v of lesson.content.vocab) {
+    for (const v of harvestContent.vocab) {
       db.insert(tables.srsCards)
         .values({
           id: nanoid(),

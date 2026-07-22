@@ -28,7 +28,8 @@ export async function POST(req: Request) {
   const queued = queueKanjiLevel(
     profile.targetLanguage,
     parsed.data.level,
-    true
+    true,
+    (profile.nativeLanguage ?? "tr") as "tr" | "en"
   );
   return NextResponse.json({ queued });
 }

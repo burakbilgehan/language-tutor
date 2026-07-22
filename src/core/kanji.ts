@@ -4,6 +4,7 @@ import * as tables from "@/db/schema";
 import { kanjiIndexFor } from "@/lib/kanji-index";
 import { lookupWord } from "@/lib/jmdict";
 import type { KanjiContent } from "@/lib/llm/schemas";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
 import type { AppDb } from "./db-types";
 
 // Kanji/hanzi yüzeyinin ortam-bağımsız çekirdeği. İçerik ÜRETİMİ (LLM)
@@ -84,8 +85,11 @@ export function ensureKanjiSeeded(db: AppDb, targetLanguage: string) {
 export function applyKanjiSeed(
   db: AppDb,
   targetLanguage: string,
-  seed: Record<string, KanjiContent>
+  seed: Record<string, KanjiContent>,
+  nativeLanguage: NativeLang = "tr"
 ): number {
+  // Seed content is Turkish — never apply to a non-tr profile (T-031).
+  if (nativeLanguage !== "tr") return 0;
   const empty = db
     .select({ id: tables.kanjiEntries.id, char: tables.kanjiEntries.char })
     .from(tables.kanjiEntries)
@@ -101,7 +105,11 @@ export function applyKanjiSeed(
     const content = seed[row.char];
     if (!content) continue;
     db.update(tables.kanjiEntries)
-      .set({ content, status: "ready", generatedAt: new Date() })
+      .set({
+        content: { tr: content },
+        status: "ready",
+        generatedAt: new Date(),
+      })
       .where(eq(tables.kanjiEntries.id, row.id))
       .run();
     filled++;
@@ -109,7 +117,11 @@ export function applyKanjiSeed(
   return filled;
 }
 
-export function listKanji(db: AppDb, targetLanguage: string) {
+export function listKanji(
+  db: AppDb,
+  targetLanguage: string,
+  nativeLanguage: NativeLang = "tr"
+) {
   ensureKanjiSeeded(db, targetLanguage);
   return db
     .select({
@@ -117,11 +129,21 @@ export function listKanji(db: AppDb, targetLanguage: string) {
       level: tables.kanjiEntries.level,
       status: tables.kanjiEntries.status,
       meaningsEn: tables.kanjiEntries.meaningsEn,
+      content: tables.kanjiEntries.content,
     })
     .from(tables.kanjiEntries)
     .where(eq(tables.kanjiEntries.targetLanguage, targetLanguage))
     .orderBy(asc(tables.kanjiEntries.position))
-    .all();
+    .all()
+    .map(({ content, ...rest }) => ({
+      ...rest,
+      // Wrong-native-language content reads as pending (T-031).
+      status:
+        rest.status === "ready" &&
+        !readLangContent<KanjiContent>(content, nativeLanguage)
+          ? ("pending" as const)
+          : rest.status,
+    }));
 }
 
 export function findKanji(db: AppDb, targetLanguage: string, char: string) {
@@ -147,7 +169,12 @@ const MAX_CHARS = 8;
  * Batch dictionary lookup for the selection tooltip: unique kanji readings +
  * meanings, plus whole-selection JMdict word. Pure DB/data read.
  */
-export function kanjiLookup(db: AppDb, targetLanguage: string, text: string) {
+export function kanjiLookup(
+  db: AppDb,
+  targetLanguage: string,
+  text: string,
+  nativeLang: NativeLang = "tr"
+) {
   const candidate = text.replace(/\s+/g, "");
   const word =
     candidate.length >= 2 && candidate.length <= 12
@@ -172,10 +199,13 @@ export function kanjiLookup(db: AppDb, targetLanguage: string, text: string) {
   const kanji = chars.flatMap((char) => {
     const entry = byChar.get(char);
     if (!entry) return [];
-    const meaning =
-      entry.status === "ready" && entry.content
-        ? entry.content.meanings_tr.slice(0, 3).join(", ")
-        : entry.meaningsEn.slice(0, 2).join(", ");
+    const localized =
+      entry.status === "ready"
+        ? readLangContent<KanjiContent>(entry.content, nativeLang)
+        : null;
+    const meaning = localized
+      ? localized.meanings_tr.slice(0, 3).join(", ")
+      : entry.meaningsEn.slice(0, 2).join(", ");
     const readings = [...entry.kunyomi.slice(0, 2), ...entry.onyomi.slice(0, 1)];
     return [{ char, reading: readings.join("・"), meaning }];
   });

@@ -9,6 +9,7 @@ import { isJlptLevel, levelOrdinal, type JlptLevel } from "@/lib/curriculum/leve
 import { eq } from "drizzle-orm";
 import { tables } from "@/db";
 import type { KanjiContent } from "@/lib/llm/schemas";
+import type { NativeLang } from "@/lib/llm/lang-content";
 
 export const runtime = "nodejs";
 
@@ -36,13 +37,14 @@ export async function GET() {
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
-  let entries = listKanji(db, profile.targetLanguage);
+  const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
+  let entries = listKanji(db, profile.targetLanguage, nativeLang);
   // Boş girişleri önce seed'den doldur — auto-fill LLM kuyruğu ancak seed'in
   // kapatamadığı boşluklar için devreye girsin.
   if (entries.some((e) => e.status === "pending" || e.status === "error")) {
     const seed = loadSeed(profile.targetLanguage);
-    if (seed && applyKanjiSeed(db, profile.targetLanguage, seed) > 0) {
-      entries = listKanji(db, profile.targetLanguage);
+    if (seed && applyKanjiSeed(db, profile.targetLanguage, seed, nativeLang) > 0) {
+      entries = listKanji(db, profile.targetLanguage, nativeLang);
     }
   }
 
@@ -67,7 +69,8 @@ export async function GET() {
       .map((e) => e.level as JlptLevel)
       .filter((l) => levelOrdinal(l) <= levelOrdinal(top))
       .sort((a, b) => levelOrdinal(a) - levelOrdinal(b))[0];
-    if (autoLevel) queueKanjiLevel(profile.targetLanguage, autoLevel, false);
+    if (autoLevel)
+      queueKanjiLevel(profile.targetLanguage, autoLevel, false, nativeLang);
   }
 
   return NextResponse.json({ entries });

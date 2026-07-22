@@ -215,13 +215,17 @@ export async function kanjiList(): Promise<{
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  let entries = coreK.listKanji(db, profile.targetLanguage);
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
+  let entries = coreK.listKanji(db, profile.targetLanguage, nativeLang);
   // Boş girişleri paketlenmiş seed'den doldur (LLM'siz dolu kanji sözlüğü).
   if (entries.some((e) => e.status === "pending" || e.status === "error")) {
     const { fetchKanjiSeed } = await import("@/lib/kanji-seed");
     const seed = await fetchKanjiSeed(profile.targetLanguage);
-    if (seed && coreK.applyKanjiSeed(db, profile.targetLanguage, seed) > 0) {
-      entries = coreK.listKanji(db, profile.targetLanguage);
+    if (
+      seed &&
+      coreK.applyKanjiSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+    ) {
+      entries = coreK.listKanji(db, profile.targetLanguage, nativeLang);
     }
   }
   persistSoon(); // seed yeni satır eklemiş/doldurmuş olabilir
@@ -243,6 +247,7 @@ export async function kanjiDetail(char: string): Promise<{
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let entry = coreK.findKanji(db, profile.targetLanguage, char);
   if (!entry) {
     // Deep link (?char=) liste yüklenmeden gelebilir — önce seed'le.
@@ -253,20 +258,28 @@ export async function kanjiDetail(char: string): Promise<{
   if (entry && (entry.status === "pending" || entry.status === "error")) {
     const { fetchKanjiSeed } = await import("@/lib/kanji-seed");
     const seed = await fetchKanjiSeed(profile.targetLanguage);
-    if (seed && coreK.applyKanjiSeed(db, profile.targetLanguage, seed) > 0) {
+    if (
+      seed &&
+      coreK.applyKanjiSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+    ) {
       entry = coreK.findKanji(db, profile.targetLanguage, char) ?? entry;
       persistSoon();
     }
   }
   if (!entry) throw new Error("Kanji bulunamadı");
+  const { readLangContent } = await import("@/lib/llm/lang-content");
+  const localized =
+    entry.status === "ready"
+      ? readLangContent(entry.content, nativeLang)
+      : null;
   return {
     char: entry.char,
     level: entry.level,
     onyomi: entry.onyomi,
     kunyomi: entry.kunyomi,
     meaningsEn: entry.meaningsEn,
-    status: entry.status,
-    content: entry.status === "ready" ? entry.content : null,
+    status: localized ? "ready" : "pending",
+    content: localized,
   };
 }
 
@@ -282,7 +295,12 @@ export async function kanjiLookupApi(text: string): Promise<KanjiLookupResult> {
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  return coreK.kanjiLookup(db, profile.targetLanguage, text);
+  return coreK.kanjiLookup(
+    db,
+    profile.targetLanguage,
+    text,
+    (profile.nativeLanguage ?? "tr") as "tr" | "en"
+  );
 }
 
 // ------------------------------------------------------------------ Kelime sözlüğü
@@ -302,13 +320,17 @@ export async function vocabList(): Promise<{ entries: VocabEntrySummary[] }> {
   const coreV = await import("@/core/vocab");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  let entries = coreV.listVocab(db, profile.targetLanguage);
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
+  let entries = coreV.listVocab(db, profile.targetLanguage, nativeLang);
   // Boş girişleri paketlenmiş seed'den doldur (LLM'siz tam sözlük).
   if (entries.some((e) => e.status === "pending" || e.status === "error")) {
     const { fetchVocabSeed } = await import("@/lib/vocab-seed");
     const seed = await fetchVocabSeed(profile.targetLanguage);
-    if (seed && coreV.applyVocabSeed(db, profile.targetLanguage, seed) > 0) {
-      entries = coreV.listVocab(db, profile.targetLanguage);
+    if (
+      seed &&
+      coreV.applyVocabSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+    ) {
+      entries = coreV.listVocab(db, profile.targetLanguage, nativeLang);
     }
   }
   persistSoon(); // seed yeni satır eklemiş/doldurmuş olabilir
@@ -331,6 +353,7 @@ export async function vocabDetail(word: string): Promise<{
   const coreV = await import("@/core/vocab");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let entry = coreV.findVocab(db, profile.targetLanguage, word);
   if (!entry) {
     // Deep link (?word=) liste yüklenmeden gelebilir — önce seed'le.
@@ -341,12 +364,20 @@ export async function vocabDetail(word: string): Promise<{
   if (entry && (entry.status === "pending" || entry.status === "error")) {
     const { fetchVocabSeed } = await import("@/lib/vocab-seed");
     const seed = await fetchVocabSeed(profile.targetLanguage);
-    if (seed && coreV.applyVocabSeed(db, profile.targetLanguage, seed) > 0) {
+    if (
+      seed &&
+      coreV.applyVocabSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+    ) {
       entry = coreV.findVocab(db, profile.targetLanguage, word) ?? entry;
       persistSoon();
     }
   }
   if (!entry) throw new Error("Kelime bulunamadı");
+  const { readLangContent } = await import("@/lib/llm/lang-content");
+  const localized =
+    entry.status === "ready"
+      ? readLangContent(entry.content, nativeLang)
+      : null;
   return {
     word: entry.word,
     traditional: entry.traditional,
@@ -354,8 +385,8 @@ export async function vocabDetail(word: string): Promise<{
     meaningsEn: entry.meaningsEn,
     classifiers: entry.classifiers,
     level: entry.level,
-    status: entry.status,
-    content: entry.status === "ready" ? entry.content : null,
+    status: localized ? "ready" : "pending",
+    content: localized,
   };
 }
 
@@ -498,7 +529,12 @@ export async function translateText(
   if (!profile) return { translation: null };
   const normalized = coreT.normalizeTranslateText(text);
   const cached = normalized
-    ? coreT.cachedTranslation(db, profile.targetLanguage, normalized)
+    ? coreT.cachedTranslation(
+        db,
+        profile.targetLanguage,
+        normalized,
+        profile.nativeLanguage ?? "tr"
+      )
     : null;
   if (cached || cachedOnly) return { translation: cached };
   const gen = await browserGen();
@@ -805,6 +841,27 @@ export async function curriculumGenerate(profileId: string): Promise<{ jobId?: s
   return {};
 }
 
+/** Müfredat başlıklarını mevcut ana dile yerinde çevirir (T-031). İlerleme
+ * silinmez; yalnızca görünen metinler değişir. */
+export async function curriculumRetranslate(): Promise<{ translated: number }> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/curriculum/retranslate", { method: "POST" });
+  }
+  const gen = await browserGen();
+  const handle = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreC = await import("@/core/curriculum-gen");
+  const profile = coreP.getActiveProfile(handle.db);
+  if (!profile) throw new Error("Profil yok");
+  const translated = await coreC.retranslateCurriculum(
+    handle.db,
+    gen,
+    profile.id
+  );
+  await handle.persistNow();
+  return { translated };
+}
+
 // ------------------------------------------------------------------ Gramer
 
 export interface GrammarTopicSummary {
@@ -822,13 +879,17 @@ export async function grammarTopics(): Promise<{ topics: GrammarTopicSummary[] }
   const coreG = await import("@/core/grammar");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
-  let topics = coreG.listGrammarTopics(db, profile.targetLanguage);
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
+  let topics = coreG.listGrammarTopics(db, profile.targetLanguage, nativeLang);
   // Boş konuları paketlenmiş seed'den doldur (LLM'siz tam gramer).
   if (topics.some((t) => t.status === "pending" || t.status === "error")) {
     const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
     const seed = await fetchGrammarSeed(profile.targetLanguage);
-    if (seed && coreG.applyGrammarSeed(db, profile.targetLanguage, seed) > 0) {
-      topics = coreG.listGrammarTopics(db, profile.targetLanguage);
+    if (
+      seed &&
+      coreG.applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+    ) {
+      topics = coreG.listGrammarTopics(db, profile.targetLanguage, nativeLang);
     }
   }
   persistSoon(); // ensureSeeded/applyGrammarSeed yazmış olabilir
@@ -848,23 +909,32 @@ export async function grammarTopic(slug: string): Promise<{
   const coreG = await import("@/core/grammar");
   const profile = coreP.getActiveProfile(db);
   if (!profile) throw new Error("Profil yok");
+  const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug);
   if (!topic) throw new Error("Konu bulunamadı");
   // Deep link (?topic=) liste yüklenmeden gelebilir — boşsa seed'den doldur.
   if (topic.status === "pending" || topic.status === "error") {
     const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
     const seed = await fetchGrammarSeed(profile.targetLanguage);
-    if (seed && coreG.applyGrammarSeed(db, profile.targetLanguage, seed) > 0) {
+    if (
+      seed &&
+      coreG.applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+    ) {
       topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug) ?? topic;
       persistSoon();
     }
   }
+  const { readLangContent } = await import("@/lib/llm/lang-content");
+  const localized =
+    topic.status === "ready"
+      ? readLangContent(topic.content, nativeLang)
+      : null;
   return {
     slug: topic.slug,
     titleTr: topic.titleTr,
     category: topic.category,
-    status: topic.status,
-    content: topic.status === "ready" ? topic.content : null,
+    status: localized ? "ready" : "pending",
+    content: localized,
   };
 }
 
@@ -879,7 +949,11 @@ export async function openNodeApi(nodeId: string): Promise<
   }
   const { db } = await browserDb();
   const core = await import("@/core/lesson");
-  const result = core.openNode(db, nodeId);
+  const coreP = await import("@/core/profile");
+  const nativeLang = (coreP.getActiveProfile(db)?.nativeLanguage ?? "tr") as
+    | "tr"
+    | "en";
+  const result = core.openNode(db, nodeId, nativeLang);
   if (result.status === "notFound") throw new Error("Ders bulunamadı");
   if (result.status === "locked") throw new Error("Bu ders henüz kilitli");
   if (result.status === "needsGeneration") {
@@ -887,7 +961,7 @@ export async function openNodeApi(nodeId: string): Promise<
     // ekranını gösterir), sonra cache'ten servis et. Prefetch aynı dersi
     // üretiyorsa ensureLessonGen aynı promise'i paylaşır.
     await ensureLessonGen(nodeId);
-    const after = core.openNode(db, nodeId);
+    const after = core.openNode(db, nodeId, nativeLang);
     if (after.status !== "ready") throw new Error("Ders üretimi tamamlanamadı");
     return after;
   }

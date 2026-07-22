@@ -74,17 +74,36 @@ export function getRoadmap(
   const next = topLevel ? nextLevelFor(lang, topLevel) : null;
   const scheme = schemeFor(lang);
 
+  // Curriculum titles/descriptions are plain columns, not a lang map. If they
+  // were generated in a different native language, the UI must not show that
+  // language's text (T-031) — it flags a mismatch and offers a manual
+  // regenerate instead. Legacy rows (null contentLang) = 'tr'.
+  const contentLangMismatch =
+    (curriculum.contentLang ?? "tr") !== (profile.nativeLanguage ?? "tr");
+
+  // When the curriculum is in the wrong native language, its title strings must
+  // NOT reach the client (T-031: "İngilizce adama Türkçe gösteremeyiz") — null
+  // them server-side; the UI renders a "regenerate in this language" prompt off
+  // contentLangMismatch instead of the raw text.
+  const strip = (text: string) => (contentLangMismatch ? null : text);
+
   return {
-    curriculum: { id: curriculum.id, title: curriculum.title },
+    curriculum: {
+      id: curriculum.id,
+      title: strip(curriculum.title),
+    },
+    contentLangMismatch,
     levelScheme: scheme.name,
     finalLevel: scheme.levels[scheme.levels.length - 1],
     units: unitRows.map((u) => ({
       id: u.id,
-      titleTr: u.titleTr,
-      descriptionTr: u.descriptionTr,
+      titleTr: strip(u.titleTr),
+      descriptionTr: strip(u.descriptionTr),
       theme: u.theme,
       level: u.level,
-      nodes: (mainByUnit.get(u.id) ?? []).map(publicNode),
+      nodes: (mainByUnit.get(u.id) ?? []).map((n) =>
+        publicNode(n, contentLangMismatch)
+      ),
     })),
     chapters: chapterRows.map((c) => ({
       level: c.level,
@@ -98,13 +117,18 @@ export function getRoadmap(
   };
 }
 
-function publicNode(n: typeof tables.nodes.$inferSelect) {
+function publicNode(
+  n: typeof tables.nodes.$inferSelect,
+  langMismatch = false
+) {
   return {
     id: n.id,
     lessonType: n.lessonType,
-    titleTr: n.titleTr,
-    subtitleTr: n.subtitleTr,
-    objectives: n.objectives,
+    // Titles are plain columns in the curriculum's language — suppress on
+    // mismatch so the wrong language never reaches the client (T-031).
+    titleTr: langMismatch ? null : n.titleTr,
+    subtitleTr: langMismatch ? null : n.subtitleTr,
+    objectives: langMismatch ? [] : n.objectives,
     xpReward: n.xpReward,
     status: n.status,
   };

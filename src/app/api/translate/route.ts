@@ -39,7 +39,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Boş metin" }, { status: 400 });
   }
 
-  const cached = cachedTranslation(db, profile.targetLanguage, text);
+  const cached = cachedTranslation(
+    db,
+    profile.targetLanguage,
+    text,
+    profile.nativeLanguage ?? "tr"
+  );
   if (cached) {
     return NextResponse.json({ translation: cached });
   }

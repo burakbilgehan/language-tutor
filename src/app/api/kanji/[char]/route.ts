@@ -5,6 +5,8 @@ import { getActiveProfile } from "@/lib/profile";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
 import { findKanji } from "@/core/kanji";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import type { KanjiContent } from "@/lib/llm/schemas";
 
 export const runtime = "nodejs";
 
@@ -12,7 +14,19 @@ function findEntry(rawChar: string) {
   const profile = getActiveProfile();
   if (!profile) return null;
   // Kanji arrives percent-encoded in the path.
-  return findKanji(db, profile.targetLanguage, decodeURIComponent(rawChar));
+  const entry = findKanji(
+    db,
+    profile.targetLanguage,
+    decodeURIComponent(rawChar)
+  );
+  if (!entry) return null;
+  const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
+  // Content in the wrong native language is treated as absent (T-031).
+  const localized =
+    entry.status === "ready"
+      ? readLangContent<KanjiContent>(entry.content, nativeLang)
+      : null;
+  return { entry, localized };
 }
 
 export async function GET(
@@ -20,18 +34,21 @@ export async function GET(
   { params }: { params: Promise<{ char: string }> }
 ) {
   const { char } = await params;
-  const entry = findEntry(char);
-  if (!entry) {
+  const found = findEntry(char);
+  if (!found) {
     return NextResponse.json({ error: "Kanji bulunamadı" }, { status: 404 });
   }
+  const { entry, localized } = found;
   return NextResponse.json({
     char: entry.char,
     level: entry.level,
     onyomi: entry.onyomi,
     kunyomi: entry.kunyomi,
     meaningsEn: entry.meaningsEn,
-    status: entry.status,
-    content: entry.status === "ready" ? entry.content : null,
+    // Effective status: ready only when content exists in the current native
+    // language; otherwise it's pending (regenerate) regardless of row status.
+    status: localized ? "ready" : "pending",
+    content: localized,
   });
 }
 
@@ -42,11 +59,12 @@ export async function POST(
 ) {
   recoverStaleJobs();
   const { char } = await params;
-  const entry = findEntry(char);
-  if (!entry) {
+  const found = findEntry(char);
+  if (!found) {
     return NextResponse.json({ error: "Kanji bulunamadı" }, { status: 404 });
   }
-  if (entry.status === "ready") {
+  const { entry, localized } = found;
+  if (localized) {
     return NextResponse.json({ status: "ready" });
   }
   const gate = requireLlm();

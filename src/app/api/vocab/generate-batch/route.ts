@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import type { VocabContent } from "@/lib/llm/schemas";
 
 export const runtime = "nodejs";
 
-/** Enqueue generation for every pending/errored entry (optionally one level). */
+/** Enqueue generation for every entry not yet ready IN THE CURRENT NATIVE
+ * LANGUAGE (pending/errored, or ready only in another language — T-031). */
 export async function POST(req: Request) {
   const gate = requireLlm();
   if (gate) return gate;
@@ -17,16 +20,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
   const { level } = await req.json().catch(() => ({ level: undefined }));
+  const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
 
-  const entries = db.query.vocabEntries
-    .findMany({
-      where: and(
+  const entries = db
+    .select()
+    .from(tables.vocabEntries)
+    .where(
+      and(
         eq(tables.vocabEntries.targetLanguage, profile.targetLanguage),
-        inArray(tables.vocabEntries.status, ["pending", "error"]),
         ...(level ? [eq(tables.vocabEntries.level, level)] : [])
-      ),
-    })
-    .sync();
+      )
+    )
+    .all()
+    .filter(
+      (e) =>
+        e.status !== "ready" ||
+        !readLangContent<VocabContent>(e.content, nativeLang)
+    );
 
   // Drive sequentially (like queueKanjiLevel): firing every job at once
   // marks them all 'running' while they wait behind the CLI queue, and any

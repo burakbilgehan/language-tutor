@@ -5,17 +5,27 @@ import { getActiveProfile } from "@/lib/profile";
 import { ensureVocabSeeded, findVocab } from "@/core/vocab";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import type { VocabContent } from "@/lib/llm/schemas";
 
 export const runtime = "nodejs";
 
 function findEntry(word: string) {
   const profile = getActiveProfile();
   if (!profile) return null;
-  const entry = findVocab(db, profile.targetLanguage, word);
-  if (entry) return entry;
-  // Deep link (?word=) can arrive before the list ever seeded this profile.
-  ensureVocabSeeded(db, profile.targetLanguage);
-  return findVocab(db, profile.targetLanguage, word);
+  let entry = findVocab(db, profile.targetLanguage, word);
+  if (!entry) {
+    // Deep link (?word=) can arrive before the list ever seeded this profile.
+    ensureVocabSeeded(db, profile.targetLanguage);
+    entry = findVocab(db, profile.targetLanguage, word);
+  }
+  if (!entry) return null;
+  const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
+  const localized =
+    entry.status === "ready"
+      ? readLangContent<VocabContent>(entry.content, nativeLang)
+      : null;
+  return { entry, localized };
 }
 
 export async function GET(
@@ -23,10 +33,11 @@ export async function GET(
   { params }: { params: Promise<{ word: string }> }
 ) {
   const { word } = await params;
-  const entry = findEntry(word);
-  if (!entry) {
+  const found = findEntry(word);
+  if (!found) {
     return NextResponse.json({ error: "Kelime bulunamadı" }, { status: 404 });
   }
+  const { entry, localized } = found;
   return NextResponse.json({
     word: entry.word,
     traditional: entry.traditional,
@@ -34,8 +45,8 @@ export async function GET(
     meaningsEn: entry.meaningsEn,
     classifiers: entry.classifiers,
     level: entry.level,
-    status: entry.status,
-    content: entry.status === "ready" ? entry.content : null,
+    status: localized ? "ready" : "pending",
+    content: localized,
   });
 }
 
@@ -46,11 +57,12 @@ export async function POST(
 ) {
   recoverStaleJobs();
   const { word } = await params;
-  const entry = findEntry(word);
-  if (!entry) {
+  const found = findEntry(word);
+  if (!found) {
     return NextResponse.json({ error: "Kelime bulunamadı" }, { status: 404 });
   }
-  if (entry.status === "ready") {
+  const { entry, localized } = found;
+  if (localized) {
     return NextResponse.json({ status: "ready" });
   }
   const gate = requireLlm();

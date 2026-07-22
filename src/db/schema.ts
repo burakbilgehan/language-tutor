@@ -12,6 +12,7 @@ import type {
   KanjiContent,
   VocabContent,
 } from "@/lib/llm/schemas";
+import type { LangKeyed } from "@/lib/llm/lang-content";
 
 const id = () => text("id").primaryKey();
 const createdAt = () =>
@@ -49,6 +50,11 @@ export const curricula = sqliteTable("curricula", {
   })
     .notNull()
     .default("pending"),
+  // Native language the curriculum titles/descriptions were generated in
+  // (T-031). Plain columns can't hold a lang map like content JSON, so the
+  // roadmap gates its DISPLAY on this and offers a manual "regenerate" instead.
+  // Legacy rows (null) predate this → treated as 'tr'.
+  contentLang: text("content_lang"),
   modelUsed: text("model_used"),
   generatedAt: integer("generated_at", { mode: "timestamp" }),
 });
@@ -128,7 +134,7 @@ export const lessons = sqliteTable(
     nodeId: text("node_id")
       .notNull()
       .references(() => nodes.id),
-    content: text("content", { mode: "json" }).$type<LessonContent>(),
+    content: text("content", { mode: "json" }).$type<LangKeyed<LessonContent>>(),
     status: text("status", {
       enum: ["pending", "generating", "ready", "error"],
     })
@@ -145,6 +151,11 @@ export const exercises = sqliteTable("exercises", {
   lessonId: text("lesson_id")
     .notNull()
     .references(() => lessons.id),
+  // Learner-native language these prompts/answers are written in (T-031).
+  // The lesson body is a lang-keyed JSON map, but exercises are a side-table;
+  // this column lets both languages coexist so switching back restores the
+  // original set exactly (and preserves the other language's attempts).
+  lang: text("lang").notNull().default("tr"),
   position: integer("position").notNull(),
   type: text("type", {
     enum: ["mcq", "fill_blank", "translate", "free_response"],
@@ -220,7 +231,7 @@ export const grammarTopics = sqliteTable(
     category: text("category").notNull(),
     level: text("level"),
     position: integer("position").notNull().default(0),
-    content: text("content", { mode: "json" }).$type<GrammarTopicContent>(),
+    content: text("content", { mode: "json" }).$type<LangKeyed<GrammarTopicContent>>(),
     status: text("status", {
       enum: ["pending", "generating", "ready", "error"],
     })
@@ -247,7 +258,7 @@ export const kanjiEntries = sqliteTable(
       .notNull()
       .$type<string[]>(),
     // LLM half: Turkish meanings + examples, generated once on demand.
-    content: text("content", { mode: "json" }).$type<KanjiContent>(),
+    content: text("content", { mode: "json" }).$type<LangKeyed<KanjiContent>>(),
     status: text("status", {
       enum: ["pending", "generating", "ready", "error"],
     })
@@ -275,7 +286,7 @@ export const vocabEntries = sqliteTable(
       .$type<string[]>(),
     classifiers: text("classifiers", { mode: "json" }).$type<string[]>(),
     // LLM half: native-language meanings + examples, generated once on demand.
-    content: text("content", { mode: "json" }).$type<VocabContent>(),
+    content: text("content", { mode: "json" }).$type<LangKeyed<VocabContent>>(),
     status: text("status", {
       enum: ["pending", "generating", "ready", "error"],
     })
@@ -293,11 +304,21 @@ export const translations = sqliteTable(
   {
     id: id(),
     targetLanguage: text("target_language").notNull(),
+    // Learner-native language the translation is written in (T-031). Legacy
+    // rows predate this column → 'tr' (the historical default). Part of the
+    // cache key so a tr and an en profile on the same target don't collide.
+    nativeLanguage: text("native_language").notNull().default("tr"),
     sourceText: text("source_text").notNull(),
     translationTr: text("translation_tr").notNull(),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("translation_text_idx").on(t.targetLanguage, t.sourceText)]
+  (t) => [
+    uniqueIndex("translation_text_idx").on(
+      t.targetLanguage,
+      t.nativeLanguage,
+      t.sourceText
+    ),
+  ]
 );
 
 export const chatSessions = sqliteTable("chat_sessions", {

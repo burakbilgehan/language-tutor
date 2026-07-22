@@ -9,7 +9,12 @@ import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { languageLabel } from "@/lib/profile-options";
 import { levelDisplay } from "@/lib/curriculum/levels";
-import { roadmap, profileData, curriculumExtend } from "@/lib/client-api";
+import {
+  roadmap,
+  profileData,
+  curriculumExtend,
+  curriculumRetranslate,
+} from "@/lib/client-api";
 import { withBase } from "@/lib/base-path";
 
 const S = {
@@ -27,6 +32,12 @@ const S = {
     allDone: (lvl: string) =>
       `Tüm seviyeler (${lvl}'e kadar) tamamlandı. Sözlük + gramer artık senin.`,
     review: "Tekrar",
+    langMismatchTitle: "Müfredat başka bir dilde hazırlanmış",
+    langMismatchBody:
+      "Bu müfredatın başlıkları farklı bir dilde. İlerlemen korunur — yalnızca görünen başlıklar bu dile çevrilir.",
+    retranslate: "Bu dile çevir",
+    retranslating: "Çevriliyor...",
+    hiddenTitle: "(bu dilde henüz yok)",
   },
   en: {
     loadFailed: "Failed to load",
@@ -42,26 +53,35 @@ const S = {
     allDone: (lvl: string) =>
       `All levels (up to ${lvl}) completed. The dictionary + grammar are yours now.`,
     review: "Review",
+    langMismatchTitle: "Curriculum is in another language",
+    langMismatchBody:
+      "This curriculum's titles are in a different language. Your progress is kept — only the visible titles are translated into this language.",
+    retranslate: "Translate to this language",
+    retranslating: "Translating...",
+    hiddenTitle: "(not in this language yet)",
   },
 };
 
 interface NodeDto {
   id: string;
   lessonType: "lesson" | "checkpoint" | "boss";
-  titleTr: string;
-  subtitleTr: string;
+  // null when the curriculum is in another native language (T-031): the server
+  // suppresses the wrong-language text; the mismatch banner explains why.
+  titleTr: string | null;
+  subtitleTr: string | null;
   xpReward: number;
   status: "locked" | "available" | "completed";
 }
 
 interface RoadmapDto {
-  curriculum: { id: string; title: string };
+  curriculum: { id: string; title: string | null };
+  contentLangMismatch: boolean;
   levelScheme: string;
   finalLevel: string;
   units: {
     id: string;
-    titleTr: string;
-    descriptionTr: string;
+    titleTr: string | null;
+    descriptionTr: string | null;
     theme: string;
     level: string | null;
     nodes: NodeDto[];
@@ -185,6 +205,20 @@ export function RoadmapView() {
     }
   };
 
+  const [retranslating, setRetranslating] = useState(false);
+  const startRetranslate = async () => {
+    setRetranslating(true);
+    setExtendError(null);
+    try {
+      await curriculumRetranslate();
+      await loadRoadmap();
+    } catch (e) {
+      setExtendError(e instanceof Error ? e.message : t.startFailed);
+    } finally {
+      setRetranslating(false);
+    }
+  };
+
   if (error) {
     return (
       <CenteredPage>
@@ -215,7 +249,7 @@ export function RoadmapView() {
         title={
           meta && data.topLevel
             ? `${languageLabel(meta.targetLanguage, meta.uiLanguage)} · ${levelDisplay(meta.targetLanguage, data.topLevel)}`
-            : data.curriculum.title
+            : (data.curriculum.title ?? "")
         }
         xpTotal={data.xpTotal}
         streak={data.streak}
@@ -230,13 +264,28 @@ export function RoadmapView() {
         }`}
       >
       <main className="mx-auto max-w-xl px-4">
+        {data.contentLangMismatch && (
+          <div className="my-6 rounded-cozy border border-accent/30 bg-surface px-5 py-4 shadow-cozy">
+            <div className="font-semibold">{t.langMismatchTitle}</div>
+            <p className="mt-1 text-sm text-ink-soft">{t.langMismatchBody}</p>
+            <button
+              onClick={startRetranslate}
+              disabled={retranslating}
+              className="mt-3 rounded-cozy bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {retranslating ? t.retranslating : t.retranslate}
+            </button>
+          </div>
+        )}
         {data.units.map((unit, ui) => (
           <section key={unit.id} className="relative">
             <div className="sticky top-[calc(var(--header-h)+8px)] z-10 my-6 rounded-cozy bg-surface px-5 py-4 shadow-cozy">
               <div className="text-xs font-semibold uppercase tracking-wider text-accent">
                 {t.unit(ui + 1)}
               </div>
-              <h2 className="text-lg font-semibold">{unit.titleTr}</h2>
+              <h2 className="text-lg font-semibold">
+                {unit.titleTr ?? t.hiddenTitle}
+              </h2>
               <p className="text-sm text-ink-soft">{unit.descriptionTr}</p>
             </div>
 
@@ -397,7 +446,7 @@ function NodeBubble({
         transform: `translateX(calc(${offsetFactor} * min(90px, 18vw)))`,
       }}
       className={`group relative z-[1] my-2 flex flex-col items-center cursor-pointer disabled:cursor-not-allowed`}
-      title={node.subtitleTr}
+      title={node.subtitleTr ?? undefined}
     >
       <div
         className={`flex h-16 w-16 items-center justify-center rounded-full text-2xl transition-all ${

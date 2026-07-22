@@ -6,6 +6,7 @@ import { getActiveProfile } from "@/lib/profile";
 import { applyVocabSeed, listVocab } from "@/core/vocab";
 import { recoverStaleJobs } from "@/lib/jobs";
 import type { VocabContent } from "@/lib/llm/schemas";
+import type { NativeLang } from "@/lib/llm/lang-content";
 
 export const runtime = "nodejs";
 
@@ -35,11 +36,12 @@ export async function GET() {
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
-  let entries = listVocab(db, profile.targetLanguage);
+  const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
+  let entries = listVocab(db, profile.targetLanguage, nativeLang);
   if (entries.some((e) => e.status === "pending" || e.status === "error")) {
     const seed = loadSeed(profile.targetLanguage);
-    if (seed && applyVocabSeed(db, profile.targetLanguage, seed) > 0) {
-      entries = listVocab(db, profile.targetLanguage);
+    if (seed && applyVocabSeed(db, profile.targetLanguage, seed, nativeLang) > 0) {
+      entries = listVocab(db, profile.targetLanguage, nativeLang);
     }
   }
   return NextResponse.json({ entries });

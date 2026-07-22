@@ -26,6 +26,8 @@ import {
   KanjiContentSchema,
   LessonSchema,
 } from "@/lib/llm/schemas";
+import type { KanjiContent, LessonContent } from "@/lib/llm/schemas";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
 import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
 import { lessonPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
@@ -208,11 +210,20 @@ export function createJob(jobType: JobType, refId: string): string {
  * in-flight or freshly enqueued + fired). Used by the open route (on-demand)
  * and the complete route (prefetch for just-unlocked nodes).
  */
-export function ensureLessonJob(nodeId: string): string | null {
+export function ensureLessonJob(
+  nodeId: string,
+  nativeLanguage: NativeLang = "tr"
+): string | null {
   const lesson = db.query.lessons
     .findFirst({ where: eq(tables.lessons.nodeId, nodeId) })
     .sync();
-  if (lesson?.status === "ready" && lesson.content) return null;
+  // Ready only counts when the content exists in the current native language;
+  // a wrong-language cached lesson must be regenerated (T-031).
+  if (
+    lesson?.status === "ready" &&
+    readLangContent<LessonContent>(lesson.content, nativeLanguage)
+  )
+    return null;
   // No LLM configured → don't enqueue jobs that would only error. Callers
   // (open route) surface an explicit "LLM gerekli" state instead.
   if (!llmConfigured()) return null;
@@ -263,7 +274,11 @@ export function regenerateLessonJob(nodeId: string, feedback?: string | null): s
  * skipped — retries stay user-driven (opening the node itself), not
  * poll-driven.
  */
-export function prefetchSuccessorLessons(nodeId: string, depth = 3) {
+export function prefetchSuccessorLessons(
+  nodeId: string,
+  depth = 3,
+  nativeLanguage: NativeLang = "tr"
+) {
   if (!llmConfigured()) return; // no LLM → no background error-job spam
   let frontier = [nodeId];
   for (let d = 0; d < depth && frontier.length > 0; d++) {
@@ -282,7 +297,7 @@ export function prefetchSuccessorLessons(nodeId: string, depth = 3) {
         const lesson = db.query.lessons
           .findFirst({ where: eq(tables.lessons.nodeId, s.id) })
           .sync();
-        if (lesson?.status !== "error") ensureLessonJob(s.id);
+        if (lesson?.status !== "error") ensureLessonJob(s.id, nativeLanguage);
         next.push(s.id);
       }
     }
@@ -302,21 +317,39 @@ export function prefetchSuccessorLessons(nodeId: string, depth = 3) {
 export function queueKanjiLevel(
   targetLanguage: string,
   level: string,
-  includeErrors: boolean
+  includeErrors: boolean,
+  nativeLanguage: NativeLang = "tr"
 ): number {
   if (!llmConfigured()) return 0;
-  const statuses = includeErrors ? ["pending", "error"] : ["pending"];
-  const entries = db.query.kanjiEntries
-    .findMany({
-      where: and(
-        eq(tables.kanjiEntries.targetLanguage, targetLanguage),
-        eq(tables.kanjiEntries.level, level),
-        inArray(tables.kanjiEntries.status, statuses as ("pending" | "error")[])
-      ),
-      orderBy: [asc(tables.kanjiEntries.position)],
-      columns: { id: true },
+  // Rows that are DB-ready but only in another native language must be
+  // regenerated too (T-031), so select all rows of the level and filter by
+  // effective readiness in JS rather than a status-only SQL predicate.
+  const entries = db
+    .select({
+      id: tables.kanjiEntries.id,
+      status: tables.kanjiEntries.status,
+      content: tables.kanjiEntries.content,
     })
-    .sync();
+    .from(tables.kanjiEntries)
+    .where(
+      and(
+        eq(tables.kanjiEntries.targetLanguage, targetLanguage),
+        eq(tables.kanjiEntries.level, level)
+      )
+    )
+    .orderBy(asc(tables.kanjiEntries.position))
+    .all()
+    .filter((e) => {
+      // A job already in flight — leave it (dedupe handles re-enqueue anyway).
+      if (e.status === "generating") return false;
+      const readyInNative =
+        e.status === "ready" &&
+        readLangContent<KanjiContent>(e.content, nativeLanguage);
+      if (readyInNative) return false;
+      // Without includeErrors, skip errored rows (auto-fill never retries them).
+      if (!includeErrors && e.status === "error") return false;
+      return true;
+    });
   if (entries.length === 0) return 0;
 
   const jobIds = entries.map((e) => createJob("kanji", e.id));
@@ -342,9 +375,20 @@ export function queueMissingLessons(profileId: string): number {
     .findFirst({ where: eq(tables.curricula.profileId, profileId) })
     .sync();
   if (!curriculum) return 0;
+  const profile = db
+    .select({ nativeLanguage: tables.profiles.nativeLanguage })
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, profileId))
+    .limit(1)
+    .get();
+  const nativeLang = (profile?.nativeLanguage ?? "tr") as NativeLang;
 
   const rows = db
-    .select({ nodeId: tables.nodes.id, lessonStatus: tables.lessons.status })
+    .select({
+      nodeId: tables.nodes.id,
+      lessonStatus: tables.lessons.status,
+      lessonContent: tables.lessons.content,
+    })
     .from(tables.nodes)
     .innerJoin(tables.units, eq(tables.nodes.unitId, tables.units.id))
     .leftJoin(tables.lessons, eq(tables.lessons.nodeId, tables.nodes.id))
@@ -358,7 +402,12 @@ export function queueMissingLessons(profileId: string): number {
     .all();
 
   const jobIds = rows
-    .filter((r) => r.lessonStatus !== "ready")
+    // Not ready in the current native language → (re)generate (T-031).
+    .filter(
+      (r) =>
+        r.lessonStatus !== "ready" ||
+        !readLangContent<LessonContent>(r.lessonContent, nativeLang)
+    )
     .map((r) => createJob("lesson", r.nodeId));
   if (jobIds.length === 0) return 0;
 

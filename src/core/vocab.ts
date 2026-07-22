@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { vocabIndexFor } from "@/lib/vocab-index";
 import type { VocabContent } from "@/lib/llm/schemas";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
 import type { AppDb } from "./db-types";
 
 // Kelime sözlüğünün ortam-bağımsız çekirdeği (HSK sözlük). İçerik ÜRETİMİ
@@ -88,8 +89,11 @@ export function ensureVocabSeeded(db: AppDb, targetLanguage: string) {
 export function applyVocabSeed(
   db: AppDb,
   targetLanguage: string,
-  seed: Record<string, VocabContent>
+  seed: Record<string, VocabContent>,
+  nativeLanguage: NativeLang = "tr"
 ): number {
+  // Seed content is Turkish — never apply to a non-tr profile (T-031).
+  if (nativeLanguage !== "tr") return 0;
   const empty = db
     .select({ id: tables.vocabEntries.id, word: tables.vocabEntries.word })
     .from(tables.vocabEntries)
@@ -105,7 +109,11 @@ export function applyVocabSeed(
     const content = seed[row.word];
     if (!content) continue;
     db.update(tables.vocabEntries)
-      .set({ content, status: "ready", generatedAt: new Date() })
+      .set({
+        content: { tr: content },
+        status: "ready",
+        generatedAt: new Date(),
+      })
       .where(eq(tables.vocabEntries.id, row.id))
       .run();
     filled++;
@@ -113,7 +121,11 @@ export function applyVocabSeed(
   return filled;
 }
 
-export function listVocab(db: AppDb, targetLanguage: string) {
+export function listVocab(
+  db: AppDb,
+  targetLanguage: string,
+  nativeLanguage: NativeLang = "tr"
+) {
   ensureVocabSeeded(db, targetLanguage);
   return db
     .select({
@@ -122,11 +134,21 @@ export function listVocab(db: AppDb, targetLanguage: string) {
       meaningsEn: tables.vocabEntries.meaningsEn,
       level: tables.vocabEntries.level,
       status: tables.vocabEntries.status,
+      content: tables.vocabEntries.content,
     })
     .from(tables.vocabEntries)
     .where(eq(tables.vocabEntries.targetLanguage, targetLanguage))
     .orderBy(asc(tables.vocabEntries.position))
-    .all();
+    .all()
+    .map(({ content, ...rest }) => ({
+      ...rest,
+      // Wrong-native-language content reads as pending (T-031).
+      status:
+        rest.status === "ready" &&
+        !readLangContent<VocabContent>(content, nativeLanguage)
+          ? ("pending" as const)
+          : rest.status,
+    }));
 }
 
 export function findVocab(db: AppDb, targetLanguage: string, word: string) {

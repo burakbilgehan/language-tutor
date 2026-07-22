@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import type { LlmProvider } from "@/lib/llm/provider-types";
@@ -9,6 +9,12 @@ import {
   VocabContentSchema,
   GradeSchema,
 } from "@/lib/llm/schemas";
+import type { LessonContent } from "@/lib/llm/schemas";
+import {
+  mergeLangContent,
+  readLangContent,
+  type NativeLang,
+} from "@/lib/llm/lang-content";
 import { lessonPrompt, gradingPrompt } from "@/lib/llm/prompts/lesson";
 import { grammarPrompt } from "@/lib/llm/prompts/grammar";
 import { kanjiPrompt } from "@/lib/llm/prompts/kanji";
@@ -97,14 +103,18 @@ export async function generateLessonContent(
   // Short summary of the lesson being replaced (regenerate flow only) — gives
   // the LLM context for the user's feedback without dumping the full previous
   // JSON into the prompt (token cost).
+  const prevLessonContent = readLangContent<LessonContent>(
+    existing?.content,
+    profile.nativeLanguage as NativeLang
+  );
   const previousLessonSummary =
-    regenerationFeedback?.trim() && existing?.content
+    regenerationFeedback?.trim() && prevLessonContent
       ? [
-          `"${existing.content.title_tr}"`,
-          `${existing.content.exercises.length} alıştırma (${Array.from(
-            new Set(existing.content.exercises.map((e) => e.type))
+          `"${prevLessonContent.title_tr}"`,
+          `${prevLessonContent.exercises.length} alıştırma (${Array.from(
+            new Set(prevLessonContent.exercises.map((e) => e.type))
           ).join(", ")})`,
-          `${existing.content.examples.length} örnek`,
+          `${prevLessonContent.examples.length} örnek`,
         ].join(", ")
       : null;
   if (!existing) {
@@ -141,12 +151,22 @@ export async function generateLessonContent(
 
     db.transaction((tx) => {
       tx.update(tables.lessons)
-        .set({ content: lesson, status: "ready", generatedAt: new Date() })
+        .set({
+          content: mergeLangContent(
+            existing?.content,
+            profile.nativeLanguage as NativeLang,
+            lesson
+          ),
+          status: "ready",
+          generatedAt: new Date(),
+        })
         .where(eq(tables.lessons.id, lessonId))
         .run();
-      // Re-generation: replace old exercises. Attempts on the replaced
-      // exercises go with them (FK, and they grade questions that no longer
-      // exist).
+      // Re-generation replaces only THIS language's exercises (and their
+      // attempts) — the other native language's set stays intact so switching
+      // back restores it exactly (T-031). Attempts go with the exercises they
+      // grade (FK, and they scored questions that no longer exist).
+      const lang = (profile.nativeLanguage ?? "tr") as NativeLang;
       tx.delete(tables.attempts)
         .where(
           inArray(
@@ -154,18 +174,29 @@ export async function generateLessonContent(
             tx
               .select({ id: tables.exercises.id })
               .from(tables.exercises)
-              .where(eq(tables.exercises.lessonId, lessonId))
+              .where(
+                and(
+                  eq(tables.exercises.lessonId, lessonId),
+                  eq(tables.exercises.lang, lang)
+                )
+              )
           )
         )
         .run();
       tx.delete(tables.exercises)
-        .where(eq(tables.exercises.lessonId, lessonId))
+        .where(
+          and(
+            eq(tables.exercises.lessonId, lessonId),
+            eq(tables.exercises.lang, lang)
+          )
+        )
         .run();
       lesson.exercises.forEach((ex, i) => {
         tx.insert(tables.exercises)
           .values({
             id: nanoid(),
             lessonId,
+            lang,
             position: i,
             type: ex.type,
             promptTr: ex.prompt_tr,
@@ -240,7 +271,15 @@ export async function generateGrammarContent(
       timeoutMs: 300_000,
     });
     db.update(tables.grammarTopics)
-      .set({ content, status: "ready", generatedAt: new Date() })
+      .set({
+        content: mergeLangContent(
+          topic.content,
+          (profile?.nativeLanguage ?? "tr") as NativeLang,
+          content
+        ),
+        status: "ready",
+        generatedAt: new Date(),
+      })
       .where(eq(tables.grammarTopics.id, topicId))
       .run();
   } catch (err) {
@@ -295,7 +334,15 @@ export async function generateKanjiContent(
       timeoutMs: 120_000,
     });
     db.update(tables.kanjiEntries)
-      .set({ content, status: "ready", generatedAt: new Date() })
+      .set({
+        content: mergeLangContent(
+          entry.content,
+          (profile?.nativeLanguage ?? "tr") as NativeLang,
+          content
+        ),
+        status: "ready",
+        generatedAt: new Date(),
+      })
       .where(eq(tables.kanjiEntries.id, entryId))
       .run();
   } catch (err) {
@@ -350,7 +397,15 @@ export async function generateVocabContent(
       timeoutMs: 120_000,
     });
     db.update(tables.vocabEntries)
-      .set({ content, status: "ready", generatedAt: new Date() })
+      .set({
+        content: mergeLangContent(
+          entry.content,
+          (profile?.nativeLanguage ?? "tr") as NativeLang,
+          content
+        ),
+        status: "ready",
+        generatedAt: new Date(),
+      })
       .where(eq(tables.vocabEntries.id, entryId))
       .run();
   } catch (err) {
@@ -456,6 +511,7 @@ export async function freshTranslation(
       .values({
         id: nanoid(),
         targetLanguage: profile.targetLanguage,
+        nativeLanguage: profile.nativeLanguage ?? "tr",
         sourceText: normalizedText,
         translationTr: translation,
       })

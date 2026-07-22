@@ -14,6 +14,16 @@ import { withBase } from "@/lib/base-path";
 
 export type BrowserDb = DrizzleSqlJs<typeof schema>;
 
+// Additive column self-heals for images persisted by pre-v7 builds. ADD COLUMN
+// with a NOT NULL DEFAULT backfills existing rows on read, so no data touch.
+// Idempotent: re-running on an already-migrated image throws "duplicate column",
+// swallowed by the caller. Keep in sync with schema.ts shape changes.
+const COLUMN_HEALS: string[] = [
+  "ALTER TABLE `translations` ADD COLUMN `native_language` text DEFAULT 'tr' NOT NULL",
+  "ALTER TABLE `curricula` ADD COLUMN `content_lang` text",
+  "ALTER TABLE `exercises` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
+];
+
 const IDB_NAME = "language-tutor";
 const IDB_STORE = "sqlite";
 const IDB_KEY = "image";
@@ -78,14 +88,34 @@ async function create(): Promise<BrowserDbHandle> {
     // Additive self-heal: an image persisted by an older build may miss
     // tables added since (e.g. vocab_entries). DDL is CREATE TABLE/INDEX
     // only, so replaying it and swallowing "already exists" errors acts as
-    // a poor-man's forward migration. Column changes still need a proper
-    // migration + SAVE_SCHEMA_VERSION bump.
+    // a poor-man's forward migration.
     for (const stmt of DDL) {
       try {
         sqlite.run(stmt);
       } catch {
         /* already exists */
       }
+    }
+    // Column additions can't ride CREATE TABLE replay (the table already
+    // exists), so ADD COLUMN explicitly. Each is idempotent via try/catch on
+    // "duplicate column" — safe to run every boot. (T-031 schema v7.)
+    for (const stmt of COLUMN_HEALS) {
+      try {
+        sqlite.run(stmt);
+      } catch {
+        /* column already exists */
+      }
+    }
+    // The translations unique key gained native_language (T-031). Rebuild the
+    // index so an old image's (target, source) index becomes (target, native,
+    // source); DROP+CREATE is idempotent.
+    try {
+      sqlite.run("DROP INDEX IF EXISTS `translation_text_idx`");
+      sqlite.run(
+        "CREATE UNIQUE INDEX `translation_text_idx` ON `translations` (`target_language`,`native_language`,`source_text`)"
+      );
+    } catch {
+      /* index already in desired shape */
     }
   } else {
     sqlite = new SQL.Database();

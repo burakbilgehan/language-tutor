@@ -125,3 +125,26 @@ Sadece şemaya uygun JSON döndür.`;
 
   return { system, prompt };
 }
+
+/**
+ * Prompt to re-translate curriculum titles/descriptions into a new native
+ * language (T-031). The curriculum STRUCTURE is language-independent — only the
+ * display strings change — so we translate the existing strings in place rather
+ * than regenerating (which would orphan progress/SRS/attempts). Each item keeps
+ * its opaque id; the model must echo ids back unchanged.
+ */
+export function curriculumTranslatePrompt({
+  targetLanguage,
+  nativeLanguage,
+  items,
+}: {
+  targetLanguage: string;
+  nativeLanguage: string;
+  items: { id: string; text: string }[];
+}) {
+  const lang = languageName(targetLanguage);
+  const native = nativeLanguageName(nativeLanguage);
+  const system = `Sen bir çeviri asistanısın. Bir ${lang} öğrenme müfredatının başlık ve açıklamalarını ${native} diline çevireceksin. SADECE metni çevir; anlamı ve tonu koru, dil öğrenimine uygun doğal ${native} kullan. Her öğenin "id"sini AYNEN geri döndür, değiştirme. Sadece istenen JSON'u döndür.`;
+  const prompt = `Aşağıdaki öğeleri ${native} diline çevir. "id" alanlarını değiştirme, "text" alanına çevrilmiş metni yaz. Hedef dile (${lang}) ait özel terimler/örnekler varsa olduğu gibi bırak, sadece açıklayıcı kısımları çevir.\n\n${JSON.stringify(items, null, 2)}\n\nÇıktı: { "items": [ { "id": "...", "text": "çeviri" }, ... ] }`;
+  return { system, prompt };
+}

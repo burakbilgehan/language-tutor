@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { openNode } from "@/core/lesson";
+import { getActiveProfile } from "@/lib/profile";
+import type { NativeLang } from "@/lib/llm/lang-content";
 import {
   ensureLessonJob,
   prefetchSuccessorLessons,
@@ -17,17 +19,23 @@ export async function POST(
   recoverStaleJobs();
   const { id: nodeId } = await params;
 
-  const result = openNode(db, nodeId);
+  const profile = getActiveProfile();
+  const result = openNode(
+    db,
+    nodeId,
+    (profile?.nativeLanguage ?? "tr") as NativeLang
+  );
   if (result.status === "notFound") {
     return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
   }
   if (result.status === "locked") {
     return NextResponse.json({ error: "Bu ders henüz kilitli" }, { status: 403 });
   }
+  const nativeLang = (profile?.nativeLanguage ?? "tr") as NativeLang;
   if (result.status === "ready") {
     // The learner is about to spend minutes here — generate the next lesson
     // in the background now, not at completion time.
-    prefetchSuccessorLessons(nodeId);
+    prefetchSuccessorLessons(nodeId, 3, nativeLang);
     return NextResponse.json(result);
   }
 
@@ -43,6 +51,6 @@ export async function POST(
       { status: 503 }
     );
   }
-  const jobId = ensureLessonJob(nodeId);
+  const jobId = ensureLessonJob(nodeId, nativeLang);
   return NextResponse.json({ status: "generating", jobId });
 }

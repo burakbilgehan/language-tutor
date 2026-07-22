@@ -7,6 +7,7 @@ import { completeNodeFlow } from "@/core/lesson";
 import { createJob, ensureLessonJob, runJob, topChapterLevel } from "@/lib/jobs";
 import { nextLevelFor } from "@/lib/curriculum/levels";
 import { llmConfigured } from "@/lib/llm/config";
+import type { NativeLang } from "@/lib/llm/lang-content";
 
 export const runtime = "nodejs";
 
@@ -69,7 +70,7 @@ export async function POST(
   // Prefetch: generate the just-unlocked lesson(s) in the background so the
   // learner never stares at a 90s spinner.
   for (const unlockedId of flow.unlockedNodeIds) {
-    ensureLessonJob(unlockedId);
+    ensureLessonJob(unlockedId, (profile.nativeLanguage ?? "tr") as NativeLang);
   }
 
   // Auto-extend to the next level when the learner clears the tail.

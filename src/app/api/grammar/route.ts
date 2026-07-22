@@ -6,6 +6,7 @@ import { getActiveProfile } from "@/lib/profile";
 import { applyGrammarSeed, listGrammarTopics } from "@/core/grammar";
 import { recoverStaleJobs } from "@/lib/jobs";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
+import type { NativeLang } from "@/lib/llm/lang-content";
 
 export const runtime = "nodejs";
 
@@ -33,11 +34,15 @@ export async function GET() {
   if (!profile) {
     return NextResponse.json({ error: "Profil yok" }, { status: 404 });
   }
-  let topics = listGrammarTopics(db, profile.targetLanguage);
+  const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
+  let topics = listGrammarTopics(db, profile.targetLanguage, nativeLang);
   if (topics.some((t) => t.status === "pending" || t.status === "error")) {
     const seed = loadSeed(profile.targetLanguage);
-    if (seed && applyGrammarSeed(db, profile.targetLanguage, seed) > 0) {
-      topics = listGrammarTopics(db, profile.targetLanguage);
+    if (
+      seed &&
+      applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+    ) {
+      topics = listGrammarTopics(db, profile.targetLanguage, nativeLang);
     }
   }
   return NextResponse.json({ topics });
