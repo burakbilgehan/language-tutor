@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
@@ -51,6 +52,7 @@ const S = {
     importWarnStrong: "siler",
     importWarnAfter:
       "ve yüklenen kayıtla değiştirir. İki makinede de uygulamanın aynı sürümü kurulu olmalı.",
+    sourcesLink: "Kaynaklar & Lisanslar",
   },
   en: {
     title: "Settings",
@@ -89,6 +91,7 @@ const S = {
     importWarnStrong: "erases",
     importWarnAfter:
       "the current progress on this machine and replaces it with the loaded save. Both machines must have the same version of the app installed.",
+    sourcesLink: "Sources & Licenses",
   },
 };
 
@@ -239,6 +242,10 @@ export default function SettingsPage() {
 
         {/* Drive sync + local snapshots (T-032) — static mode only. */}
         <BackupSection />
+
+        <Link href="/about" className="text-sm text-ink-soft underline">
+          {t.sourcesLink}
+        </Link>
       </main>
     </div>
   );
