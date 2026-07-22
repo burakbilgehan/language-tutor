@@ -506,10 +506,25 @@ export async function retranslateCurriculum(
   });
   const byId = new Map(result.items.map((i) => [i.id, i.text]));
 
+  // Every string must come back translated. If the model dropped or blanked
+  // any id, restamping contentLang would clear the mismatch banner while those
+  // titles stay in the old language → the exact leak this feature closes
+  // (T-031). So refuse a partial result: leave contentLang unchanged (mismatch
+  // stays, titles stay suppressed) and surface an error so the user retries.
+  // This also makes fixture mode ({items:[]}) a clean no-op instead of a leak.
+  const missing = items.filter((it) => {
+    const v = byId.get(it.id);
+    return !v || !v.trim();
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Müfredat çevirisi eksik döndü (${missing.length}/${items.length} çevrilemedi)`
+    );
+  }
+
   db.transaction((tx) => {
     for (const item of items) {
-      const translated = byId.get(item.id);
-      if (!translated || !translated.trim()) continue; // keep original on miss
+      const translated = byId.get(item.id)!;
       const [table, field, rowId] = item.id.split(":");
       if (table === "cur") {
         tx.update(tables.curricula)
@@ -541,6 +556,7 @@ export async function retranslateCurriculum(
           .run();
       }
     }
+    // Only now that all strings translated — flip the language stamp.
     tx.update(tables.curricula)
       .set({ contentLang: nativeLanguage })
       .where(eq(tables.curricula.id, curriculum.id))
