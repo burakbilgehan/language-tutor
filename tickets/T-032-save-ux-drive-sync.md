@@ -1,13 +1,24 @@
 ---
 id: T-032
 title: Save teşviki + Google Drive otomatik yedekleme
-status: backlog
+status: done
 priority: p2
 effort: L
 confidence: medium
 depends: [T-024]
 created: 2026-07-22
 ---
+Statü (2026-07-22): iki faz da yapıldı. Faz 1 (header "Yedekle" çipi +
+hatırlatıcı çubuk + IndexedDB son-K snapshot + storage.persist) ve Faz 2
+(SaveBackend seam + Drive appDataFolder sync, GIS token client + raw REST,
+token-süresi kuyruğu, açılışta daha-yeni-save sorusu). Tüm defter tutma
+localStorage/IDB yan-kanalında — save imajına/DB'ye girmiyor (SAVE_SCHEMA
+_VERSION dokunulmadı). Kurulum: docs/drive-backup-setup.md. Saf mantık 15
+birim testle (src/lib/backup.test.ts); npm test 73/73, build + build:static
++ parity yeşil. GIS/Drive I/O tarayıcıda elle doğrulanacak (gerçek client ID
+gerekli): bağla-yedekle-sil-geri-yükle turu, token-dolmuş sekmede sessiz
+kuyruk + re-auth akışı, iki-sekme çakışması.
+
 Serversız yaşadığımız için save dosyası TEK kalıcılık mekanizması —
 statik modda IndexedDB silinirse (tarayıcı temizliği, cihaz değişimi)
 ilerleme gider. Oyunlardaki save zihniyeti: kullandıkça ilerleme hem
