@@ -23,6 +23,11 @@ const STATUS_ICONS: Record<VocabEntrySummary["status"], string> = {
 
 const SEARCH_CAP = 100;
 
+// The dictionary is single-language per profile; the level scheme identifies
+// it (N* = JLPT/ja, HSK* = zh) for the CJK typography lang attribute.
+const langForLevel = (level: string) =>
+  level.startsWith("N") ? "ja" : "zh-Hans";
+
 const S = {
   tr: {
     statuses: {
@@ -38,10 +43,15 @@ const S = {
       HSK4: "HSK 4 — Orta",
       HSK5: "HSK 5 — Orta-İleri",
       HSK6: "HSK 6 — İleri",
+      N5: "JLPT N5 — Başlangıç",
+      N4: "JLPT N4 — Temel",
+      N3: "JLPT N3 — Orta",
+      N2: "JLPT N2 — Orta-İleri",
+      N1: "JLPT N1 — İleri",
     } as Record<string, string>,
     loading: "Yükleniyor...",
     empty: "Bu dil için sözlük index'i yok.",
-    searchPlaceholder: "Ara: kelime, pinyin veya anlam",
+    searchPlaceholder: "Ara: kelime, okunuş veya anlam",
     searchMore: (n: number) => `+${n} sonuç daha — aramayı daralt`,
     noResults: "Sonuç yok.",
     prepareCount: (n: number) => `${n} kelimeyi hazırla`,
@@ -61,10 +71,15 @@ const S = {
       HSK4: "HSK 4 — Intermediate",
       HSK5: "HSK 5 — Upper-Intermediate",
       HSK6: "HSK 6 — Advanced",
+      N5: "JLPT N5 — Beginner",
+      N4: "JLPT N4 — Elementary",
+      N3: "JLPT N3 — Intermediate",
+      N2: "JLPT N2 — Upper-Intermediate",
+      N1: "JLPT N1 — Advanced",
     } as Record<string, string>,
     loading: "Loading...",
     empty: "No dictionary index for this language.",
-    searchPlaceholder: "Search: word, pinyin or meaning",
+    searchPlaceholder: "Search: word, reading or meaning",
     searchMore: (n: number) => `+${n} more results — narrow the search`,
     noResults: "No results.",
     prepareCount: (n: number) => `Prepare ${n} words`,
@@ -166,7 +181,7 @@ export function VocabSidebar() {
       }`}
     >
       <span className="min-w-0 truncate">
-        <span className="mr-2 text-base" lang="zh-Hans">
+        <span className="mr-2 text-base" lang={langForLevel(v.level)}>
           {v.word}
         </span>
         <span className="mr-2 text-xs text-ink-soft">{v.reading}</span>

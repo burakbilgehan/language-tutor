@@ -8,6 +8,14 @@ import type { VocabContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { vocabDetail, vocabGenerate } from "@/lib/client-api";
+import { levelDisplay } from "@/lib/curriculum/levels";
+
+// Single-language per profile; the level scheme identifies it (N* = ja, else zh)
+// for the target language and CJK typography lang attribute.
+const langAndTarget = (level: string) =>
+  level.startsWith("N")
+    ? { lang: "ja", target: "ja" }
+    : { lang: "zh-Hans", target: "zh" };
 
 const S = {
   tr: {
@@ -100,6 +108,8 @@ export function VocabEntryView({ word }: { word: string }) {
     return <div className="py-24 text-center text-ink-soft">{s.loading}</div>;
   }
 
+  const { lang, target } = langAndTarget(entry.level);
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-3">
@@ -109,19 +119,19 @@ export function VocabEntryView({ word }: { word: string }) {
         >
           {s.backToList}
         </Link>
-        <h1 className="font-display text-3xl font-bold" lang="zh-Hans">
+        <h1 className="font-display text-3xl font-bold" lang={lang}>
           {entry.word}
         </h1>
         <div className="min-w-0">
           <div className="text-lg text-ink-soft">{entry.reading}</div>
           {entry.traditional && (
             <div className="text-xs text-ink-soft">
-              {s.traditional}: <span lang="zh-Hans">{entry.traditional}</span>
+              {s.traditional}: <span lang={lang}>{entry.traditional}</span>
             </div>
           )}
         </div>
         <span className="ml-auto shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold text-ink-soft">
-          {entry.level.replace("HSK", "HSK ")}
+          {levelDisplay(target, entry.level)}
         </span>
       </div>
 
@@ -131,7 +141,7 @@ export function VocabEntryView({ word }: { word: string }) {
           {entry.classifiers.map((c) => (
             <span
               key={c}
-              lang="zh-Hans"
+              lang={lang}
               className="rounded-full bg-surface px-3 py-1 shadow-cozy"
             >
               {c}
@@ -198,7 +208,7 @@ export function VocabEntryView({ word }: { word: string }) {
                 {entry.content.chars.map((c, i) => (
                   <div key={i} className="rounded-xl bg-background p-4">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl" lang="zh-Hans">
+                      <span className="text-2xl" lang={lang}>
                         {c.char}
                       </span>
                       <span className="text-sm text-ink-soft">{c.reading}</span>
