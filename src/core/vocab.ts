@@ -136,6 +136,9 @@ export function listVocab(
   targetLanguage: string,
   nativeLanguage: NativeLang = "tr"
 ) {
+  // No index for this language (e.g. the removed ja dictionary) → no listing,
+  // even if a previous seed left rows behind in this profile's DB.
+  if (vocabIndexFor(targetLanguage).length === 0) return [];
   ensureVocabSeeded(db, targetLanguage);
   return db
     .select({

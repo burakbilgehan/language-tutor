@@ -1,7 +1,7 @@
 ---
 id: T-030
 title: ja kelime sözlüğü (JMdict tabanlı, zh vocab kalıbının kopyası)
-status: done
+status: reverted
 priority: p2
 effort: L
 confidence: medium
@@ -72,3 +72,13 @@ Elimizdekiler (baştan başlamıyoruz):
 Doğrulama: "uma" / "馬" / "horse" üçü de aynı kelimeyi bulur; parity
 harness ALL PASS; nav ja profilde Sözlük sekmesini gösterir, nl'de
 göstermez.
+
+Geri alma (2026-07-22, Burak): iki düzeltme turuna rağmen içerik kalitesi
+kabul edilemez kaldı (yanlış entry eşleşmeleri: いくら→"salmon roe",
+甘い→"skillful", 前→さき; sense-kısıtı ihlalleri; çoklu okunuş temsili yok).
+ja sözlük yüzeyi tamamen söküldü: index/build script silindi, nav zh-only,
+listVocab index'siz dilde boş döner (bayat seed satırları görünmez). zh
+sözlüğü ve ranking iyileştirmeleri (gloss kalite alt-skoru) yerinde kaldı.
+Ders: JMdict distilasyonu Jisho-seviyesi sunum yapısı (sense grupları,
+appliesToKana, çoklu okunuş) olmadan yayınlanmamalı; yeniden denenecekse
+önce görsel prototip onayı, sonra veri işi.

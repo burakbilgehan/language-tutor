@@ -156,7 +156,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/map", label: "lessons", match: ["/lesson"] },
   { href: "/grammar", label: "grammar" },
   // Word dictionary: index data exists for zh only (HSK word lists).
-  { href: "/vocab", label: "vocab", langs: ["zh", "ja"] },
+  { href: "/vocab", label: "vocab", langs: ["zh"] },
   { href: "/pinyin", label: "pinyin", langs: ["zh"] },
   { href: "/stroke", label: "stroke", jaOnly: true },
   // ja: conjugator, zh: aspect chart, nl: conjugator — all languages covered.
