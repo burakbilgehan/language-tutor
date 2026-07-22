@@ -1,12 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { withBase } from "@/lib/base-path";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import { GeneratingScreen } from "./GeneratingScreen";
 import { pick } from "@/lib/i18n";
-import { profileData, createProfileApi, curriculumGenerate } from "@/lib/client-api";
+import {
+  profileData,
+  createProfileApi,
+  curriculumGenerate,
+  saveImportApi,
+} from "@/lib/client-api";
 import { useLlmStatus } from "@/lib/llm-status";
 import { LlmSetupWizard } from "@/components/settings/LlmSetupWizard";
 import {
@@ -41,6 +46,16 @@ const TOTAL_STEPS = 6;
 // language the user picks in step 0 (draft.uiLanguage) live, via pick().
 const S = {
   tr: {
+    introTitle: "Merhaba! 🌸",
+    introSubtitle: "Önce bir kayıt var mı diye soralım.",
+    loadTitle: "Kayıt yükle",
+    loadDesc: "Daha önce indirdiğin bir kayıt dosyan varsa yükle, kaldığın yerden devam et.",
+    loadButton: "📂 Dosya seç",
+    loadingLabel: "Yükleniyor...",
+    newTitle: "Yeni başla",
+    newDesc: "Sıfırdan bir dil yolculuğuna başla — birkaç soruyla seni tanıyalım.",
+    newButton: "✨ Yeni başla",
+    importFailed: "Kayıt yüklenemedi",
     profileSaveFailed: "Profil kaydedilemedi",
     curriculumStartFailed: "Müfredat üretimi başlatılamadı",
     genericError: "Bir şeyler ters gitti",
@@ -73,6 +88,16 @@ const S = {
     start: "Yolculuğu Başlat ✨",
   },
   en: {
+    introTitle: "Hello! 🌸",
+    introSubtitle: "First, let's check if you already have a save.",
+    loadTitle: "Load save",
+    loadDesc: "If you have a save file from before, load it and pick up where you left off.",
+    loadButton: "📂 Choose file",
+    loadingLabel: "Loading...",
+    newTitle: "New game",
+    newDesc: "Start a fresh language journey — a few questions and we'll get to know you.",
+    newButton: "✨ Start new",
+    importFailed: "Could not load the save",
     profileSaveFailed: "Could not save the profile",
     curriculumStartFailed: "Could not start curriculum generation",
     genericError: "Something went wrong",
@@ -134,6 +159,35 @@ export function OnboardingWizard() {
   // are switched from settings, not re-onboarded.
   const [usedLanguages, setUsedLanguages] = useState<string[]>([]);
 
+  // T-025: on a truly empty session (no profile at all — not "adding a
+  // language", which lands here with profiles.length > 0), the very first
+  // screen offers Load save / New game instead of jumping straight into the
+  // wizard. "checking" avoids flashing the wrong screen while profileData()
+  // is in flight; showIntro flips to false forever once left (New game or a
+  // successful Load, which navigates away anyway).
+  const [checkingProfiles, setCheckingProfiles] = useState(true);
+  const [showIntro, setShowIntro] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    // No confirm() here unlike Settings: an empty session has nothing to
+    // erase, so the "this replaces your progress" warning doesn't apply.
+    setImporting(true);
+    setImportError(null);
+    try {
+      await saveImportApi(file);
+      window.location.href = withBase("/map"); // full reload → fresh reads, skip wizard entirely
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : t.importFailed);
+      setImporting(false);
+    }
+  };
+
   // Detect the visitor's spoken language from the browser locale and
   // preselect it — they can still override in step 0.
   useEffect(() => {
@@ -163,8 +217,17 @@ export function OnboardingWizard() {
           targetLanguage: free?.code ?? prev.targetLanguage,
           displayName: prev.displayName || (d.profile?.displayName ?? ""),
         }));
+        // Truly empty session (no profile whatsoever) → offer Load/New.
+        // Adding a 2nd+ language already has profiles, so it skips straight
+        // to the wizard as before.
+        setShowIntro((d.profiles ?? []).length === 0);
       })
-      .catch(() => {});
+      .catch(() => {
+        // profileData() failing (e.g. fresh static DB before first read)
+        // reads the same as "no profile" — still offer Load/New.
+        setShowIntro(true);
+      })
+      .finally(() => setCheckingProfiles(false));
   }, []);
 
   const toggle = (key: "goals" | "interests", value: string) =>
@@ -200,6 +263,8 @@ export function OnboardingWizard() {
     }
   }, [draft]);
 
+  // An in-flight generation job implies a profile already exists, so this
+  // takes priority over the intro/loading checks below.
   if (jobId) {
     return (
       <GeneratingScreen
@@ -214,6 +279,60 @@ export function OnboardingWizard() {
           setJobId(null);
         }}
       />
+    );
+  }
+
+  if (checkingProfiles) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center text-ink-soft">
+        <div className="animate-float-slow text-5xl">🌸</div>
+      </div>
+    );
+  }
+
+  if (showIntro) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
+        <div className="rounded-cozy bg-surface p-5 shadow-cozy sm:p-8">
+          <h1 className="text-2xl font-semibold">{t.introTitle}</h1>
+          <p className="mt-2 mb-6 text-ink-soft">{t.introSubtitle}</p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border-2 border-surface-2 bg-background p-5">
+              <div className="font-semibold">{t.loadTitle}</div>
+              <p className="mt-1 mb-4 text-sm text-ink-soft">{t.loadDesc}</p>
+              <CozyButton
+                variant="soft"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                {importing ? t.loadingLabel : t.loadButton}
+              </CozyButton>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".db"
+                className="hidden"
+                onChange={onImportFile}
+              />
+            </div>
+
+            <div className="rounded-xl border-2 border-surface-2 bg-background p-5">
+              <div className="font-semibold">{t.newTitle}</div>
+              <p className="mt-1 mb-4 text-sm text-ink-soft">{t.newDesc}</p>
+              <CozyButton onClick={() => setShowIntro(false)}>
+                {t.newButton}
+              </CozyButton>
+            </div>
+          </div>
+
+          {importError && (
+            <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
+              {importError}
+            </p>
+          )}
+        </div>
+      </div>
     );
   }
 
