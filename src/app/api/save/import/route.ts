@@ -10,10 +10,7 @@ export async function POST(req: Request) {
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json(
-      { error: "Dosya okunamadı." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "save_read_failed" }, { status: 400 });
   }
 
   const file = form.get("file");
@@ -32,12 +29,12 @@ export async function POST(req: Request) {
     importSave(bytes);
   } catch (err) {
     if (err instanceof SaveImportError) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
+      return NextResponse.json(
+        { error: err.code, params: err.params },
+        { status: 400 }
+      );
     }
-    return NextResponse.json(
-      { error: "Kayıt yüklenemedi." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "save_load_failed" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

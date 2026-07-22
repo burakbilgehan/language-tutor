@@ -11,7 +11,7 @@ export async function POST(
   const { id } = await params;
   const result = cancelJob(id);
   if (result === null) {
-    return NextResponse.json({ error: "Job bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({ result });
 }

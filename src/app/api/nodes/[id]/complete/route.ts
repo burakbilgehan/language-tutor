@@ -49,7 +49,7 @@ export async function POST(
   const { id: nodeId } = await params;
   const profile = getActiveProfile();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   const node = db
     .select()
@@ -58,13 +58,13 @@ export async function POST(
     .limit(1)
     .get();
   if (!node) {
-    return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const wasCompleted = node.status === "completed";
 
   const flow = completeNodeFlow(db, nodeId, profile.id);
   if (!flow) {
-    return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   // Prefetch: generate the just-unlocked lesson(s) in the background so the

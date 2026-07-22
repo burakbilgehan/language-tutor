@@ -38,20 +38,20 @@ export async function POST(req: Request) {
     .findFirst({ where: eq(tables.curricula.profileId, profileId) })
     .sync();
   if (!curriculum) {
-    return NextResponse.json({ error: "Müfredat yok" }, { status: 404 });
+    return NextResponse.json({ error: "curriculum_missing" }, { status: 404 });
   }
   const profile = db.query.profiles
     .findFirst({ where: eq(tables.profiles.id, profileId) })
     .sync();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
 
   const top = topChapterLevel(curriculum.id, profile.targetLanguage);
   const next = top ? nextLevelFor(profile.targetLanguage, top) : null;
   if (!next) {
     return NextResponse.json(
-      { error: "En üst seviyeye ulaşıldı", done: true },
+      { error: "no_level_to_extend", done: true },
       { status: 409 }
     );
   }

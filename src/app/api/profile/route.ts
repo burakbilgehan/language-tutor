@@ -60,7 +60,7 @@ export async function PATCH(req: Request) {
   }
   const profile = updateActiveProfile(db, parsed.data);
   if (!profile) {
-    return NextResponse.json({ error: "Profil bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   return NextResponse.json({ profile });
 }

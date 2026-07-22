@@ -28,7 +28,7 @@ const BodySchema = z.object({
 export async function POST(req: Request) {
   const profile = getActiveProfile();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   const parsed = BodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {

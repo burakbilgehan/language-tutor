@@ -6,6 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
 import type { VocabContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { vocabDetail, vocabGenerate } from "@/lib/client-api";
 
 const S = {
@@ -54,6 +55,7 @@ interface EntryResponse {
 
 export function VocabEntryView({ word }: { word: string }) {
   const s = useStrings(S);
+  const localize = useLocalizeError();
   const [entry, setEntry] = useState<EntryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const stopped = useRef(false);
@@ -66,7 +68,7 @@ export function VocabEntryView({ word }: { word: string }) {
       if (body.status === "generating") setTimeout(load, 3000);
     } catch (e) {
       if (!stopped.current)
-        setError(e instanceof Error ? e.message : s.genericError);
+        setError(localize(e));
     }
   }, [word, s]);
 

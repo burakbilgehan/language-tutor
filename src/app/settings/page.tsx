@@ -7,6 +7,8 @@ import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
+import { AppError } from "@/lib/errors";
 import { stats, saveExportApi, saveImportApi } from "@/lib/client-api";
 import { withBase } from "@/lib/base-path";
 
@@ -91,6 +93,7 @@ const S = {
 
 export default function SettingsPage() {
   const t = useStrings(S);
+  const localize = useLocalizeError();
   const [dark, setDark] = useState(false);
   const [llm, setLlm] = useState<{
     todayUsd: number;
@@ -133,7 +136,7 @@ export default function SettingsPage() {
       window.location.href = withBase("/map"); // full reload → fresh reads
     } catch (err) {
       setSaveMsg(
-        `❌ ${err instanceof Error ? err.message : t.saveImportFailed}`
+        `❌ ${err instanceof AppError ? localize(err) : t.saveImportFailed}`
       );
       setImporting(false);
     }

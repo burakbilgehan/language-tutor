@@ -10,6 +10,7 @@ import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { openNodeApi, completeNodeApi, attemptApi, regenerateLesson } from "@/lib/client-api";
 
 const S = {
@@ -171,6 +172,7 @@ export function LessonPlayer({
   onCompleted?: () => void;
 }) {
   const t = useStrings(S);
+  const localize = useLocalizeError();
   const router = useRouter();
   const targetLanguage = useProfileMeta()?.targetLanguage;
   const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
@@ -201,7 +203,7 @@ export function LessonPlayer({
       }
     } catch (e) {
       if (!stopped.current)
-        setError(e instanceof Error ? e.message : t.genericError);
+        setError(localize(e));
     }
   }, [nodeId, t]);
 
@@ -230,7 +232,7 @@ export function LessonPlayer({
         open();
       } catch (e) {
         if (!stopped.current)
-          setError(e instanceof Error ? e.message : t.regenFailed);
+          setError(localize(e));
       }
     },
     [nodeId, open, t]

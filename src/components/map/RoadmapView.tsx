@@ -6,6 +6,7 @@ import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { languageLabel } from "@/lib/profile-options";
 import { levelDisplay } from "@/lib/curriculum/levels";
@@ -104,6 +105,7 @@ const TYPE_ICON: Record<string, string> = {
 export function RoadmapView() {
   const router = useRouter();
   const t = useStrings(S);
+  const localize = useLocalizeError();
   const meta = useProfileMeta();
   const [data, setData] = useState<RoadmapDto | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +170,7 @@ export function RoadmapView() {
   const loadRoadmap = () =>
     roadmap()
       .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : t.loadFailed));
+      .catch((e) => setError(localize(e)));
 
   useEffect(() => {
     loadRoadmap();
@@ -201,7 +203,7 @@ export function RoadmapView() {
       const j = await curriculumExtend(profileId);
       setExtendJobId(j.jobId ?? null);
     } catch (e) {
-      setExtendError(e instanceof Error ? e.message : t.startFailed);
+      setExtendError(localize(e));
     }
   };
 
@@ -213,7 +215,7 @@ export function RoadmapView() {
       await curriculumRetranslate();
       await loadRoadmap();
     } catch (e) {
-      setExtendError(e instanceof Error ? e.message : t.startFailed);
+      setExtendError(localize(e));
     } finally {
       setRetranslating(false);
     }

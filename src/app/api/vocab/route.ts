@@ -34,7 +34,7 @@ export async function GET() {
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
   let entries = listVocab(db, profile.targetLanguage, nativeLang);

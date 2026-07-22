@@ -30,7 +30,7 @@ export async function GET(
   const { slug } = await params;
   const found = findTopic(slug);
   if (!found) {
-    return NextResponse.json({ error: "Konu bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const { topic, localized } = found;
   return NextResponse.json({
@@ -51,7 +51,7 @@ export async function POST(
   const { slug } = await params;
   const found = findTopic(slug);
   if (!found) {
-    return NextResponse.json({ error: "Konu bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const { topic, localized } = found;
   if (localized) {

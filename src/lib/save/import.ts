@@ -6,7 +6,24 @@ import { inArray } from "drizzle-orm";
 import { db, tables, resetDb, DB_PATH } from "@/db";
 import { SAVE_SCHEMA_VERSION } from "./version";
 
-export class SaveImportError extends Error {}
+import type { ErrorCode } from "@/lib/errors";
+
+// Carries a stable error code (+ optional params) so the route/UI localize it
+// instead of surfacing the Turkish message (T-031 Layer 1). The message stays
+// as a developer-facing fallback.
+export class SaveImportError extends Error {
+  readonly code: ErrorCode;
+  readonly params?: Record<string, string | number>;
+  constructor(
+    code: ErrorCode,
+    message: string,
+    params?: Record<string, string | number>
+  ) {
+    super(message);
+    this.code = code;
+    this.params = params;
+  }
+}
 
 /**
  * Replace-all import: validates the uploaded SQLite snapshot, then atomically
@@ -30,7 +47,10 @@ export function importSave(bytes: Buffer): void {
         simple: true,
       }) as string;
       if (integrity !== "ok") {
-        throw new SaveImportError("Kayıt dosyası bozuk görünüyor.");
+        throw new SaveImportError(
+          "save_invalid",
+          "Kayıt dosyası bozuk görünüyor."
+        );
       }
 
       let version = 0;
@@ -44,9 +64,9 @@ export function importSave(bytes: Buffer): void {
       }
       if (version !== SAVE_SCHEMA_VERSION) {
         throw new SaveImportError(
-          version === 0
-            ? "Bu kayıt tanınmıyor veya çok eski."
-            : `Kayıt sürümü uyumsuz (dosya: ${version}, beklenen: ${SAVE_SCHEMA_VERSION}). İki makinede de aynı sürümü kullanman gerek.`
+          "save_version_mismatch",
+          `Kayıt sürümü uyumsuz (dosya: ${version}, beklenen: ${SAVE_SCHEMA_VERSION}).`,
+          { file: version || "?", app: SAVE_SCHEMA_VERSION }
         );
       }
 
@@ -58,7 +78,10 @@ export function importSave(bytes: Buffer): void {
   } catch (err) {
     fs.rmSync(tmpPath, { force: true });
     if (err instanceof SaveImportError) throw err;
-    throw new SaveImportError("Kayıt dosyası okunamadı veya geçersiz.");
+    throw new SaveImportError(
+      "save_invalid",
+      "Kayıt dosyası okunamadı veya geçersiz."
+    );
   }
 
   // ---- Swap (close live handle, back up, move file in, reopen) -------------
@@ -78,7 +101,10 @@ export function importSave(bytes: Buffer): void {
       fs.renameSync(backupPath, DB_PATH);
     }
     fs.rmSync(tmpPath, { force: true });
-    throw new SaveImportError("Kayıt yüklenirken dosya değiştirilemedi.");
+    throw new SaveImportError(
+      "save_load_failed",
+      "Kayıt yüklenirken dosya değiştirilemedi."
+    );
   }
 
   // Touch the db so the next request reopens against the new file, and make

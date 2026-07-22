@@ -35,7 +35,7 @@ export async function GET(
   const { word } = await params;
   const found = findEntry(word);
   if (!found) {
-    return NextResponse.json({ error: "Kelime bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const { entry, localized } = found;
   return NextResponse.json({
@@ -59,7 +59,7 @@ export async function POST(
   const { word } = await params;
   const found = findEntry(word);
   if (!found) {
-    return NextResponse.json({ error: "Kelime bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const { entry, localized } = found;
   if (localized) {

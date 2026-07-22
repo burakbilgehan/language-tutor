@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
   const result = srsReview(db, cardId, rating as Rating);
   if (!result) {
-    return NextResponse.json({ error: "Kart bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json(result);
 }

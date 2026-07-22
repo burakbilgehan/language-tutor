@@ -6,6 +6,8 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import { GeneratingScreen } from "./GeneratingScreen";
 import { pick } from "@/lib/i18n";
+import { localizeError } from "@/lib/i18n/errors";
+import { resolveUiLang } from "@/lib/i18n/use-localize-error";
 import {
   profileData,
   createProfileApi,
@@ -183,7 +185,7 @@ export function OnboardingWizard() {
       await saveImportApi(file);
       window.location.href = withBase("/map"); // full reload → fresh reads, skip wizard entirely
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : t.importFailed);
+      setImportError(localizeError(err, resolveUiLang(draft.uiLanguage)));
       setImporting(false);
     }
   };
@@ -257,7 +259,7 @@ export function OnboardingWizard() {
       localStorage.setItem("curriculumJobId", gen.jobId);
       setJobId(gen.jobId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.genericError);
+      setError(localizeError(err, resolveUiLang(draft.uiLanguage)));
     } finally {
       setSubmitting(false);
     }

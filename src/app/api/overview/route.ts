@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const profile = getActiveProfile();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   return NextResponse.json(getOverview(db, profile));
 }

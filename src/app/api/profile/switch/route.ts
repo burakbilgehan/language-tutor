@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   }
   const profile = setActiveProfile(parsed.data.profileId);
   if (!profile) {
-    return NextResponse.json({ error: "Profil bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   return NextResponse.json({ profile });
 }

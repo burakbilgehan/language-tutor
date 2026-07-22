@@ -11,7 +11,7 @@ export async function GET(
   const { id } = await params;
   const job = getJob(id);
   if (!job) {
-    return NextResponse.json({ error: "Job bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({
     id: job.id,

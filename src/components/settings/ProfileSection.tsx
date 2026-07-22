@@ -19,6 +19,8 @@ import {
   type SelfLevel,
 } from "@/lib/profile-options";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
+import { AppError } from "@/lib/errors";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import {
   profileData,
@@ -109,6 +111,7 @@ interface ProfileSummary {
 export function ProfileSection() {
   const router = useRouter();
   const t = useStrings(S);
+  const localize = useLocalizeError();
   const uiLanguage = useProfileMeta()?.uiLanguage;
   const [profile, setProfile] = useState<ProfileDto | null>(null);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -171,7 +174,7 @@ export function ProfileSection() {
       setEditing(false);
       setMsg(nativeChanged ? t.savedLangChanged : t.saved);
     } catch (err) {
-      setMsg(`❌ ${err instanceof Error ? err.message : t.saveFailed}`);
+      setMsg(`❌ ${err instanceof AppError ? localize(err) : t.saveFailed}`);
     } finally {
       setSaving(false);
     }
@@ -183,7 +186,7 @@ export function ProfileSection() {
       await switchProfile$(profileId);
       window.location.href = withBase("/map"); // full reload → fresh server reads
     } catch (err) {
-      setMsg(`❌ ${err instanceof Error ? err.message : t.switchFailed}`);
+      setMsg(`❌ ${err instanceof AppError ? localize(err) : t.switchFailed}`);
       setSwitching(false);
     }
   };

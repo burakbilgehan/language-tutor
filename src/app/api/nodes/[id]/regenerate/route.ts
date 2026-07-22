@@ -30,10 +30,10 @@ export async function POST(
     .findFirst({ where: eq(tables.nodes.id, nodeId) })
     .sync();
   if (!node) {
-    return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (node.status === "locked") {
-    return NextResponse.json({ error: "Bu ders henüz kilitli" }, { status: 403 });
+    return NextResponse.json({ error: "node_locked" }, { status: 403 });
   }
 
   const rawBody = await req.json().catch(() => ({}));

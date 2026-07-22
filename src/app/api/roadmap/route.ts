@@ -10,11 +10,11 @@ export async function GET() {
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   const roadmap = getRoadmap(profile.id);
   if (!roadmap) {
-    return NextResponse.json({ error: "Müfredat hazır değil" }, { status: 404 });
+    return NextResponse.json({ error: "curriculum_not_ready" }, { status: 404 });
   }
   return NextResponse.json(roadmap);
 }

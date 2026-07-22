@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
   const { level } = await req.json().catch(() => ({ level: undefined }));
   const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;

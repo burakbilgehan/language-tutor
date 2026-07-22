@@ -36,7 +36,7 @@ export async function GET(
   const { char } = await params;
   const found = findEntry(char);
   if (!found) {
-    return NextResponse.json({ error: "Kanji bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const { entry, localized } = found;
   return NextResponse.json({
@@ -61,7 +61,7 @@ export async function POST(
   const { char } = await params;
   const found = findEntry(char);
   if (!found) {
-    return NextResponse.json({ error: "Kanji bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const { entry, localized } = found;
   if (localized) {

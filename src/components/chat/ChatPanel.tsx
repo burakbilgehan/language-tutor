@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useLlmStatus } from "@/lib/llm-status";
 import { chatHistoryApi, chatSend } from "@/lib/client-api";
 
@@ -39,6 +40,7 @@ interface Msg {
 
 export function ChatPanel() {
   const t = useStrings(S);
+  const localize = useLocalizeError();
   const llm = useLlmStatus();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -74,7 +76,7 @@ export function ChatPanel() {
         ...m,
         {
           role: "assistant",
-          content: `⚠️ ${e instanceof Error ? e.message : t.genericError}`,
+          content: `⚠️ ${localize(e)}`,
         },
       ]);
     } finally {

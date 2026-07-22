@@ -26,10 +26,10 @@ export async function POST(
     (profile?.nativeLanguage ?? "tr") as NativeLang
   );
   if (result.status === "notFound") {
-    return NextResponse.json({ error: "Ders bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (result.status === "locked") {
-    return NextResponse.json({ error: "Bu ders henüz kilitli" }, { status: 403 });
+    return NextResponse.json({ error: "node_locked" }, { status: 403 });
   }
   const nativeLang = (profile?.nativeLanguage ?? "tr") as NativeLang;
   if (result.status === "ready") {

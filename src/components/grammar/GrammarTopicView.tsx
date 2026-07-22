@@ -7,6 +7,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { grammarTopic, grammarGenerate } from "@/lib/client-api";
 
@@ -44,6 +45,7 @@ interface TopicResponse {
 
 export function GrammarTopicView({ slug }: { slug: string }) {
   const s = useStrings(S);
+  const localize = useLocalizeError();
   const targetLanguage = useProfileMeta()?.targetLanguage;
   const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
   const [topic, setTopic] = useState<TopicResponse | null>(null);
@@ -58,7 +60,7 @@ export function GrammarTopicView({ slug }: { slug: string }) {
       if (body.status === "generating") setTimeout(load, 3000);
     } catch (e) {
       if (!stopped.current)
-        setError(e instanceof Error ? e.message : s.genericError);
+        setError(localize(e));
     }
   }, [slug, s]);
 

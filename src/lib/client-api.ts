@@ -8,6 +8,7 @@
 // bir fonksiyon olarak eklenir.
 
 import type { Rating } from "@/lib/srs";
+import { AppError } from "@/lib/errors";
 
 export const IS_STATIC = process.env.NEXT_PUBLIC_STATIC_BUILD === "1";
 
@@ -44,7 +45,16 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.message ?? body.error ?? `HTTP ${res.status}`);
+    // Routes return a stable error CODE in `body.error` (T-031 Layer 1); rethrow
+    // it as an AppError so the UI catch boundary localizes it. `params` carries
+    // interpolation values (e.g. save version numbers). Unknown/legacy codes
+    // still flow through — localizeError falls back to a generic message rather
+    // than rendering a raw (possibly wrong-language) string.
+    const { AppError, isErrorCode } = await import("@/lib/errors");
+    if (isErrorCode(body.error)) {
+      throw new AppError(body.error, body.params);
+    }
+    throw new Error(body.error ?? `HTTP ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -57,9 +67,9 @@ export async function roadmap(): Promise<import("@/core/roadmap").Roadmap> {
   const coreP = await import("@/core/profile");
   const coreR = await import("@/core/roadmap");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const result = coreR.getRoadmap(db, profile.id);
-  if (!result) throw new Error("Müfredat hazır değil");
+  if (!result) throw new AppError("curriculum_not_ready");
   return result;
 }
 
@@ -105,7 +115,7 @@ export async function patchProfile(
     patch as Parameters<typeof core.updateActiveProfile>[1]
   );
   persistSoon();
-  if (!profile) throw new Error("Profil bulunamadı");
+  if (!profile) throw new AppError("profile_missing");
   return { profile };
 }
 
@@ -121,7 +131,7 @@ export async function switchProfile(profileId: string): Promise<void> {
   const handle = await browserDb();
   const core = await import("@/core/profile");
   if (!core.setActiveProfile(handle.db, profileId))
-    throw new Error("Profil bulunamadı");
+    throw new AppError("profile_missing");
   // Çağıran hemen full-reload yapar — debounce yerine yazmayı BEKLE, yoksa
   // switch yarışta kaybolur ve eski profil geri gelir.
   await handle.persistNow();
@@ -139,9 +149,7 @@ async function browserGen() {
   const { getBrowserGen } = await import("@/lib/llm/browser-provider");
   const gen = getBrowserGen();
   if (!gen) {
-    throw new Error(
-      "LLM yapılandırılmamış — Ayarlar → LLM Sağlayıcı'dan köprü/Ollama/API key bağla."
-    );
+    throw new AppError("llm_unconfigured");
   }
   return gen;
 }
@@ -214,7 +222,7 @@ export async function kanjiList(): Promise<{
   const coreP = await import("@/core/profile");
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let entries = coreK.listKanji(db, profile.targetLanguage, nativeLang);
   // Boş girişleri paketlenmiş seed'den doldur (LLM'siz dolu kanji sözlüğü).
@@ -246,7 +254,7 @@ export async function kanjiDetail(char: string): Promise<{
   const coreP = await import("@/core/profile");
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let entry = coreK.findKanji(db, profile.targetLanguage, char);
   if (!entry) {
@@ -266,7 +274,7 @@ export async function kanjiDetail(char: string): Promise<{
       persistSoon();
     }
   }
-  if (!entry) throw new Error("Kanji bulunamadı");
+  if (!entry) throw new AppError("not_found");
   const { readLangContent } = await import("@/lib/llm/lang-content");
   const localized =
     entry.status === "ready"
@@ -294,7 +302,7 @@ export async function kanjiLookupApi(text: string): Promise<KanjiLookupResult> {
   const coreP = await import("@/core/profile");
   const coreK = await import("@/core/kanji");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   return coreK.kanjiLookup(
     db,
     profile.targetLanguage,
@@ -319,7 +327,7 @@ export async function vocabList(): Promise<{ entries: VocabEntrySummary[] }> {
   const coreP = await import("@/core/profile");
   const coreV = await import("@/core/vocab");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let entries = coreV.listVocab(db, profile.targetLanguage, nativeLang);
   // Boş girişleri paketlenmiş seed'den doldur (LLM'siz tam sözlük).
@@ -352,7 +360,7 @@ export async function vocabDetail(word: string): Promise<{
   const coreP = await import("@/core/profile");
   const coreV = await import("@/core/vocab");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let entry = coreV.findVocab(db, profile.targetLanguage, word);
   if (!entry) {
@@ -372,7 +380,7 @@ export async function vocabDetail(word: string): Promise<{
       persistSoon();
     }
   }
-  if (!entry) throw new Error("Kelime bulunamadı");
+  if (!entry) throw new AppError("not_found");
   const { readLangContent } = await import("@/lib/llm/lang-content");
   const localized =
     entry.status === "ready"
@@ -401,9 +409,9 @@ export async function vocabGenerate(word: string): Promise<void> {
   const coreV = await import("@/core/vocab");
   const coreG = await import("@/core/llm-gen");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const entry = coreV.findVocab(db, profile.targetLanguage, word);
-  if (!entry) throw new Error("Kelime bulunamadı");
+  if (!entry) throw new AppError("not_found");
   await coreG.generateVocabContent(db, gen, entry.id);
   persistSoon();
 }
@@ -426,7 +434,7 @@ export async function vocabGenerateBatch(level?: string): Promise<void> {
   const { eq, and, inArray } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
   const profile = coreP.getActiveProfile(handle.db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const entries = handle.db
     .select()
     .from(tables.vocabEntries)
@@ -469,7 +477,7 @@ export async function overview(): Promise<
   const coreP = await import("@/core/profile");
   const coreO = await import("@/core/overview");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   return coreO.getOverview(db, profile);
 }
 
@@ -502,7 +510,7 @@ export async function chatSend(body: {
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/llm-gen");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const result = await coreG.sendChatMessage(db, gen, profile, {
     sessionId: body.sessionId,
     message: body.message,
@@ -573,14 +581,18 @@ export async function saveImportApi(file: File): Promise<void> {
     fd.append("file", file);
     const res = await fetch("/api/save/import", { method: "POST", body: fd });
     const body = await res.json();
-    if (!res.ok) throw new Error(body.error ?? "Yüklenemedi");
+    if (!res.ok) {
+      const { isErrorCode } = await import("@/lib/errors");
+      if (isErrorCode(body.error)) throw new AppError(body.error, body.params);
+      throw new AppError("save_load_failed");
+    }
     return;
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
   // Sunucu import'uyla aynı kontroller: SQLite başlığı + şema sürümü.
   const header = new TextDecoder().decode(bytes.slice(0, 15));
   if (header !== "SQLite format 3") {
-    throw new Error("Geçersiz kayıt dosyası (SQLite değil)");
+    throw new AppError("save_invalid");
   }
   const { SAVE_SCHEMA_VERSION } = await import("@/lib/save/version");
   const initSqlJs = (await import("sql.js")).default;
@@ -593,9 +605,10 @@ export async function saveImportApi(file: File): Promise<void> {
     );
     const version = Number(res[0]?.values?.[0]?.[0]);
     if (version !== SAVE_SCHEMA_VERSION) {
-      throw new Error(
-        `Kayıt sürümü uyumsuz (dosya: v${version || "?"}, uygulama: v${SAVE_SCHEMA_VERSION})`
-      );
+      throw new AppError("save_version_mismatch", {
+        file: version || "?",
+        app: SAVE_SCHEMA_VERSION,
+      });
     }
   } finally {
     probe.close();
@@ -618,7 +631,9 @@ export async function regenerateLesson(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.message ?? body.error ?? "Yenilenemedi");
+      const { isErrorCode } = await import("@/lib/errors");
+      if (isErrorCode(body.error)) throw new AppError(body.error, body.params);
+      throw new AppError("lesson_gen_failed");
     }
     return;
   }
@@ -645,17 +660,17 @@ export async function curriculumExtend(profileId: string): Promise<{ jobId?: str
   const { eq } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
   const profile = coreP.getActiveProfile(handle.db);
-  if (!profile || profile.id !== profileId) throw new Error("Profil uyuşmadı");
+  if (!profile || profile.id !== profileId) throw new AppError("profile_mismatch");
   const curriculum = handle.db
     .select()
     .from(tables.curricula)
     .where(eq(tables.curricula.profileId, profileId))
     .limit(1)
     .get();
-  if (!curriculum) throw new Error("Müfredat yok");
+  if (!curriculum) throw new AppError("curriculum_missing");
   const top = coreC.topChapterLevel(handle.db, curriculum.id, profile.targetLanguage);
   const next = top ? nextLevelFor(profile.targetLanguage, top) : null;
-  if (!next) throw new Error("Uzatılacak seviye kalmadı");
+  if (!next) throw new AppError("no_level_to_extend");
   await coreC.generateChapter(handle.db, gen, profileId, next);
   await handle.persistNow();
   return {};
@@ -672,9 +687,9 @@ export async function grammarGenerate(slug: string): Promise<void> {
   const coreGr = await import("@/core/grammar");
   const coreG = await import("@/core/llm-gen");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const topic = coreGr.findGrammarTopic(db, profile.targetLanguage, slug);
-  if (!topic) throw new Error("Konu bulunamadı");
+  if (!topic) throw new AppError("not_found");
   await coreG.generateGrammarContent(db, gen, topic.id);
   persistSoon();
 }
@@ -697,7 +712,7 @@ export async function grammarGenerateBatch(level?: string): Promise<void> {
   const { eq, and, inArray } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
   const profile = coreP.getActiveProfile(handle.db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const topics = handle.db
     .select()
     .from(tables.grammarTopics)
@@ -741,9 +756,9 @@ export async function kanjiGenerate(char: string): Promise<void> {
   const coreK = await import("@/core/kanji");
   const coreG = await import("@/core/llm-gen");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const entry = coreK.findKanji(db, profile.targetLanguage, char);
-  if (!entry) throw new Error("Kanji bulunamadı");
+  if (!entry) throw new AppError("not_found");
   await coreG.generateKanjiContent(db, gen, entry.id);
   persistSoon();
 }
@@ -763,7 +778,7 @@ export async function kanjiGenerateBatch(level: string): Promise<{ queued: numbe
   const { eq, and, inArray } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
   const profile = coreP.getActiveProfile(handle.db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const entries = handle.db
     .select()
     .from(tables.kanjiEntries)
@@ -815,9 +830,7 @@ export async function createProfileApi(
     input as Parameters<typeof core.createOrReuseProfile>[1]
   );
   if (duplicate) {
-    throw new Error(
-      "Bu dil için zaten bir profil var. Ayarlardan geçiş yapabilirsin."
-    );
+    throw new AppError("duplicate_profile");
   }
   await handle.persistNow();
   return { profile };
@@ -852,7 +865,7 @@ export async function curriculumRetranslate(): Promise<{ translated: number }> {
   const coreP = await import("@/core/profile");
   const coreC = await import("@/core/curriculum-gen");
   const profile = coreP.getActiveProfile(handle.db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const translated = await coreC.retranslateCurriculum(
     handle.db,
     gen,
@@ -878,7 +891,7 @@ export async function grammarTopics(): Promise<{ topics: GrammarTopicSummary[] }
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/grammar");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let topics = coreG.listGrammarTopics(db, profile.targetLanguage, nativeLang);
   // Boş konuları paketlenmiş seed'den doldur (LLM'siz tam gramer).
@@ -908,10 +921,10 @@ export async function grammarTopic(slug: string): Promise<{
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/grammar");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug);
-  if (!topic) throw new Error("Konu bulunamadı");
+  if (!topic) throw new AppError("not_found");
   // Deep link (?topic=) liste yüklenmeden gelebilir — boşsa seed'den doldur.
   if (topic.status === "pending" || topic.status === "error") {
     const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
@@ -954,15 +967,15 @@ export async function openNodeApi(nodeId: string): Promise<
     | "tr"
     | "en";
   const result = core.openNode(db, nodeId, nativeLang);
-  if (result.status === "notFound") throw new Error("Ders bulunamadı");
-  if (result.status === "locked") throw new Error("Bu ders henüz kilitli");
+  if (result.status === "notFound") throw new AppError("not_found");
+  if (result.status === "locked") throw new AppError("node_locked");
   if (result.status === "needsGeneration") {
     // Tarayıcı LLM'iyle inline üret (1-3 dk sürebilir; UI hazırlanıyor
     // ekranını gösterir), sonra cache'ten servis et. Prefetch aynı dersi
     // üretiyorsa ensureLessonGen aynı promise'i paylaşır.
     await ensureLessonGen(nodeId);
     const after = core.openNode(db, nodeId, nativeLang);
-    if (after.status !== "ready") throw new Error("Ders üretimi tamamlanamadı");
+    if (after.status !== "ready") throw new AppError("lesson_gen_failed");
     return after;
   }
   return result;
@@ -981,7 +994,7 @@ export async function completeNodeApi(nodeId: string): Promise<{
   const coreP = await import("@/core/profile");
   const coreL = await import("@/core/lesson");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const { eq } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
   const node = db
@@ -993,7 +1006,7 @@ export async function completeNodeApi(nodeId: string): Promise<{
   const wasCompleted = node?.status === "completed";
   const flow = coreL.completeNodeFlow(db, nodeId, profile.id);
   persistSoon();
-  if (!flow) throw new Error("Ders bulunamadı");
+  if (!flow) throw new AppError("not_found");
 
   // LLM bağlıysa: açılan dersleri arkaplanda önden üret, kuyruk
   // temizlendiyse sıradaki seviyeyi ekle (sunucudaki akışın muadili).
@@ -1037,7 +1050,7 @@ export async function attemptApi(
   const coreP = await import("@/core/profile");
   const coreL = await import("@/core/lesson");
   const profile = coreP.getActiveProfile(db);
-  if (!profile) throw new Error("Profil yok");
+  if (!profile) throw new AppError("profile_missing");
   const { getBrowserGen } = await import("@/lib/llm/browser-provider");
   const gen = getBrowserGen();
   const coreG = await import("@/core/llm-gen");
@@ -1049,7 +1062,7 @@ export async function attemptApi(
     // Tarayıcı LLM'i bağlıysa gerçek değerlendirme; değilse self-check.
     llmGrade: gen ? coreG.makeLlmGrader(gen, profile, response) : undefined,
   });
-  if (outcome.kind === "notFound") throw new Error("Alıştırma bulunamadı");
+  if (outcome.kind === "notFound") throw new AppError("not_found");
   persistSoon();
   if (outcome.kind === "needsSelfCheck") {
     return { needsSelfCheck: true, expected: outcome.expected };
@@ -1085,7 +1098,7 @@ export async function srsReview(
   const core = await import("@/core/srs");
   const result = core.srsReview(db, cardId, rating);
   persistSoon();
-  if (!result) throw new Error("Kart bulunamadı");
+  if (!result) throw new AppError("not_found");
   return result;
 }
 

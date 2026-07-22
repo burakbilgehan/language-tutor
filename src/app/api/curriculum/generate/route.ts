@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     .findFirst({ where: eq(tables.profiles.id, profileId) })
     .sync();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
 
   // First chapter of the profile's level scheme (N5 / HSK1 / A1). Same

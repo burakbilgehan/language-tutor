@@ -29,7 +29,7 @@ export async function POST(
 
   const profile = getActiveProfile();
   if (!profile) {
-    return NextResponse.json({ error: "Profil yok" }, { status: 404 });
+    return NextResponse.json({ error: "profile_missing" }, { status: 404 });
   }
 
   const outcome = await attemptExercise(db, {
@@ -45,7 +45,7 @@ export async function POST(
   });
 
   if (outcome.kind === "notFound") {
-    return NextResponse.json({ error: "Alıştırma bulunamadı" }, { status: 404 });
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (outcome.kind === "needsSelfCheck") {
     return NextResponse.json({
