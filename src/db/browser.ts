@@ -22,6 +22,9 @@ const COLUMN_HEALS: string[] = [
   "ALTER TABLE `translations` ADD COLUMN `native_language` text DEFAULT 'tr' NOT NULL",
   "ALTER TABLE `curricula` ADD COLUMN `content_lang` text",
   "ALTER TABLE `exercises` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
+  // T-035 schema v8
+  "ALTER TABLE `srs_cards` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
+  "ALTER TABLE `chat_messages` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
 ];
 
 const IDB_NAME = "language-tutor";

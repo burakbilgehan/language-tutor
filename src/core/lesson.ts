@@ -193,6 +193,10 @@ export function completeNodeFlow(
           itemType: "vocab",
           front: v.term,
           back: v.meaning_tr,
+          // Stamp the native language the `back` is written in (T-035). The
+          // harvest content was already resolved for this native language, so
+          // the meaning matches. Legacy/pre-v8 rows default 'tr' in schema.
+          lang: (profileRow?.nativeLanguage ?? "tr") as NativeLang,
           reading: v.reading ?? null,
           example: v.example ?? null,
           sourceLessonId: lesson.id,

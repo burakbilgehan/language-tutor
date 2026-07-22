@@ -485,7 +485,7 @@ export async function overview(): Promise<
 
 export async function chatHistoryApi(): Promise<{
   sessionId: string | null;
-  messages: { role: string; content: string }[];
+  messages: { role: string; content: string; lang: string }[];
 }> {
   if (!IS_STATIC) return fetchJson("/api/chat");
   const { db } = await browserDb();

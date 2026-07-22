@@ -12,13 +12,16 @@ export function chatHistory(db: AppDb, profileId: string) {
     .limit(1)
     .get();
   if (!session)
-    return { sessionId: null as string | null, messages: [] as { role: string; content: string }[] };
+    return {
+      sessionId: null as string | null,
+      messages: [] as { role: string; content: string; lang: string }[],
+    };
   const messages = db
     .select()
     .from(tables.chatMessages)
     .where(eq(tables.chatMessages.sessionId, session.id))
     .orderBy(asc(tables.chatMessages.createdAt))
     .all()
-    .map((m) => ({ role: m.role, content: m.content }));
+    .map((m) => ({ role: m.role, content: m.content, lang: m.lang }));
   return { sessionId: session.id as string | null, messages };
 }

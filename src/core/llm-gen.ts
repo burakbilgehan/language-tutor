@@ -478,10 +478,14 @@ export async function sendChatMessage(
     })
   ).trim();
 
+  // Stamp the native language this exchange happened in (T-035). The reply was
+  // generated in `profile.nativeLanguage` (chatPrompt uses nativeLanguageName);
+  // the user turn shares the label so a bubble reads the language of its run.
+  const chatLang = profile.nativeLanguage ?? "tr";
   db.insert(tables.chatMessages)
     .values([
-      { id: nanoid(), sessionId, role: "user" as const, content: input.message },
-      { id: nanoid(), sessionId, role: "assistant" as const, content: reply },
+      { id: nanoid(), sessionId, role: "user" as const, content: input.message, lang: chatLang },
+      { id: nanoid(), sessionId, role: "assistant" as const, content: reply, lang: chatLang },
     ])
     .run();
 
