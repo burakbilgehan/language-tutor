@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # npm install, not npm ci: locks generated on macOS omit wasm32 optional
+      # deps (@emnapi/*, npm platform bug), which makes npm ci fail on linux.
+      - run: npm install
       - run: npm run build:static
         env:
           # Proje sitesi alt yolu: https://<user>.github.io/language-tutor/
