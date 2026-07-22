@@ -7,6 +7,13 @@ effort: L
 confidence: medium
 depends: [T-024]
 created: 2026-07-22
+status_note: done 2026-07-22 (branch t-034-job-queue-panel) — core/jobs.ts
+  (env-agnostic list/cancel/cancelAll/resume, no-bump), src/lib/jobs.ts boot
+  recovery now marks orphan queued → pending_approval (no auto-run), 4 routes
+  (GET /api/jobs, cancel, cancel-all, resume-pending), browser store
+  (jobs-store.ts + client-api seam onJobsChange), JobQueuePop (global) +
+  JobQueuePanel (settings). Kanji auto-fill left as-is (panel makes it
+  visible/cancellable — original concern resolved). tsc/test/parity all green.
 ---
 Bağlam: kullanıcının arka plan LLM kuyruğu üzerinde hiç kontrolü yok.
 Somut acılar (Burak):

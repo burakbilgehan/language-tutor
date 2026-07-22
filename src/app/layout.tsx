@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fraunces, Nunito_Sans } from "next/font/google";
 import { SelectionTooltip } from "@/components/shared/SelectionTooltip";
 import { FloatingOverview } from "@/components/shared/FloatingOverview";
+import { JobQueuePop } from "@/components/shared/JobQueuePop";
 import { CommandPalette } from "@/components/shared/CommandPalette";
 import { FeedbackButton } from "@/components/shared/FeedbackButton";
 import "./globals.css";
@@ -40,6 +41,7 @@ export default function RootLayout({
       >
         {children}
         <SelectionTooltip />
+        <JobQueuePop />
         <FloatingOverview />
         <CommandPalette />
         <FeedbackButton />
