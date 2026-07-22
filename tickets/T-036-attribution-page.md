@@ -1,7 +1,7 @@
 ---
 id: T-036
 title: Atıf/lisans sayfası (EDRDG JMdict, Tanos JLPT, HSK, KanjiVG…)
-status: backlog
+status: done
 priority: p2
 effort: S
 confidence: high
@@ -30,3 +30,12 @@ Listelenecek kaynaklar (hepsi hâlihazırda repoda kullanılıyor):
   sayfada toplansın.
 
 Çıkış: kullanıcıya görünen tek atıf/lisans sayfası + footer/settings linki.
+
+---
+Statü (2026-07-22, dalga 4.5): yapıldı — `/about` (Kaynaklar & Lisanslar) + Settings linki.
+Kaynak listesi doğrulanarak çıkarıldı: JMdict/KANJIDIC2 (EDRDG CC BY-SA 4.0, kanji lookup +
+SelectionTooltip hâlâ taşıyor), kanji-data (MIT araç), Tanos JLPT (CC BY, 2010 reform notuyla),
+complete-hsk-vocabulary (MIT + CC-CEDICT gloss), hanzi-writer-data-jp (KanjiVG DEĞİL —
+Make Me a Hanzi/animCJK türevi, LGPL/Arphic/Unicode) ve Hanzi Writer (MIT). KanjiVG repoda yok.
+Açık soru: EDRDG lisansı canlı sözlük işlevi için "her ekranda" atıf ister — SelectionTooltip'e
+inline atıf ayrı bir UX/hukuk kararı, bu ticket kapsamı dışında bırakıldı.
