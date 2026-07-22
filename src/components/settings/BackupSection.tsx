@@ -1,8 +1,9 @@
 "use client";
 
 // Settings surface for T-032, STATIC MODE ONLY (server mode keeps its existing
-// save section + on-disk .bak): Google Drive sync connect/disconnect and the
-// last-K local IndexedDB snapshot list with restore. Server mode renders null.
+// save section + on-disk .bak): Google Drive sync connect/disconnect + version
+// list. Internal pre-restore safety snapshots still exist in src/db/browser.ts
+// but have no user-facing surface (deliberate — see T-032 closure).
 
 import { useCallback, useEffect, useState } from "react";
 import { IS_STATIC } from "@/lib/client-api";
@@ -22,7 +23,6 @@ import {
   type RestoreCandidate,
 } from "@/lib/backup/controller";
 import type { RemoteSave } from "@/lib/backup/backend";
-import type { SnapshotMeta } from "@/db/browser";
 
 const S = {
   tr: {
@@ -49,15 +49,8 @@ const S = {
     connectFailed: "Bağlanılamadı",
     save: "Kaydet",
     saved: "Kaydedildi",
-    snapTitle: "Yerel Anlık Yedekler",
-    snapDesc:
-      "Bu tarayıcıda tutulan son otomatik kopyalar. Yanlış bir içe aktarma ya da hatalı tıklamayı buradan geri alabilirsin. (Tarayıcı verisi silinirse bunlar da gider — kalıcı yedek için Drive kullan.)",
-    noSnaps: "Henüz anlık yedek yok.",
     restore: "Geri yükle",
-    restoreConfirm:
-      "Bu, mevcut ilerlemeyi seçilen anlık yedekle değiştirir. Devam edilsin mi?",
     restoring: "Yükleniyor…",
-    take: "Şimdi bir kopya al",
     driveVersions: "Drive'daki sürümler",
     driveRestoreConfirm:
       "Bu, mevcut ilerlemeyi Drive'daki bu sürümle değiştirir. Devam edilsin mi?",
@@ -88,15 +81,8 @@ const S = {
     connectFailed: "Could not connect",
     save: "Save",
     saved: "Saved",
-    snapTitle: "Local Snapshots",
-    snapDesc:
-      "The most recent automatic copies kept in this browser. Undo a bad import or a wrong click from here. (If browser data is cleared these go too — use Drive for durable backup.)",
-    noSnaps: "No snapshots yet.",
     restore: "Restore",
-    restoreConfirm:
-      "This replaces your current progress with the selected snapshot. Continue?",
     restoring: "Restoring…",
-    take: "Take a copy now",
     driveVersions: "Versions on Drive",
     driveRestoreConfirm:
       "This replaces your current progress with this Drive version. Continue?",
@@ -121,14 +107,8 @@ export function BackupSection() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [snaps, setSnaps] = useState<SnapshotMeta[]>([]);
   const [driveSaves, setDriveSaves] = useState<RemoteSave[] | null>(null);
   const [restoring, setRestoring] = useState(false);
-
-  const loadSnaps = useCallback(async () => {
-    const { listSnapshots } = await import("@/db/browser");
-    setSnaps(await listSnapshots());
-  }, []);
 
   const loadDriveSaves = useCallback(async () => {
     const be = getDriveBackend();
@@ -148,9 +128,8 @@ export function BackupSection() {
     const id = readDriveClientId();
     setSavedId(id);
     setClientId(id ?? "");
-    void loadSnaps();
     void loadDriveSaves();
-  }, [loadSnaps, loadDriveSaves]);
+  }, [loadDriveSaves]);
 
   const onSaveClientId = () => {
     writeDriveClientId(clientId);
@@ -202,31 +181,9 @@ export function BackupSection() {
     await doRestoreDrive({ id: s.id, at: s.at });
   };
 
-  const onTakeSnap = async () => {
-    const { getBrowserDb } = await import("@/db/browser");
-    const handle = await getBrowserDb();
-    await handle.persistNow();
-    await handle.takeSnapshot();
-    await loadSnaps();
-  };
-
-  const onRestore = async (key: string) => {
-    if (!window.confirm(t.restoreConfirm)) return;
-    setRestoring(true);
-    try {
-      const { getBrowserDb } = await import("@/db/browser");
-      const handle = await getBrowserDb();
-      await handle.restoreSnapshot(key);
-      window.location.href = withBase("/map"); // full reload → fresh reads
-    } finally {
-      setRestoring(false);
-    }
-  };
-
   if (!IS_STATIC) return null;
 
   return (
-    <>
       <section className="rounded-cozy bg-surface p-6 shadow-cozy">
         <h2 className="mb-1 font-semibold">{t.driveTitle}</h2>
         <p className="mb-3 text-sm text-ink-soft">{t.driveDesc}</p>
@@ -326,43 +283,5 @@ export function BackupSection() {
           </div>
         )}
       </section>
-
-      <section className="rounded-cozy bg-surface p-6 shadow-cozy">
-        <h2 className="mb-1 font-semibold">{t.snapTitle}</h2>
-        <p className="mb-3 text-sm text-ink-soft">{t.snapDesc}</p>
-        {snaps.length === 0 ? (
-          <p className="text-sm text-ink-soft">{t.noSnaps}</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {snaps.map((s) => (
-              <li
-                key={s.key}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-3 py-2 text-sm"
-              >
-                <span>
-                  {fmt(s.at)}
-                  {s.size != null && (
-                    <span className="text-ink-soft"> ({fmtSize(s.size)})</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  disabled={restoring}
-                  onClick={() => void onRestore(s.key)}
-                  className="rounded-full bg-surface-2 px-3 py-1 text-xs font-semibold transition-colors hover:bg-surface disabled:opacity-60"
-                >
-                  {restoring ? t.restoring : t.restore}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="mt-3">
-          <CozyButton variant="soft" onClick={() => void onTakeSnap()}>
-            {t.take}
-          </CozyButton>
-        </div>
-      </section>
-    </>
   );
 }
