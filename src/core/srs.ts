@@ -15,6 +15,10 @@ export interface DueCard {
   itemType: string;
   front: string;
   back: string;
+  // Native language the `back` was written in (T-035). The review UI shows
+  // `back` as-is when it matches the active native language, otherwise it
+  // reconstructs the meaning from `front` via the translations cache.
+  lang: string;
   reading: string | null;
   example: string | null;
 }
@@ -42,6 +46,7 @@ export function srsDue(db: AppDb): {
       itemType: c.itemType,
       front: c.front,
       back: c.back,
+      lang: c.lang,
       reading: c.reading,
       example: c.example,
     }));

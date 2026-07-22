@@ -8,7 +8,7 @@ import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
-import { srsDue, srsReview } from "@/lib/client-api";
+import { srsDue, srsReview, translateText } from "@/lib/client-api";
 
 const S = {
   tr: {
@@ -22,6 +22,7 @@ const S = {
     backToMap: "Haritaya dön",
     headerTitle: "Kelime Tekrarı",
     tapToReveal: "Görmek için dokun",
+    translating: "Çevriliyor…",
   },
   en: {
     ratingLabels: ["Again", "Hard", "Good", "Easy"],
@@ -33,6 +34,7 @@ const S = {
     backToMap: "Back to map",
     headerTitle: "Vocabulary Review",
     tapToReveal: "Tap to reveal",
+    translating: "Translating…",
   },
 };
 
@@ -41,6 +43,7 @@ interface CardDto {
   itemType: string;
   front: string;
   back: string;
+  lang: string;
   reading: string | null;
   example: string | null;
 }
@@ -55,13 +58,19 @@ const RATINGS: { value: 0 | 1 | 2 | 3; cls: string }[] = [
 export function SrsSession() {
   const t = useStrings(S);
   const router = useRouter();
-  const targetLanguage = useProfileMeta()?.targetLanguage;
+  const meta = useProfileMeta();
+  const targetLanguage = meta?.targetLanguage;
+  const nativeLanguage = meta?.nativeLanguage ?? "tr";
   const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
   const [cards, setCards] = useState<CardDto[] | null>(null);
   const [idx, setIdx] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [reviewed, setReviewed] = useState(0);
   const [busy, setBusy] = useState(false);
+  // Reconstructed backs for cards stamped in a different native language
+  // (T-035), keyed by card id. Filled lazily on reveal via the translations
+  // cache — the card row itself is never mutated, so SRS timing is untouched.
+  const [xlated, setXlated] = useState<Record<string, string>>({});
 
   useEffect(() => {
     srsDue()
@@ -71,6 +80,52 @@ export function SrsSession() {
         setCards([]);
       });
   }, []);
+
+  // Whether this card's stored back is in the wrong language for the active
+  // profile and must be reconstructed from `front`.
+  const needsXlate = (c: CardDto) => (c.lang || "tr") !== nativeLanguage;
+
+  // Pre-warm from the translations cache once the deck loads: for every
+  // wrong-language card, ask the cache only (cachedOnly, zero LLM) so an
+  // already-cached back reveals instantly. A miss leaves xlated[id] undefined
+  // → reveal spends the one-time LLM call. Runs only when nativeLanguage is
+  // known (avoids a spurious pass before profile meta resolves).
+  useEffect(() => {
+    if (!cards || !meta) return;
+    for (const c of cards) {
+      if (!needsXlate(c)) continue;
+      translateText(c.front, true)
+        .then((r) => {
+          if (r.translation)
+            setXlated((m) =>
+              m[c.id] !== undefined ? m : { ...m, [c.id]: r.translation as string }
+            );
+        })
+        .catch(() => {});
+    }
+    // Depend on `meta`, not the derived `nativeLanguage`: for a tr-native
+    // profile the string stays "tr" across the meta null→resolved transition,
+    // so keying on it would fire once while meta is still null (bailing on the
+    // !meta guard) and never re-run. `meta` changes identity when it resolves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards, meta]);
+
+  const reveal = (c: CardDto) => {
+    setRevealed(true);
+    if (!needsXlate(c) || xlated[c.id] !== undefined) return;
+    // cachedOnly:false → first miss calls the LLM once, then it's cached
+    // (native_language-keyed) for every future review, in both modes. On a
+    // null result or failure (e.g. no LLM configured) fall back to the stored
+    // back — a real, if wrong-language, meaning beats a stuck spinner.
+    translateText(c.front)
+      .then((r) =>
+        setXlated((m) => ({ ...m, [c.id]: r.translation || c.back }))
+      )
+      .catch((err) => {
+        console.error("[srs] arka yüz çevrilemedi:", err);
+        setXlated((m) => ({ ...m, [c.id]: c.back }));
+      });
+  };
 
   const rate = async (rating: 0 | 1 | 2 | 3) => {
     if (!cards || busy) return;
@@ -126,7 +181,7 @@ export function SrsSession() {
         </div>
 
         <button
-          onClick={() => setRevealed(true)}
+          onClick={() => reveal(card)}
           disabled={revealed}
           className="flex min-h-72 w-full flex-col items-center justify-center gap-3 rounded-cozy bg-surface p-8 text-center shadow-cozy transition-transform active:scale-[0.99] cursor-pointer disabled:cursor-default"
         >
@@ -139,7 +194,9 @@ export function SrsSession() {
                 <div className="text-ink-soft">{card.reading}</div>
               )}
               <div className="text-xl font-semibold text-accent">
-                {card.back}
+                {needsXlate(card)
+                  ? xlated[card.id] ?? t.translating
+                  : card.back}
               </div>
               {card.example && (
                 <div className="text-sm text-ink-soft">

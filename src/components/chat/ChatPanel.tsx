@@ -6,7 +6,12 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useLlmStatus } from "@/lib/llm-status";
+import { useProfileMeta } from "@/lib/use-profile-meta";
+import { NATIVE_LANGUAGES } from "@/lib/profile-options";
 import { chatHistoryApi, chatSend } from "@/lib/client-api";
+
+const nativeLangDisplay = (code: string) =>
+  NATIVE_LANGUAGES.find((l) => l.code === code)?.name ?? code;
 
 const S = {
   tr: {
@@ -19,6 +24,7 @@ const S = {
     send: "Gönder",
     noLlm:
       "Sohbet için bir LLM sağlayıcısı gerekli. Ayarlar → LLM Sağlayıcı bölümünden bağlayabilirsin.",
+    genIn: (lang: string) => `${lang} dilinde yazıldı`,
   },
   en: {
     title: "Chat with Kumo ☁️",
@@ -30,18 +36,23 @@ const S = {
     send: "Send",
     noLlm:
       "Chat needs an LLM provider. You can connect one in Settings → LLM Provider.",
+    genIn: (lang: string) => `Written in ${lang}`,
   },
 };
 
 interface Msg {
   role: "user" | "assistant";
   content: string;
+  // Native language the message was generated in (T-035). New messages carry
+  // the active native language; history keeps its stamp.
+  lang?: string;
 }
 
 export function ChatPanel() {
   const t = useStrings(S);
   const localize = useLocalizeError();
   const llm = useLlmStatus();
+  const nativeLanguage = useProfileMeta()?.nativeLanguage ?? "tr";
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -65,12 +76,15 @@ export function ChatPanel() {
     const message = input.trim();
     if (!message || busy) return;
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: message }]);
+    setMessages((m) => [...m, { role: "user", content: message, lang: nativeLanguage }]);
     setBusy(true);
     try {
       const body = await chatSend({ sessionId, message });
       setSessionId(body.sessionId);
-      setMessages((m) => [...m, { role: "assistant", content: body.reply }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: body.reply, lang: nativeLanguage },
+      ]);
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -95,18 +109,32 @@ export function ChatPanel() {
               <p>{t.emptyState}</p>
             </div>
           )}
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 ${
-                m.role === "user"
-                  ? "self-end bg-accent text-surface rounded-br-md"
-                  : "self-start bg-surface shadow-cozy rounded-bl-md"
-              }`}
-            >
-              {m.content}
-            </div>
-          ))}
+          {messages.map((m, i) => {
+            const otherLang = m.lang && m.lang !== nativeLanguage ? m.lang : null;
+            return (
+              <div
+                key={i}
+                className={`flex max-w-[85%] flex-col gap-1 ${
+                  m.role === "user" ? "self-end items-end" : "self-start items-start"
+                }`}
+              >
+                <div
+                  className={`whitespace-pre-wrap rounded-2xl px-4 py-3 ${
+                    m.role === "user"
+                      ? "bg-accent text-surface rounded-br-md"
+                      : "bg-surface shadow-cozy rounded-bl-md"
+                  }`}
+                >
+                  {m.content}
+                </div>
+                {otherLang && (
+                  <span className="px-1 text-xs text-ink-soft">
+                    {t.genIn(nativeLangDisplay(otherLang))}
+                  </span>
+                )}
+              </div>
+            );
+          })}
           {busy && (
             <div className="flex items-center gap-2 self-start rounded-2xl bg-surface px-4 py-3 shadow-cozy">
               {[0, 1, 2].map((i) => (

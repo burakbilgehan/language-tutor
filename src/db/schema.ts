@@ -195,6 +195,12 @@ export const srsCards = sqliteTable(
     }).notNull(),
     front: text("front").notNull(),
     back: text("back").notNull(),
+    // Learner-native language the `back` was written in (T-035). Legacy rows
+    // predate this column → 'tr' (the historical default). Not part of the
+    // dedupe key: dedupe stays (profileId, itemType, front) so switching
+    // language never duplicates cards — the back is reconstructed at display
+    // time via the translations cache when lang !== the active native language.
+    lang: text("lang").notNull().default("tr"),
     reading: text("reading"),
     example: text("example"),
     sourceLessonId: text("source_lesson_id"),
@@ -337,6 +343,10 @@ export const chatMessages = sqliteTable("chat_messages", {
     .references(() => chatSessions.id),
   role: text("role", { enum: ["user", "assistant"] }).notNull(),
   content: text("content").notNull(),
+  // Learner-native language the message was generated in (T-035). Legacy rows
+  // predate this column → 'tr'. History is never re-translated; the UI shows a
+  // "generated in <lang>" label on bubbles whose lang != the active native.
+  lang: text("lang").notNull().default("tr"),
   createdAt: createdAt(),
 });
 
