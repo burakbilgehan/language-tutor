@@ -75,6 +75,12 @@ Review ekleri (backlog session, 2026-07-22):
    "hepsini durdur" default'u kullanıcı batch'lerini hedeflesin — yoksa
    kullanıcı normal ders prefetch'ini görüp cancel'lar, node açılışları
    yavaşlar diye şikayet geri gelir.
+11. **Ayrım KOLONSUZ yapılacak** (madde 9'daki tuzağın aynısı: "source"
+   kolonu = şema şekli değişikliği = SAVE_SCHEMA_VERSION bump, değmez):
+   jobType üzerinden kaba sınıflama — lesson/chapter = sistem
+   (prefetch/auto-extend), grammar/vocab/kanji = kullanıcı batch'i.
+   Lesson'da "kullanıcı açtı" vs "prefetch" ayrımı kaybolur; kabul —
+   pop toplam sayı gösteriyor, panelde jobType etiketi yeterli.
 
 Doğrulama: "tümünü üret" başlat → panelden gör → cancel → kuyruk durdu,
 token akışı kesildi (llm_calls artmıyor); başka sayfaya geç → global pop
