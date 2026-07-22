@@ -42,24 +42,25 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-011](T-011-sidequest-backfill.md) | Mevcut nl/zh profillerine yan görev backfill | wontfix | p2 | S | high |
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu (ops'a taşındı — blast paneli) | wontfix | p3 | S | high |
 
-## Yol haritası (2026-07-22 sprint)
+## Yol haritası (2026-07-22 sprint, rev2)
 
 Kurallar öncekiyle aynı: adım = ayrı session, bitince main'e push;
 paralel adımlar ayrı worktree + branch, küçük olan önce merge, ikinci
 rebase eder. 2026-07-18 dersi geçerli: paralel başlamadan dosya kümesi
 ayrıklığını DOĞRULA, varsayma.
 
+Dalga 1 tamamlandı (T-033 + T-024 + T-027, 2026-07-22). Rev2: T-034
+(job kuyruğu paneli — T-024'ün kalıcı çözümü) dalga 2'ye yerleşti.
+
 | Adım | Ticket | Mod | Model | Not |
 |---|---|---|---|---|
-| 1a | T-033 | paralel ok | sonnet | Sözlük arama ranking'i — canlı acı, küçük; VocabSidebar + build-script tie-break |
-| 1b | T-024 | paralel ok | sonnet | Save/job kuyruğu — lib/save + lib/jobs, 1a/1c ile ayrık |
-| 1c | T-027 | paralel ok | opus | Routing hardening — teşhis + repo-geneli sweep, debug ağırlıklı iş |
-| 2a | T-025 | paralel ok | sonnet | Onboarding Load/New — T-024 bitmiş olmalı (import akışı ortak) |
-| 2b | T-028 | paralel ok | sonnet | Ayarlar çipi — StatsHeader, küçük |
-| 3 | T-031 | SERİ, tek başına | opus | İçerik dil izolasyonu — çok dosyalı sweep + mimari karar (damga yeri, seed gating); hiçbir şeyle paralel koşturma |
-| 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün arama yardımcısını kullanır |
-| 4b | T-032 | paralel ok | opus | Drive sync — save/* + yeni oauth modülü, 4a ile ayrık |
-| 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar |
+| 2a | T-034 | paralel ok | opus | Kuyruk paneli — core/jobs + yeni routes + iki UI yüzeyi + statik parite; L, mimari ağırlıklı. p1: token koruması, en erken slot |
+| 2b | T-025 | paralel ok | sonnet | Onboarding Load/New — import akışını çağırır (T-024 done). DİKKAT: 2a client-api.ts'e dokunuyor; başlamadan kesişimi doğrula, T-025 import'u mevcut fonksiyon üzerinden çağırıp client-api'yi düzenlemesin |
+| 2c | T-028 | paralel ok | sonnet | Ayarlar çipi — StatsHeader; 2a'nın Ayarlar-İÇİ paneliyle ayrı dosya, çakışmaz |
+| 3 | T-031 | SERİ, tek başına | opus | İçerik dil izolasyonu — çok dosyalı sweep + mimari karar (damga yeri, seed gating); hiçbir şeyle paralel koşturma. T-034'ten SONRA olması bilinçli: iki geniş iş üst üste binmesin |
+| 4a | T-030 | paralel ok | opus | ja sözlük (JMdict) — T-031 sonrası ki yeni içerik doğuştan dil damgalı olsun; T-033'ün ranking yardımcısını kullanır |
+| 4b | T-032 | paralel ok | opus | Drive sync — save/* + yeni oauth modülü, 4a ile ayrık. T-024 export-strip'i Drive'a giden imaj için de geçerli |
+| 5 | T-026 | EN SON | opus | Security review; bulgular fable-verifier'dan geçer, batch'in son haline koşar (depends güncellendi: T-034 dahil). T-034'ün cancel route'ları da tarama kapsamında |
 
 Lisans: bilinçli ertelendi (müşteri yok; lisanssız public = all rights
 reserved). Tek kural: lisans kararından önce dış PR kabul etme. Public

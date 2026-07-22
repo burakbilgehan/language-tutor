@@ -55,6 +55,27 @@ panel gelince auto-fill kuyruğu da görünür/cancel'lanabilir olur; ayrı
 "user-triggered'a çek" kararına gerek kalmayabilir. Panel'i implement
 ederken tekrar değerlendir.
 
+Review ekleri (backlog session, 2026-07-22):
+7. **Liste endpoint'i yok**: `/api/jobs/` altında sadece `[id]` var.
+   Pop + panel için `GET /api/jobs` (aktif/bekleyen + son N geçmiş)
+   gerekiyor — hafif, LLM'siz; pop bunu poll'lar (roadmap'in 4s
+   kalıbı emsal).
+8. **Statik modda veri kaynağı**: job tablosu orada HİÇ kullanılmıyor —
+   batch, client-api içinde inline döngü. Pop/panel statikte aynı UI'ı
+   tarayıcı-içi bir kuyruk store'undan (module-level state + subscribe,
+   AbortController'la iptal) beslemeli; `GET /api/jobs` yalnız server
+   modu. Seam yine client-api.
+9. **"Recovery pending" işareti şema tuzağı**: yeni KOLON ekleme —
+   `generation_jobs` şekli değişir, SAVE_SCHEMA_VERSION bump + eski
+   save'ler reddedilir. Text `status` kolonuna yeni DEĞER (ör.
+   `pending_approval`) bump gerektirmez (`gradedBy:"self"` emsali).
+   Yeni değerle git; eski app sürümü görmezse zaten koşmaz, güvenli yön.
+10. **Sistem işi ≠ kullanıcı batch'i**: prefetch (ensureLessonJob) ve
+   auto-extend de bu kuyruğa giriyor. Panelde etiketle (sistem/kullanıcı);
+   "hepsini durdur" default'u kullanıcı batch'lerini hedeflesin — yoksa
+   kullanıcı normal ders prefetch'ini görüp cancel'lar, node açılışları
+   yavaşlar diye şikayet geri gelir.
+
 Doğrulama: "tümünü üret" başlat → panelden gör → cancel → kuyruk durdu,
 token akışı kesildi (llm_calls artmıyor); başka sayfaya geç → global pop
 aktif işi gösteriyor; kirli save'i import etmeden boot → hiçbir job
