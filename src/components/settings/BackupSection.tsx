@@ -32,7 +32,16 @@ const S = {
     clientIdLabel: "OAuth Client ID",
     clientIdPlaceholder: "xxxx.apps.googleusercontent.com",
     clientIdHelp:
-      "Google Cloud'da kendi OAuth Client ID'ni oluşturup buraya yapıştır (adımlar: docs/drive-backup-setup.md). Secret gerekmez.",
+      "Google Cloud'da kendi OAuth Client ID'ni oluşturup buraya yapıştır. Secret gerekmez, ücretsizdir.",
+    setupSummary: "Client ID nasıl alınır? (adım adım)",
+    setupSteps: [
+      "console.cloud.google.com adresine gir, (gerekirse) yeni bir proje oluştur.",
+      "\"APIs & Services → Library\"den Google Drive API'yi etkinleştir (Enable).",
+      "\"APIs & Services → OAuth consent screen\": External seç; uygulama adı ve e-postanı yaz; Scopes adımında \"drive.appdata\" scope'unu ekle; Test users kısmına kendi Gmail adresini ekle ve durumu \"Testing\"de bırak (yayınlama/doğrulama gerekmez).",
+      "\"APIs & Services → Credentials → Create Credentials → OAuth client ID\": tür olarak Web application seç.",
+      "\"Authorized JavaScript origins\" alanına bu sitenin adresini ekle (adres çubuğundaki kök adres, ör. https://KULLANICI.github.io). Redirect URI gerekmez.",
+      "Oluşan \"xxxx.apps.googleusercontent.com\" biçimindeki Client ID'yi kopyala, yukarıya yapıştır, Kaydet'e bas ve Drive'a bağlan.",
+    ],
     connect: "Drive'a bağlan",
     connecting: "Bağlanılıyor…",
     connected: "✅ Bağlı",
@@ -62,7 +71,16 @@ const S = {
     clientIdLabel: "OAuth Client ID",
     clientIdPlaceholder: "xxxx.apps.googleusercontent.com",
     clientIdHelp:
-      "Create your own OAuth Client ID in Google Cloud and paste it here (steps: docs/drive-backup-setup.md). No secret needed.",
+      "Create your own OAuth Client ID in Google Cloud and paste it here. No secret needed, it's free.",
+    setupSummary: "How do I get a Client ID? (step by step)",
+    setupSteps: [
+      "Go to console.cloud.google.com and create a new project (if needed).",
+      "In \"APIs & Services → Library\", enable the Google Drive API.",
+      "\"APIs & Services → OAuth consent screen\": choose External; fill in an app name and your email; in the Scopes step add the \"drive.appdata\" scope; add your own Gmail address under Test users and leave the status as \"Testing\" (no publishing/verification needed).",
+      "\"APIs & Services → Credentials → Create Credentials → OAuth client ID\": choose Web application as the type.",
+      "Under \"Authorized JavaScript origins\" add this site's address (the root address in your address bar, e.g. https://USER.github.io). No redirect URI needed.",
+      "Copy the resulting Client ID (\"xxxx.apps.googleusercontent.com\"), paste it above, hit Save, then Connect Drive.",
+    ],
     connect: "Connect Drive",
     connecting: "Connecting…",
     connected: "✅ Connected",
@@ -229,6 +247,16 @@ export function BackupSection() {
           </CozyButton>
         </div>
         <p className="mt-2 text-xs text-ink-soft">{t.clientIdHelp}</p>
+        <details className="mt-2 rounded-lg bg-background px-3 py-2">
+          <summary className="cursor-pointer text-xs font-medium text-ink-soft">
+            {t.setupSummary}
+          </summary>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs text-ink-soft">
+            {t.setupSteps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </details>
 
         {savedId && (
           <div className="mt-4 flex flex-wrap items-center gap-3">
