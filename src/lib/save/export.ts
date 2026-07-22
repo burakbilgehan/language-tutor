@@ -1,28 +1,43 @@
 import Database from "better-sqlite3";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { SAVE_SCHEMA_VERSION } from "./version";
 
 /**
- * Strips in-flight generation_jobs rows (queued/running) out of a serialized
- * SQLite image, on a throwaway second connection — never the live DB, so a
- * batch running at export time keeps running undisturbed. If a save export is
- * taken mid-batch, those rows would otherwise get baked into the snapshot and
- * any session importing it would have recoverStaleJobs (src/lib/jobs.ts)
- * adopt them as orphans and start burning LLM tokens on its own. done/error
- * rows (job history) are left alone.
+ * Takes a consistent snapshot of the live DB (VACUUM INTO a temp file — reads
+ * committed state incl. WAL, never blocks the live connection) and strips
+ * in-flight generation_jobs rows (queued/running) from the copy. If a save
+ * export is taken mid-batch, those rows would otherwise get baked into the
+ * snapshot and any session importing it would have recoverStaleJobs
+ * (src/lib/jobs.ts) adopt them as orphans and start burning LLM tokens on its
+ * own. done/error rows (job history) are left alone.
+ *
+ * Deliberately NOT `new Database(db.$client.serialize())`: SQLite cannot
+ * deserialize a WAL-mode image in memory (SQLITE_CANTOPEN). The VACUUM INTO
+ * copy is written in rollback-journal mode, which also makes the exported
+ * file itself deserializable downstream.
  */
-function stripJobQueue(buffer: Buffer): Buffer {
-  const copy = new Database(buffer);
+function snapshotWithoutJobQueue(): Buffer {
+  const dir = mkdtempSync(join(tmpdir(), "language-tutor-save-"));
+  const path = join(dir, "save.db");
   try {
-    copy
-      .prepare(
-        `DELETE FROM generation_jobs WHERE status IN ('queued', 'running')`
-      )
-      .run();
-    return copy.serialize();
+    db.$client.prepare(`VACUUM INTO ?`).run(path);
+    const copy = new Database(path);
+    try {
+      copy
+        .prepare(
+          `DELETE FROM generation_jobs WHERE status IN ('queued', 'running')`
+        )
+        .run();
+      return copy.serialize();
+    } finally {
+      copy.close();
+    }
   } finally {
-    copy.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -48,9 +63,7 @@ export function exportSave(): { buffer: Buffer; filename: string } {
       .run();
   }
 
-  // Fold WAL contents into the main image so the snapshot is complete.
-  db.$client.pragma("wal_checkpoint(TRUNCATE)");
-  const buffer = stripJobQueue(db.$client.serialize());
+  const buffer = snapshotWithoutJobQueue();
 
   const stamp = new Date()
     .toISOString()
