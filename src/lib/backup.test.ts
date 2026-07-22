@@ -149,6 +149,24 @@ test("pruneToK with K=0 deletes everything", () => {
   );
 });
 
+test("pruneToK keeps the newest by the `at` it's given — the newest real upload survives when `at` is Drive modifiedTime, not a skewed uploader clock", () => {
+  // Scenario: a lagging device uploaded most recently. If ordering used the
+  // uploader's wall clock, `lagging` (small stamp) would sort oldest and be
+  // pruned. list() now feeds Drive-authoritative modifiedTime as `at`, so the
+  // genuinely-newest upload has the largest `at` and is kept.
+  const byModifiedTime = [
+    { id: "old", at: 1000 },
+    { id: "mid", at: 2000 },
+    { id: "lagging-but-newest", at: 3000 }, // Drive modifiedTime, not skewed
+  ];
+  const doomed = pruneToK(byModifiedTime, 2);
+  assert.deepEqual(doomed, ["old"], "only the truly-oldest is pruned");
+  assert.ok(
+    !doomed.includes("lagging-but-newest"),
+    "the newest real upload is never pruned"
+  );
+});
+
 test("isRemoteNewer semantics", () => {
   assert.equal(isRemoteNewer(null, 100), true, "never synced, remote exists");
   assert.equal(isRemoteNewer(100, null), false, "remote empty");

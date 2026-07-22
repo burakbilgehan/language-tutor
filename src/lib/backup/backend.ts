@@ -8,8 +8,15 @@
 export interface RemoteSave {
   /** Backend-specific id (Drive file id, or a server row id later). */
   id: string;
-  /** Epoch ms this save represents (its export time). Newest wins. */
+  /**
+   * Epoch ms used for ORDERING / prune / newer-than comparisons. This must be a
+   * server-authoritative time (Drive's modifiedTime), NOT the uploader's wall
+   * clock — a lagging device's newer save would otherwise sort older and get
+   * pruned. Display uses `exportedAt`.
+   */
   at: number;
+  /** Uploader's stamped export time (display only; may skew across devices). */
+  exportedAt?: number;
   /** Byte size, if the backend reports it. */
   size?: number;
 }
@@ -28,11 +35,13 @@ export interface SaveBackend {
   disconnect(): void;
   /**
    * Upload a save image. Keeps the last K remote versions (prunes oldest).
-   * `at` is the save's export time, stored as remote metadata for compare.
+   * `at` is the save's export time (uploader wall clock, stored as display
+   * metadata). Returns the SERVER-authoritative sync timestamp the caller
+   * should record as lastSyncedAt (so it matches list()/compare ordering).
    * Throws BackendAuthError when the token is dead so the caller can queue +
    * prompt re-auth.
    */
-  upload(bytes: Uint8Array, at: number): Promise<void>;
+  upload(bytes: Uint8Array, at: number): Promise<number>;
   /** List remote saves, newest first. */
   list(): Promise<RemoteSave[]>;
   /** Download a specific remote save's bytes. */

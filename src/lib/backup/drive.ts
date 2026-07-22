@@ -254,19 +254,27 @@ export class DriveBackend implements SaveBackend {
         id: string;
         name: string;
         size?: string;
+        modifiedTime?: string;
         appProperties?: { exportedAt?: string };
       }[];
     };
     return (data.files ?? [])
       .filter((f) => f.name.startsWith(FILE_PREFIX))
-      .map((f) => ({
-        id: f.id,
-        at:
-          Number(f.appProperties?.exportedAt) ||
-          timestampFromName(f.name) ||
-          0,
-        size: f.size ? Number(f.size) : undefined,
-      }))
+      .map((f) => {
+        // Ordering authority = Drive server modifiedTime (clock-skew proof).
+        // exportedAt (uploader wall clock) is display-only; fall back to it, or
+        // the name-embedded stamp, only if modifiedTime is somehow absent.
+        const modified = f.modifiedTime ? Date.parse(f.modifiedTime) : NaN;
+        const exportedAt =
+          Number(f.appProperties?.exportedAt) || timestampFromName(f.name) || undefined;
+        const at = Number.isFinite(modified) ? modified : exportedAt ?? 0;
+        return {
+          id: f.id,
+          at,
+          exportedAt,
+          size: f.size ? Number(f.size) : undefined,
+        };
+      })
       .sort((a, b) => b.at - a.at);
   }
 
@@ -280,7 +288,7 @@ export class DriveBackend implements SaveBackend {
     return new Uint8Array(await res.arrayBuffer());
   }
 
-  async upload(bytes: Uint8Array, at: number): Promise<void> {
+  async upload(bytes: Uint8Array, at: number): Promise<number> {
     const token = await this.token$();
     const boundary = `ltbnd_${Math.random().toString(36).slice(2)}`;
     const metadata = {
@@ -300,7 +308,7 @@ export class DriveBackend implements SaveBackend {
     const tail = enc.encode(`\r\n--${boundary}--`);
     const body = new Blob([head, bytes as BlobPart, tail]);
     const res = await this.authFetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime",
       {
         method: "POST",
         headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
@@ -309,7 +317,12 @@ export class DriveBackend implements SaveBackend {
       token
     );
     if (!res.ok) throw new Error(`Drive upload failed: ${res.status}`);
+    // Return the SERVER modifiedTime as the authoritative sync timestamp, so
+    // the caller records lastSyncedAt on the same clock list()/compare use.
+    const created = (await res.json()) as { modifiedTime?: string };
+    const modified = created.modifiedTime ? Date.parse(created.modifiedTime) : NaN;
     await this.prune();
+    return Number.isFinite(modified) ? modified : at;
   }
 
   /** Keep the newest KEEP_VERSIONS remote saves, delete the rest. */

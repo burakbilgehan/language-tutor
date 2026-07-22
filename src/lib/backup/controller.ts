@@ -103,6 +103,13 @@ async function maybeSnapshot(): Promise<void> {
 export async function autoUpload(): Promise<boolean> {
   const be = getDriveBackend();
   if (!be) return false;
+  // BLOCKER guard: never upload an empty DB. After IndexedDB eviction the
+  // startup flow can recreate a fresh empty image; if list()/isConnected()
+  // momentarily fail the restore offer is skipped, and an unguarded upload
+  // would push that empty image as the newest save — winning restore
+  // comparisons and pruning the real save. An empty (no active profile) DB is
+  // never legitimate save material, so refuse here where ALL callers inherit it.
+  if (await isLocalEmpty()) return false;
   const { getBrowserDb } = await import("@/db/browser");
   const { markSyncQueued, markSyncUploaded } = await import("./sync-queue");
   const handle = await getBrowserDb();
@@ -110,10 +117,14 @@ export async function autoUpload(): Promise<boolean> {
   const bytes = handle.exportBytes();
   const at = Date.now();
   try {
-    await be.upload(bytes, at);
-    // Record a successful backup + sync.
+    // upload() returns the SERVER modifiedTime — record THAT as lastSyncedAt so
+    // the next startup compare is on the same clock as list() (no false "newer
+    // remote" from local/server skew).
+    const syncedAt = await be.upload(bytes, at);
     const s = readBackupState();
-    writeBackupState(markBackedUp(s, getLessonCount(), at, { synced: true }));
+    writeBackupState(
+      markBackedUp(s, getLessonCount(), syncedAt, { synced: true })
+    );
     markSyncUploaded();
     emit();
     return true;

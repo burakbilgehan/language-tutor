@@ -11,6 +11,7 @@ import { drizzle, type SQLJsDatabase as DrizzleSqlJs } from "drizzle-orm/sql-js"
 import * as schema from "./schema";
 import { DDL } from "./ddl";
 import { withBase } from "@/lib/base-path";
+import { stampAndSerialize, validateSaveImage } from "@/lib/backup/save-image";
 
 export type BrowserDb = DrizzleSqlJs<typeof schema>;
 
@@ -256,36 +257,26 @@ async function create(): Promise<BrowserDbHandle> {
       }
       await idbPut(sqlite.export());
     },
-    exportBytes: () => sqlite.export(),
+    exportBytes: () => stampAndSerialize(sqlite),
     importBytes: async (bytes: Uint8Array) => {
+      // Validate header + schema version before swapping in — a corrupt or
+      // wrong-version image must never silently replace good progress.
+      await validateSaveImage(bytes, async () => SQL);
       sqlite.close();
       sqlite = new SQL.Database(bytes);
       sqlite.run("PRAGMA foreign_keys = ON");
       live = drizzle(sqlite, { schema });
       await idbPut(bytes);
     },
-    takeSnapshot: async () => {
-      const bytes = sqlite.export();
-      const at = Date.now();
-      const key = `${SNAPSHOT_PREFIX}${at}`;
-      await idbPutKey(key, bytes);
-      // Rotate: keep the newest SNAPSHOT_KEEP, delete the rest. Timestamps are
-      // encoded in the key name, so rotation reads KEYS ONLY — never the (large)
-      // snapshot bytes.
-      const keys = (await idbAllKeys()).filter((k) =>
-        k.startsWith(SNAPSHOT_PREFIX)
-      );
-      const { pruneToK } = await import("@/lib/backup/rotate");
-      const doomed = pruneToK(
-        keys.map((k) => ({ id: k, at: Number(k.slice(SNAPSHOT_PREFIX.length)) || 0 })),
-        SNAPSHOT_KEEP
-      );
-      await Promise.all(doomed.map((k) => idbDeleteKey(k)));
-      return { key, at, size: bytes.byteLength };
-    },
+    takeSnapshot: () => doSnapshot(),
     restoreSnapshot: async (key: string) => {
       const bytes = await idbGetKey(key);
       if (!bytes) throw new Error(`snapshot not found: ${key}`);
+      // Same guard as any other restore path.
+      await validateSaveImage(bytes, async () => SQL);
+      // Safety net: snapshot the CURRENT state before replacing it, so a
+      // mis-click restore is itself undoable (mirrors restoreFromDrive).
+      await doSnapshot();
       sqlite.close();
       sqlite = new SQL.Database(bytes);
       sqlite.run("PRAGMA foreign_keys = ON");
@@ -293,6 +284,29 @@ async function create(): Promise<BrowserDbHandle> {
       await idbPut(bytes); // snapshot becomes the live image
     },
   };
+
+  async function doSnapshot(): Promise<SnapshotMeta> {
+    const bytes = stampAndSerialize(sqlite);
+    const at = Date.now();
+    const key = `${SNAPSHOT_PREFIX}${at}`;
+    await idbPutKey(key, bytes);
+    // Rotate: keep the newest SNAPSHOT_KEEP, delete the rest. Timestamps are
+    // encoded in the key name, so rotation reads KEYS ONLY — never the (large)
+    // snapshot bytes.
+    const keys = (await idbAllKeys()).filter((k) =>
+      k.startsWith(SNAPSHOT_PREFIX)
+    );
+    const { pruneToK } = await import("@/lib/backup/rotate");
+    const doomed = pruneToK(
+      keys.map((k) => ({
+        id: k,
+        at: Number(k.slice(SNAPSHOT_PREFIX.length)) || 0,
+      })),
+      SNAPSHOT_KEEP
+    );
+    await Promise.all(doomed.map((k) => idbDeleteKey(k)));
+    return { key, at, size: bytes.byteLength };
+  }
 }
 
 /** Tekil tarayıcı DB handle'ı (ilk çağrıda wasm + imaj yüklenir). */
