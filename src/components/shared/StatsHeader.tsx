@@ -7,6 +7,7 @@ import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { stats as stats$ } from "@/lib/client-api";
 import { useShortcutLabel } from "@/components/shared/CommandPalette";
+import { useLlmStatus } from "@/lib/llm-status";
 
 const S = {
   tr: {
@@ -24,6 +25,7 @@ const S = {
     },
     streak: "Seri",
     settings: "Ayarlar",
+    settingsUnconfigured: "Ayarlar — LLM yapılandırılmadı",
     search: "Ara",
     costTitle: (today: string, calls: number, total: string) =>
       `Bugün: $${today} (${calls} çağrı) · Toplam: $${total}`,
@@ -43,6 +45,7 @@ const S = {
     },
     streak: "Streak",
     settings: "Settings",
+    settingsUnconfigured: "Settings — LLM not configured",
     search: "Search",
     costTitle: (today: string, calls: number, total: string) =>
       `Today: $${today} (${calls} calls) · Total: $${total}`,
@@ -141,6 +144,7 @@ export function StatsHeader({
   const pathname = usePathname();
   const t = useStrings(S);
   const lang = useProfileMeta()?.targetLanguage;
+  const llmStatus = useLlmStatus();
   const items = NAV_ITEMS.filter(
     (i) =>
       (!i.jaOnly || lang === "ja") && (!i.langs || i.langs.includes(lang ?? ""))
@@ -176,14 +180,22 @@ export function StatsHeader({
             <SearchButton title={t.search} />
             <Link
               href="/settings"
-              title={t.settings}
-              className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+              title={llmStatus.configured ? t.settings : t.settingsUnconfigured}
+              aria-label={llmStatus.configured ? t.settings : t.settingsUnconfigured}
+              className={`relative flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-cozy transition-colors ${
                 pathname.startsWith("/settings")
                   ? "bg-accent-soft"
-                  : "hover:bg-surface-2"
+                  : "bg-surface hover:bg-surface-2"
               }`}
             >
-              ⚙︎
+              <span className="text-base leading-none">⚙︎</span>
+              <span className="hidden sm:inline">{t.settings}</span>
+              {!llmStatus.configured && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-background"
+                />
+              )}
             </Link>
           </div>
         </div>
