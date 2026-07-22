@@ -1,7 +1,7 @@
 ---
 id: T-024
 title: Save dosyasına job kuyruğu sızmasın (import edilen save token yakıyor)
-status: backlog
+status: done
 priority: p1
 effort: S
 confidence: high
@@ -22,6 +22,14 @@ modu export'larından gelir.
 
 Karar (Burak): bilgi save dosyasına hiç yazılmasın — temizlik export
 tarafında.
+
+Statü (2026-07-22): 1+2 yapıldı (export strip + import belt). Bu **geçici
+yeterli** — sürpriz kuyruğun ana vektörünü (import edilen save) kapatır.
+Açık kalan boşluk: kullanıcı tekrar import'a basmadan (localStorage/
+IndexedDB'den) devam ederse boot'taki `recoverStaleJobs` bekleyen queued
+işleri hâlâ otomatik koşturur. Bunun kalıcı çözümü + kullanıcıya cancel/
+görünürlük **T-034**'e taşındı. Sub-decision 3 (kanji auto-fill GET) da
+orada tekrar değerlendirilecek.
 
 İş:
 1. **Export'ta temizlik** (`src/lib/save/export.ts`): `serialize()` sonrası

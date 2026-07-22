@@ -1,7 +1,7 @@
 ---
 id: T-033
 title: Sözlük araması — ranking yok, "ma" alakasız sonuç kusuyor
-status: backlog
+status: done
 priority: p1
 effort: S
 confidence: high
