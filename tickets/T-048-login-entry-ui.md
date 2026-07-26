@@ -1,7 +1,7 @@
 ---
 id: T-048
 title: Giriş UI — anonim/load + login seçeneği + buluttan getir
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: high

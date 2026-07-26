@@ -18,7 +18,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) — stack DOĞRULANDI | done | p1 | M | medium |
 | [T-046](T-046-auth-better-auth.md) | Auth — better-auth Worker'da (Google-only, same-origin, test-gate'li) | done | p1 | L | medium |
 | [T-047](T-047-cloud-save-sync.md) | Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull) | done | p1 | L | medium |
-| [T-048](T-048-login-entry-ui.md) | Giriş UI (anonim/load + login + buluttan getir) | backlog | p2 | M | high |
+| [T-048](T-048-login-entry-ui.md) | Giriş UI (anonim/load + login + buluttan getir) | done | p2 | M | high |
 | [T-044](T-044-mcq-bracket-grading.md) | mcq'da doğru şık "yanlış" sayılıyor (bracket strip asimetrisi) | done | p1 | S | high |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
@@ -64,7 +64,17 @@ ayrı worktree + branch, küçük önce merge. Env notu: dev server + blast
 dashboard açık → ikinci `next build` YASAK (tsc/test/parity harness OK);
 kod değişikliği DB'ye yazmıyor ama blast'la kota penceresini çakıştırma.
 
-### Dalga B — Backend + kimlik (2026-07-26, kökten değişiklik) ★ SIRADAKİ
+### Dalga B — Backend + kimlik (2026-07-26) ✅ TAMAMLANDI
+
+Zincir 2026-07-26'da tek master session'da baştan sona koşuldu (T-045→T-048,
+hepsi merge+push). Kararlar: **domain YOK → Google-only** (magic-link düştü:
+domain'siz email sender yok) + **hosting same-origin Cloudflare'a** (Worker
+static assets, GH Pages anonim ayna). Boyut gerçeği: strip 17.54→8.55 MB
+(tahmin 2-4 MB yanlıştı; generation_jobs done/error geçmişi %28 — ayrı karar).
+Kalan ops (Burak): CF hesap kurulumu + Google OAuth client + deploy
+(`worker/README.md`), deploy'da site origin'i `TRUSTED_ORIGINS`'e; manuel
+test listesi T-048 raporunda. `out/` build'i `NEXT_PUBLIC_BASE_PATH`'SİZ
+üretilmeli (Pages build'ini R2 worker'ına verme).
 
 Burak kararı: 6-7-8 içerik dalgaları yerine backend'e geçiş. Local-first
 KORUNUR (anonim = pure local, değişmez); login = save'i bizim buluta senkron.
