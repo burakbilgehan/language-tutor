@@ -26,10 +26,13 @@ import { IS_STATIC } from "@/lib/client-api";
 import { AppError } from "@/lib/errors";
 import { SAVE_SCHEMA_VERSION } from "@/lib/save/version";
 import {
-  stripSeedContent,
+  stripSeedContentWithManifest,
+  readStripManifest,
+  findUnreconstituted,
   sqlJsStripExec,
   type SeedBundle,
   type StripStats,
+  type UnreconstitutedRow,
 } from "@/lib/save/seed-strip";
 
 /**
@@ -83,6 +86,25 @@ export class NotSignedInError extends Error {
   constructor() {
     super("not signed in");
     this.name = "NotSignedInError";
+  }
+}
+
+/**
+ * Thrown when a push is refused because the LOCAL database is empty.
+ *
+ * The disaster case this exists for: IndexedDB gets evicted, the app recreates
+ * a fresh empty image on next load, and the user — seeing an empty app —
+ * clicks "buluta gönder". That would overwrite their only cloud copy with
+ * nothing. Worse than the Drive equivalent, which keeps K versions; here there
+ * is a single key and no history, so the good save is simply gone.
+ *
+ * Distinct from every other error on purpose: T-048 should render this as
+ * "local looks empty — pull instead?", never as a generic failure.
+ */
+export class LocalEmptyError extends Error {
+  constructor() {
+    super("local database is empty");
+    this.name = "LocalEmptyError";
   }
 }
 
@@ -186,7 +208,9 @@ async function buildStrippedBlob(): Promise<{
       .map((r) => r.lang as string);
     const seeds = await loadSeeds(languages);
 
-    const stripped = stripSeedContent(exec, seeds);
+    // Records a manifest of what was removed into the COPY's save_meta, so the
+    // restoring side can detect seed drift instead of silently losing content.
+    const { stats: stripped } = stripSeedContentWithManifest(exec, seeds);
     copy.run("VACUUM");
     return { bytes: copy.export(), originalBytes: original.byteLength, stripped };
   } finally {
@@ -201,6 +225,14 @@ async function buildStrippedBlob(): Promise<{
 export async function pushToCloud(): Promise<PushResult> {
   if (!IS_STATIC) throw new Error("cloud sync is static-mode only");
   await requireSession();
+
+  // BLOCKER guard, same one autoUpload() applies for Drive — and it matters
+  // MORE here. After IndexedDB eviction the startup flow can recreate a fresh
+  // empty image; pushing that would overwrite the single R2 key, which (unlike
+  // Drive's K versions) has no history to recover from. An empty DB is never
+  // legitimate save material.
+  const { isLocalEmpty } = await import("./controller");
+  if (await isLocalEmpty()) throw new LocalEmptyError();
 
   const { bytes, originalBytes, stripped } = await buildStrippedBlob();
 
@@ -217,16 +249,29 @@ export async function pushToCloud(): Promise<PushResult> {
   });
 
   if (res.status === 401) throw new NotSignedInError();
+  // 413 is genuinely "this save is too big to sync". Everything else — R2
+  // unavailable, connection dropped (the Worker answers 503 upload_failed) —
+  // must NOT be reported as an invalid save: the save is fine, the service
+  // blipped, and telling the user otherwise would be actively misleading.
   if (res.status === 413) throw new AppError("save_invalid");
   if (!res.ok) throw new AppError("save_load_failed");
 
   const body = (await res.json()) as { updatedAt?: string };
-  return {
-    bytes: bytes.byteLength,
-    originalBytes,
-    stripped,
-    updatedAt: body.updatedAt ?? new Date().toISOString(),
-  };
+  const updatedAt = body.updatedAt ?? new Date().toISOString();
+
+  // A successful push IS a backup — record it, or the reminder bar keeps
+  // nagging and findRestoreCandidate() keeps offering a stale Drive restore
+  // over data we just synced. Mirrors restoreFromDrive's bookkeeping.
+  const { readBackupState, writeBackupState, markBackedUp } = await import("./state");
+  const { getLessonCount, emitBackupChange } = await import("./controller");
+  writeBackupState(
+    markBackedUp(readBackupState(), getLessonCount(), Date.parse(updatedAt) || Date.now(), {
+      synced: true,
+    })
+  );
+  emitBackupChange();
+
+  return { bytes: bytes.byteLength, originalBytes, stripped, updatedAt };
 }
 
 /** What is stored in the cloud, without downloading it (R2 head()). */
@@ -255,7 +300,46 @@ export async function getCloudInfo(): Promise<CloudSaveInfo> {
  * anything, and the Worker has already refused a version-mismatched blob
  * server-side, so a save that cannot be loaded never reaches the live DB.
  */
-export async function pullFromCloud(): Promise<{ reseeded: number }> {
+/** Open a detached sql.js instance over `bytes` and run `fn` against it. */
+async function withDetached<T>(
+  bytes: Uint8Array,
+  fn: (db: import("sql.js").Database) => T
+): Promise<T> {
+  const [{ default: initSqlJs }, { withBase }] = await Promise.all([
+    import("sql.js"),
+    import("@/lib/base-path"),
+  ]);
+  const SQL = await initSqlJs({ locateFile: (file: string) => withBase(`/${file}`) });
+  const db = new SQL.Database(bytes);
+  try {
+    return fn(db);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Compare the restored image against the strip manifest it carries. Returns the
+ * rows the manifest says were stripped but which are still not `ready` — i.e.
+ * content the packaged seed could no longer reconstitute.
+ */
+async function checkSeedDrift(bytes: Uint8Array): Promise<UnreconstitutedRow[]> {
+  return withDetached(bytes, (db) => {
+    const exec = sqlJsStripExec(db);
+    const manifest = readStripManifest(exec);
+    return manifest ? findUnreconstituted(exec, manifest) : [];
+  });
+}
+
+export interface PullResult {
+  reseeded: number;
+  /** Rows the blob's manifest says were stripped but that the seed did NOT
+   * bring back — real content loss from seed drift (a renamed/removed slug).
+   * Empty on a clean restore. No UI here; T-048 renders it. */
+  warnings: UnreconstitutedRow[];
+}
+
+export async function pullFromCloud(): Promise<PullResult> {
   if (!IS_STATIC) throw new Error("cloud sync is static-mode only");
   await requireSession();
 
@@ -298,9 +382,32 @@ export async function pullFromCloud(): Promise<{ reseeded: number }> {
     /* offline → rows stay pending, refilled lazily later */
   }
 
-  const { emitBackupChange } = await import("./controller");
+  // Seed-drift check. The blob records WHICH rows were stripped; if the CDN
+  // seed no longer covers some of them (slug renamed or dropped), those rows
+  // are still pending with NULL content and that content is simply gone.
+  // Without this the loss is completely silent.
+  //
+  // Run against a DETACHED copy of the now-live image (same approach as the
+  // push path) rather than the live handle: BrowserDbHandle exposes no raw
+  // sql.js instance, and widening that interface is outside this ticket.
+  let warnings: UnreconstitutedRow[] = [];
+  try {
+    warnings = await checkSeedDrift(handle.exportBytes());
+  } catch {
+    /* no manifest / old blob → nothing to compare against */
+  }
+
+  // A pull is a sync point too: without recording it the reminder bar nags
+  // immediately and findRestoreCandidate() offers a stale Drive save over the
+  // cloud data we just restored.
+  const { readBackupState, writeBackupState, markBackedUp } = await import("./state");
+  const { getLessonCount, emitBackupChange } = await import("./controller");
+  writeBackupState(
+    markBackedUp(readBackupState(), getLessonCount(), Date.now(), { synced: true })
+  );
   emitBackupChange();
-  return { reseeded };
+
+  return { reseeded, warnings };
 }
 
 /**

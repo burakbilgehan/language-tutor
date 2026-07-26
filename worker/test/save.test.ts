@@ -197,6 +197,40 @@ describe("upload size cap", () => {
     expect(await env.SAVES.head(key)).toBeNull();
   });
 
+  it("a FAILED push does NOT destroy the previously stored save", async () => {
+    // REGRESSION (merge-review blocker 1). putSave used to delete(key) in its
+    // catch, on the theory that it was cleaning up a partial write. R2's put()
+    // is atomic, so there is no partial write to clean up — the delete was
+    // simply destroying the user's only cloud copy. Failure mode: a push over
+    // a flaky network dies mid-stream and yesterday's good save is gone.
+    const { cookie, userId } = await createTestSession("keepgood@example.com");
+    const key = `saves/${userId}/latest.db`;
+    const good = new Uint8Array(2048).fill(0x5a);
+
+    const first = await SELF.fetch(
+      req("/api/save", { method: "PUT", body: good, headers: { cookie, [VERSION]: "8" } })
+    );
+    expect(first.status).toBe(200);
+
+    // Now a push that fails mid-stream (body overruns its declared length).
+    const lying = lyingBody(4096, 1024);
+    await SELF.fetch(
+      req("/api/save", {
+        ...lying,
+        headers: { ...(lying.headers as Record<string, string>), cookie },
+      })
+    ).catch(() => null);
+
+    // The good save must still be there, byte-identical, with its metadata.
+    const head = await env.SAVES.head(key);
+    expect(head, "previous good save was destroyed by a failed push").not.toBeNull();
+
+    const get = await SELF.fetch(req("/api/save", { headers: { cookie } }));
+    expect(get.status).toBe(200);
+    expect(new Uint8Array(await get.arrayBuffer())).toEqual(good);
+    expect(get.headers.get(VERSION)).toBe("8");
+  });
+
   it("requires a Content-Length (411) rather than streaming an unknown size", async () => {
     const { cookie } = await createTestSession("nolen@example.com");
     const stream = new ReadableStream<Uint8Array>({

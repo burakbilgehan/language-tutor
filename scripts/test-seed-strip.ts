@@ -23,10 +23,15 @@ import * as schema from "@/db/schema";
 // shipped code rather than a private lookalike that could silently drift.
 import {
   stripSeedContent,
+  stripSeedContentWithManifest,
+  readStripManifest,
+  findUnreconstituted,
   sqlJsStripExec,
+  STRIP_MANIFEST_KEY,
   type StripExec,
   type SeedBundle,
 } from "@/lib/save/seed-strip";
+import { SAVE_SCHEMA_VERSION } from "@/lib/save/version";
 import { normalizeLangContent } from "@/lib/llm/lang-content";
 import { applyGrammarSeed } from "@/core/grammar";
 import { applyKanjiSeed } from "@/core/kanji";
@@ -266,6 +271,90 @@ async function main() {
     `en-native profile (${victim}) keeps its content — apply*Seed would refuse to refill it`,
     leftReady.c === baselineReady,
     `ready ${leftReady.c}/${baselineReady}`
+  );
+
+  // ================= E. strip manifest (seed-drift detection) ==============
+  // The stripped blob records WHAT it removed, so a restore can tell "refilled
+  // everything" from "some rows never came back" (a renamed/removed seed slug
+  // would otherwise lose content silently).
+  const ePath = "/tmp/t047-e.db";
+  fs.copyFileSync(base, ePath);
+  const e = new Database(ePath);
+  const { stats: statsE, manifest } = stripSeedContentWithManifest(
+    betterSqlite3Exec(e),
+    seeds
+  );
+  e.prepare("VACUUM").run();
+  e.close();
+
+  const manifestTotal = (["grammar", "kanji", "vocab"] as const).reduce(
+    (n, kind) =>
+      n + Object.values(manifest[kind]).reduce((m, keys) => m + keys.length, 0),
+    0
+  );
+  check(
+    "manifest records exactly the stripped rows",
+    manifestTotal === statsE.grammar + statsE.kanji + statsE.vocab,
+    `manifest=${manifestTotal} stripped=${statsE.grammar + statsE.kanji + statsE.vocab}`
+  );
+
+  // The manifest must survive a serialize/reopen (it lives in save_meta).
+  const eReopened = new SQL.Database(fs.readFileSync(ePath));
+  const readBack = readStripManifest(sqlJsStripExec(eReopened));
+  check("manifest survives round-trip through the blob", readBack !== null);
+
+  // A CLEAN restore (seed still covers everything) must report zero drift.
+  const eDrizzle = drizzleSqlJs(eReopened, { schema });
+  for (const lang of langs) {
+    const g = seeds.grammar?.[lang];
+    const k = seeds.kanji?.[lang];
+    const v = seeds.vocab?.[lang];
+    if (g) applyGrammarSeed(eDrizzle as never, lang, g, "tr");
+    if (k) applyKanjiSeed(eDrizzle as never, lang, k, "tr");
+    if (v) applyVocabSeed(eDrizzle as never, lang, v, "tr");
+  }
+  const cleanDrift = findUnreconstituted(sqlJsStripExec(eReopened), readBack!);
+  check("clean restore reports no drift", cleanDrift.length === 0, `${cleanDrift.length} rows`);
+
+  // Old imports must still load a blob carrying the extra save_meta row —
+  // this is why no SAVE_SCHEMA_VERSION bump is needed. save_meta is free-form
+  // key/value and both validators look up 'schemaVersion' by key.
+  const metaExec = sqlJsStripExec(eReopened);
+  const versionRow = metaExec.all(
+    `SELECT value FROM save_meta WHERE key = 'schemaVersion'`
+  )[0]?.value;
+  const manifestRow = metaExec.all(`SELECT value FROM save_meta WHERE key = ?`, [
+    STRIP_MANIFEST_KEY,
+  ])[0]?.value;
+  eReopened.close();
+  check(
+    "manifest row does not disturb the version lookup (no SAVE_SCHEMA_VERSION bump)",
+    Number(versionRow) === SAVE_SCHEMA_VERSION && typeof manifestRow === "string",
+    `schemaVersion=${versionRow} (app ${SAVE_SCHEMA_VERSION})`
+  );
+
+  // ---- DRIFT case: seed loses a slug the manifest says was stripped -------
+  const dropped = Object.entries(manifest.grammar).find(([, keys]) => keys.length)!;
+  const [driftLang, driftKeys] = dropped;
+  const victimSlug = driftKeys[0];
+  const drifted = new SQL.Database(fs.readFileSync(ePath));
+  const driftedDrizzle = drizzleSqlJs(drifted, { schema });
+  const shrunkSeed = { ...(seeds.grammar![driftLang] as Record<string, unknown>) };
+  delete shrunkSeed[victimSlug]; // the CDN no longer offers this topic
+  for (const lang of langs) {
+    const g = lang === driftLang ? shrunkSeed : seeds.grammar?.[lang];
+    const k = seeds.kanji?.[lang];
+    const v = seeds.vocab?.[lang];
+    if (g) applyGrammarSeed(driftedDrizzle as never, lang, g as never, "tr");
+    if (k) applyKanjiSeed(driftedDrizzle as never, lang, k, "tr");
+    if (v) applyVocabSeed(driftedDrizzle as never, lang, v, "tr");
+  }
+  const drift = findUnreconstituted(sqlJsStripExec(drifted), readBack!);
+  drifted.close();
+  check(
+    "seed drift is DETECTED (dropped slug reported, not silently lost)",
+    drift.length === 1 && drift[0].key === victimSlug && drift[0].lang === driftLang,
+    `${drift.length} unreconstituted → ${drift.map((d) => `${d.lang}/${d.key}`).join(", ")}`
   );
 
   console.log(`\n${fail === 0 ? "ALL PASS" : `${fail} FAILURES`}`);

@@ -18,7 +18,8 @@
     "seed:grammar": "tsx scripts/export-grammar-seed.ts",
     "seed:kanji": "tsx scripts/export-kanji-seed.ts",
     "seed:vocab": "tsx scripts/export-vocab-seed.ts",
-    "test": "tsx --test src/lib/*.test.ts"
+    "test": "tsx --test src/lib/*.test.ts src/lib/**/*.test.ts",
+    "build:strip-fixture": "tsx scripts/build-strip-fixture.ts"
   },
   "dependencies": {
     "@k1low/hanzi-writer-data-jp": "^0.8.0",

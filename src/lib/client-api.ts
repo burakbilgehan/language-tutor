@@ -595,7 +595,7 @@ export async function cloudPush(): Promise<import("@/lib/backup/cloud").PushResu
   return pushToCloud();
 }
 
-export async function cloudPull(): Promise<{ reseeded: number }> {
+export async function cloudPull(): Promise<import("@/lib/backup/cloud").PullResult> {
   const { pullFromCloud } = await import("@/lib/backup/cloud");
   return pullFromCloud();
 }

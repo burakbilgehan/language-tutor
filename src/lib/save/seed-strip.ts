@@ -204,7 +204,9 @@ function stripTable(
   exec: StripExec,
   spec: TableSpec,
   byLang: Record<string, Record<string, unknown> | null | undefined> | undefined,
-  refillable: Set<string>
+  refillable: Set<string>,
+  /** When given, records each stripped key under its language for the manifest. */
+  record?: Record<string, string[]>
 ): number {
   if (!byLang) return 0;
 
@@ -256,6 +258,7 @@ function stripTable(
       `UPDATE ${spec.table} SET content = ?, status = 'pending', generated_at = NULL WHERE id = ?`,
       [remaining, row.id]
     );
+    if (record) (record[lang] ??= []).push(key);
     stripped++;
   }
   return stripped;
@@ -280,4 +283,125 @@ export function stripSeedContent(exec: StripExec, seeds: SeedBundle): StripStats
     kanji: stripTable(exec, SPECS.kanji, seeds.kanji, refillable),
     vocab: stripTable(exec, SPECS.vocab, seeds.vocab, refillable),
   };
+}
+
+/**
+ * `save_meta` key holding the strip manifest. The blob records exactly WHICH
+ * rows were removed, so a restore can tell "refilled everything" apart from
+ * "some rows never came back".
+ *
+ * Why this is needed: the strip trades bytes for a dependency on the CDN seed.
+ * If a slug is later renamed or dropped from the packaged seed, pull leaves
+ * those rows pending with content NULL — the content is simply gone, and
+ * nothing anywhere says so. The manifest turns that silent loss into a
+ * reportable count.
+ *
+ * Storage choice: `save_meta` is a free-form key/value table, and BOTH import
+ * validators (src/lib/save/import.ts, src/lib/backup/save-image.ts) read it
+ * with a targeted `WHERE key = 'schemaVersion'` — neither enumerates keys nor
+ * validates the row set. So an extra row is purely additive: it changes no
+ * table shape and NO SAVE_SCHEMA_VERSION bump is required (verified: an
+ * older-format import still loads a blob carrying this row).
+ *
+ * Written on the OUTGOING COPY ONLY — never the live database.
+ */
+export const STRIP_MANIFEST_KEY = "cloudStripManifest";
+
+/** Which natural keys were stripped, per kind, per language. */
+export interface StripManifest {
+  version: 1;
+  grammar: Record<string, string[]>;
+  kanji: Record<string, string[]>;
+  vocab: Record<string, string[]>;
+}
+
+/**
+ * Strip AND record a manifest of what was removed, stamping it into the copy's
+ * `save_meta`. Use this for anything destined for the cloud; `stripSeedContent`
+ * alone remains available for callers that only want the row edits.
+ */
+export function stripSeedContentWithManifest(
+  exec: StripExec,
+  seeds: SeedBundle
+): { stats: StripStats; manifest: StripManifest } {
+  const refillable = trNativeLanguages(exec);
+  const manifest: StripManifest = { version: 1, grammar: {}, kanji: {}, vocab: {} };
+
+  const stats: StripStats = {
+    grammar: stripTable(exec, SPECS.grammar, seeds.grammar, refillable, manifest.grammar),
+    kanji: stripTable(exec, SPECS.kanji, seeds.kanji, refillable, manifest.kanji),
+    vocab: stripTable(exec, SPECS.vocab, seeds.vocab, refillable, manifest.vocab),
+  };
+
+  try {
+    exec.run(
+      `INSERT INTO save_meta (key, value) VALUES (?, ?) ` +
+        `ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      [STRIP_MANIFEST_KEY, JSON.stringify(manifest)]
+    );
+  } catch {
+    // No save_meta table (very old image) — the strip still stands, we just
+    // cannot report drift for this blob.
+  }
+
+  return { stats, manifest };
+}
+
+/** Read a manifest back out of an imported save. Null when absent (an
+ * un-stripped save, or one written before manifests existed). */
+export function readStripManifest(exec: StripExec): StripManifest | null {
+  try {
+    const rows = exec.all(`SELECT value FROM save_meta WHERE key = ?`, [
+      STRIP_MANIFEST_KEY,
+    ]);
+    const raw = rows[0]?.value;
+    if (typeof raw !== "string") return null;
+    const parsed = JSON.parse(raw) as StripManifest;
+    return parsed && parsed.version === 1 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One row the manifest says was stripped but which is still not `ready`. */
+export interface UnreconstitutedRow {
+  kind: keyof StripStats;
+  lang: string;
+  key: string;
+}
+
+/**
+ * After a pull + import + seed re-apply: which stripped rows did NOT come back?
+ * A non-empty result means the packaged seed no longer covers content this save
+ * used to hold — real, otherwise-silent content loss.
+ */
+export function findUnreconstituted(
+  exec: StripExec,
+  manifest: StripManifest
+): UnreconstitutedRow[] {
+  const missing: UnreconstitutedRow[] = [];
+  for (const kind of ["grammar", "kanji", "vocab"] as const) {
+    const spec = SPECS[kind];
+    for (const [lang, keys] of Object.entries(manifest[kind] ?? {})) {
+      if (!keys.length) continue;
+      let ready: Set<string>;
+      try {
+        ready = new Set(
+          exec
+            .all(
+              `SELECT ${spec.keyColumn} AS k FROM ${spec.table} ` +
+                `WHERE target_language = ? AND status = 'ready'`,
+              [lang]
+            )
+            .map((r) => r.k as string)
+        );
+      } catch {
+        continue;
+      }
+      for (const key of keys) {
+        if (!ready.has(key)) missing.push({ kind, lang, key });
+      }
+    }
+  }
+  return missing;
 }

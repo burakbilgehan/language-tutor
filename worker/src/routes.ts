@@ -190,11 +190,31 @@ async function putSave(request: Request, env: Env, key: string): Promise<Respons
     });
     await pump;
     if (pumpError) throw pumpError;
-  } catch {
-    // A length mismatch (lying client) or a broken upload can leave a partial
-    // or empty object behind; a corrupt save is worse than no save.
-    await env.SAVES.delete(key).catch(() => {});
-    return json({ error: "too_large", max: MAX_UPLOAD_BYTES }, 413);
+  } catch (err) {
+    // DO NOT delete the key here.
+    //
+    // R2's put() is ATOMIC: a put that fails or is aborted never commits, so
+    // the PREVIOUS object is still intact at this point (verified with a probe
+    // against the real runtime — a failed overrun put left the prior bytes
+    // byte-identical). An explicit delete() would therefore not be cleaning up
+    // a partial write; it would be destroying the user's only cloud copy.
+    // Concretely: a push over a flaky network dies mid-stream and the good save
+    // uploaded yesterday is gone, with no history to fall back on.
+    //
+    // Distinguish WHY the write failed. A length mismatch is the client's
+    // fault and genuinely means "too large"; anything else (R2 unavailable,
+    // connection dropped) is ours, and telling the user their save is invalid
+    // when the service simply blipped would be actively misleading.
+    const message = err instanceof Error ? err.message : String(err);
+    const lengthMismatch =
+      message.includes("FixedLengthStream") ||
+      message.includes("too many bytes") ||
+      message.includes("too few bytes");
+
+    if (lengthMismatch) {
+      return json({ error: "too_large", max: MAX_UPLOAD_BYTES }, 413);
+    }
+    return json({ error: "upload_failed" }, 503);
   }
 
   return json({
