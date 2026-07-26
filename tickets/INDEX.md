@@ -14,7 +14,11 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-040](T-040-server-mode-auth-gate.md) | Server modu env-token auth gate (frame B, public blocker) | done | p1 | M | high |
 | [T-041](T-041-save-import-hardening.md) | Save import sertleştirme (kötücül trigger + statik boyut cap) | done | p2 | M | high |
 | [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | done | p3 | S | high |
-| [T-043](T-043-multi-tenant-isolation.md) | Gerçek multi-tenant izolasyon (T-040 sonrası, monetize'e gate'li) | backlog | p3 | XL | low |
+| [T-043](T-043-multi-tenant-isolation.md) | Server-mode (self-host) multi-tenant izolasyon — cloud tenancy T-046/47'ye taşındı | backlog | p3 | XL | low |
+| [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) | backlog | p1 | M | medium |
+| [T-046](T-046-auth-better-auth.md) | Auth — better-auth (Google+magic-link) Worker'da, güvenlik gate'li | backlog | p1 | L | medium |
+| [T-047](T-047-cloud-save-sync.md) | Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull) | backlog | p1 | L | medium |
+| [T-048](T-048-login-entry-ui.md) | Giriş UI (anonim/load + login + buluttan getir) | backlog | p2 | M | high |
 | [T-044](T-044-mcq-bracket-grading.md) | mcq'da doğru şık "yanlış" sayılıyor (bracket strip asimetrisi) | done | p1 | S | high |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
@@ -59,6 +63,34 @@ adım = ayrı session, bitince main'e direkt push (T-008); paralel adımlar
 ayrı worktree + branch, küçük önce merge. Env notu: dev server + blast
 dashboard açık → ikinci `next build` YASAK (tsc/test/parity harness OK);
 kod değişikliği DB'ye yazmıyor ama blast'la kota penceresini çakıştırma.
+
+### Dalga B — Backend + kimlik (2026-07-26, kökten değişiklik) ★ SIRADAKİ
+
+Burak kararı: 6-7-8 içerik dalgaları yerine backend'e geçiş. Local-first
+KORUNUR (anonim = pure local, değişmez); login = save'i bizim buluta senkron.
+Kilitlenen tech: **Cloudflare R2 (10GB) + better-auth (Google + magic-link)**;
+kapsam **kimlik + bulut-save** (LLM-hosting/monetize AYRI, sonra). Statik
+content (seed+strokes, 39MB) Pages/CDN'de kalır. Ölçüm: save'in %71'i
+seed-türevi content → upload'ta seed-strip ile buluta giden blob ~2-4MB.
+
+**SERİ zincir** (birbirine bağımlı, T-046/47 aynı Worker codebase):
+`T-045 → T-046 → T-047 → T-048`, hepsi **opus** (backend/auth/güvenlik/yeni
+platform). hive-wave'in paralel-batch'i değil — her biri ayrı session, seri.
+
+| Adım | Ticket | Not |
+|---|---|---|
+| B0 | T-045 | **SPIKE önce** — better-auth-on-Workers + magic-link sender + cookie/domain'i kanıtla; başarısızsa mimari burada döner |
+| B1 | T-046 | Auth prod. **Karar:** custom domain (advisor: same-origin cookie için en ucuz, monetize öncesi zaten istenir). Worker'a kendi auth-test gate'i |
+| B2 | T-047 | Cloud-sync. Seed-strip on upload + manuel push/pull (auto DEĞİL) + tenant-scope |
+| B3 | T-048 | Giriş UI — anonim/load/**login** üçlü kapı + buluttan getir |
+
+Açık karar (Burak): **custom domain alınacak mı?** (cookie hikayesi buna
+bağlı — T-046). T-043 yeniden kapsamlandı: cloud tenancy T-046/47'ye geçti,
+kalan = self-host multi-tenancy (deferred).
+
+Aşağıdaki 6/7/8 dalgaları backend'den SONRAYA ertelendi.
+
+---
 
 hive-wave formatı: her dalga 2 paralel izole-worktree agent. Model routing:
 **opus** = güvenlik/mimari/tasarım-ağır (ince semantik, regresyon riski);

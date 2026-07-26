@@ -14,10 +14,16 @@ onun ötesi: **gerçek çok-kullanıcılı** senaryo — her kullanıcı kendi
 verisini görsün, birbirinin job'unu iptal edemesin, save export yalnız
 kendi verisini döndürsün.
 
-Şu an **açık gerekçeyle ertelendi:** monetization modeli yok. Multi-tenant
-tasarımı (per-user DB dosyası mı, tek DB'de `profileId`/`userId` scope mu,
-kimlik sağlayıcı: kendi auth mı OAuth mı) tam da o modele bağlı — model
-kararlaşmadan yapılan izolasyon büyük olasılıkla yanlış eksende olur.
+**Yeniden kapsamlandı (2026-07-26):** "monetization belirsiz" gate'i
+değişti — backend/kimlik işine (T-045–T-048) karar verildi (Cloudflare +
+better-auth + R2). **Cloud-save tenant izolasyonu artık O işe ait**
+(login'li kullanıcı yalnız kendi `saves/{userId}`'ine erişir; T-046/T-047
+güvenlik kriterleri). Bu ticket'ın KALAN kapsamı: **server-mode**
+(localhost/self-host Next.js) çok-kullanıcı izolasyonu — tek global
+`data/app.db`'yi per-user'a bölmek. Bu hâlâ deferred: server modu bugün
+tek-kullanıcı (T-040 env-token gate yeterli); gerçek self-host multi-user
+talebi gelmeden dokunulmaz. Yani T-043 = "backend değil, self-host Next.js
+multi-tenancy".
 
 Kapsam (model kararınca): (1) job route IDOR — `generation_jobs`'a tenant
 kolonu + scope (`core/jobs.ts:78` bugün "NO profile scoping"); (2) save
