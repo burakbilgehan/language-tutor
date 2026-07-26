@@ -2,16 +2,48 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "language-tutor-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-07-01",
+  "compatibility_date": "2026-07-26",
   // better-auth pulls in Node builtins (crypto/buffer) for hashing + jose.
   "compatibility_flags": ["nodejs_compat"],
 
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // SAME-ORIGIN HOSTING (T-046 owner ruling).
+  //
+  // The site and the API are served from ONE origin, so the session cookie is
+  // first-party and `SameSite=Lax` is sufficient — no third-party-cookie
+  // problem (Safari ITP), no `SameSite=None`, no bearer-token-in-localStorage.
+  //
+  // `run_worker_first: ["/api/*"]` guarantees /api/* reaches the Worker and is
+  // never shadowed by a same-named asset. Everything else is served straight
+  // from the asset store without invoking the Worker (no CPU, no cost).
+  //
+  // `not_found_handling` is left at its default (plain 404) on purpose: the
+  // "single-page-application" mode would rewrite unmatched paths to index.html
+  // and thereby swallow /api/* misses. The static build is multi-page anyway
+  // and addresses content by query param (/lesson?node=), so SPA fallback buys
+  // nothing.
+  //
+  // `directory` points at a placeholder for local verification. PRODUCTION
+  // POINTS IT AT THE NEXT STATIC BUILD (`../out`) — see README "Deploy".
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
 
   "vars": {
-    // Dev defaults. In production these are set per-environment.
+    // Dev defaults; overridden per-environment in production.
+    // Also the origin better-auth derives the cookie `Secure` flag from:
+    // http here (so `wrangler dev` cookies work), https in production.
     "BETTER_AUTH_URL": "http://localhost:8787",
-    // Comma-separated. The GitHub Pages origin goes here in prod.
+    // Comma-separated origin allowlist, parsed once in src/origin.ts and
+    // shared with better-auth's `trustedOrigins`.
+    //
+    // localhost:3000 is the Next dev server. It is cross-ORIGIN from :8787
+    // (port differs) so it needs CORS, but same-SITE (port is not part of
+    // site), so `SameSite=Lax` cookies still flow. That is why dev works
+    // without weakening the production cookie posture at all.
     "TRUSTED_ORIGINS": "http://localhost:8787,http://localhost:3000"
   },
 

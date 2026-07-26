@@ -1,5 +1,14 @@
 # Copy to `.dev.vars` for local `wrangler dev`. `.dev.vars` is gitignored.
-# Any random string works locally; production uses `wrangler secret put`.
-BETTER_AUTH_SECRET=dev-only-secret-not-for-production
+#
+# Production sets these with `wrangler secret put` instead — never in
+# wrangler.jsonc, which is committed.
+
+# better-auth warns below 32 characters. Generate a real one for production:
+#   openssl rand -base64 32
+BETTER_AUTH_SECRET=dev-only-secret-at-least-32-characters-long
+
+# Dummy values are enough to exercise the OAuth *start* (the redirect to
+# accounts.google.com is built locally). Completing a real sign-in needs the
+# owner's actual Google client — see README "Deploy".
 GOOGLE_CLIENT_ID=dummy-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=dummy-client-secret

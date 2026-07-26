@@ -37,6 +37,30 @@ Fence (T-047 ile aynı Worker codebase): `worker/` (T-045 iskeleti — top-level
 `worker/` dizini, `src/worker` DEĞİL; kendi package.json/lockfile'ı var).
 T-047 ile SERİ ya da fence-ayrık paralel + **auth önce merge**.
 
+**T-046 uygulama kararları (2026-07-26, sahip kararı + uygulama):**
+- **Google-only.** Magic-link kapsam dışı (custom domain yok → hiçbir email
+  sağlayıcı gönderemiyor). `emailAndPassword` de kaldırıldı (spike'ta açık
+  kayıt endpoint'iydi).
+- **Cookie/domain sorusu same-origin ile çözüldü:** Worker hem statik siteyi
+  hem `/api/*`'ı tek origin'den servis ediyor (Workers static assets +
+  `run_worker_first: ["/api/*"]`). Session cookie first-party → `SameSite=Lax`
+  yetiyor; third-party cookie / ITP problemi ortadan kalktı. Custom domain
+  gerekmedi. GitHub Pages anonim-only ayna olarak kalıyor.
+- **Auth-before-execute tipe gömüldü:** `src/routes.ts` route tablosu; authed
+  handler'ın context tipi çözülmüş `session` İÇERİYOR, yani session olmadan
+  çağrılamıyor. T-047'nin save route'ları bu özelliği tabloya katılarak
+  otomatik miras alır.
+- **Worker test gate** (`worker/test/`, vitest-pool-workers, gerçek workerd):
+  Next'teki metinsel taramadan güçlü — route tablosunu gezip gerçek
+  unauthenticated istek atıyor, 401 + **R2'de yan etki yok** doğruluyor;
+  `index.ts`'te tablo-bypass route'u da yakalıyor. İkisi de kırmızı
+  gösterildi.
+- **Bulunan+düzeltilen bug:** `/api/auth/*` origin gate'inden muaf tutulunca
+  OPTIONS preflight 404 dönüyordu → tarayıcı dev sign-in'i bloklardı. OPTIONS
+  artık muaf değil (preflight'ta cookie/body yok, callback GET etkilenmiyor).
+- Şema yeniden üretildi: **byte-identical** (verification = core OAuth state,
+  magic-link'e ait değil) → `0001` değişmedi.
+
 T-045 sonrası notlar (2026-07-26): (1) better-auth ≥1.6 raw D1 binding'i
 doğrudan kabul ediyor — `kysely`/`kysely-d1` deps kullanılmıyor, kaldır.
 (2) `emailAndPassword: { enabled: true }` spike-only açık kayıt endpoint'i —

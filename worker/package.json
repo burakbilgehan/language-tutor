@@ -5,17 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "test": "vitest run",
     "migrate:local": "wrangler d1 execute lt-auth --local --file=./migrations/0001_better_auth.sql",
+    "schema:generate": "better-auth generate --config schema-gen.config.ts --output migrations/0001_better_auth.sql --yes",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "better-auth": "^1.6.25",
-    "kysely": "^0.29.4",
-    "kysely-d1": "^0.4.0"
+    "better-auth": "^1.6.25"
   },
   "devDependencies": {
+    "@better-auth/cli": "^1.4.21",
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
     "@cloudflare/workers-types": "^5.20260726.1",
     "typescript": "^7.0.2",
+    "vitest": "^4.1.10",
     "wrangler": "^4.114.0"
   }
 }

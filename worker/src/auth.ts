@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
-import { magicLink } from "better-auth/plugins";
+import { authOptions } from "./auth-options";
+import { trustedOrigins } from "./origin";
 import type { Env } from "./env";
 
 /**
@@ -7,8 +8,12 @@ import type { Env } from "./env";
  *
  * Cloudflare bindings (`env.DB`, `env.SAVES`) only exist per-request; a
  * module-scope `betterAuth({ database: env.DB })` would capture `undefined`.
- * We memoize per-isolate keyed on the D1 binding identity so we pay the
- * construction cost once per isolate rather than once per request.
+ *
+ * The module-level `cached` below is NOT request state (which would be a
+ * cross-request leak) — it is derived configuration, keyed on the identity of
+ * the D1 binding it was built from. Same binding → same config → safe to reuse
+ * across requests in the isolate; a different binding (a different test env, a
+ * different environment) rebuilds.
  */
 let cached: { db: D1Database; auth: AuthInstance } | null = null;
 
@@ -24,37 +29,22 @@ export function getAuth(env: Env): AuthInstance {
 
 function createAuth(env: Env) {
   return betterAuth({
+    // Everything except the database comes from the shared fragment, which
+    // schema-gen.config.ts spreads too — so the generated SQL schema cannot
+    // drift from the running config.
+    ...authOptions({
+      baseURL: env.BETTER_AUTH_URL,
+      secret: env.BETTER_AUTH_SECRET,
+      // Same parsed list the dispatcher enforces (src/origin.ts). One source,
+      // so better-auth's own origin check and ours cannot disagree.
+      trustedOrigins: trustedOrigins(env),
+      googleClientId: env.GOOGLE_CLIENT_ID,
+      googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    }),
+
     // better-auth >= 1.6 accepts a raw D1Database binding in its `database`
-    // union directly — no Kysely dialect and no community adapter needed.
+    // union directly — no Kysely dialect and no community adapter needed
+    // (T-045 finding).
     database: env.DB,
-
-    baseURL: env.BETTER_AUTH_URL,
-    secret: env.BETTER_AUTH_SECRET,
-    trustedOrigins: (env.TRUSTED_ORIGINS ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-
-    // Spike-only: lets curl prove session create/read through D1 without an
-    // external identity provider in the loop. T-046 decides whether this
-    // provider ships at all (the ticket scopes production to Google + magic-link).
-    emailAndPassword: { enabled: true },
-
-    socialProviders: {
-      google: {
-        clientId: env.GOOGLE_CLIENT_ID ?? "",
-        clientSecret: env.GOOGLE_CLIENT_SECRET ?? "",
-      },
-    },
-
-    plugins: [
-      magicLink({
-        // Stubbed sender: logs the link instead of emailing it. T-046 swaps
-        // this for the real provider chosen in the T-045 report.
-        sendMagicLink: async ({ email, url }) => {
-          console.log(`[magic-link] to=${email} url=${url}`);
-        },
-      }),
-    ],
   });
 }
