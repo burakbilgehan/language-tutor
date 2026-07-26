@@ -241,10 +241,8 @@ localhost/placeholder — it is what `wrangler dev` and the test suite read.
    (Verified path — it is what the sign-in redirect actually requests.)
 4. **Static assets.** `env.production` points at `../out`. Build it at the repo
    root with a plain `npm run build:static`, **without** `NEXT_PUBLIC_BASE_PATH`.
-   That variable is set only by `.github/workflows/pages.yml` (for the
-   `/language-tutor` project path), so a local build is already root-relative —
-   but do not reuse a Pages-built `out/`, or every asset URL will be off by one
-   path segment.
+   Nothing sets that variable anymore (the GitHub Pages workflow that did was
+   removed 2026-07-27), so a plain local build is already root-relative.
 5. `npx wrangler deploy --env production`. The custom-domain route attaches
    okumo.dev on first deploy (DNS + cert are automatic on the zone).
 

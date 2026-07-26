@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Okumo — gamified language tutor
 
-## Getting Started
+**Live: https://okumo.dev**
 
-First, run the development server:
+Personal language tutor for **Japanese, Chinese and Dutch** (any other language
+falls back to a CEFR curriculum). A deterministic Next.js app where an LLM is
+only the content engine — lessons, grammar explanations and grading come from a
+model, everything else (curriculum structure, SRS, progress, dictionaries) is
+plain code and data. UI in Turkish and English.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Using the site
+
+- **Anonymous and local-first by default.** All your data — profiles, progress,
+  SRS deck, generated lessons — lives in your browser (a SQLite image via
+  sql.js, persisted to IndexedDB). Nothing is uploaded anywhere.
+- **Save file.** Settings → save export/import. One `.db` file; import is
+  replace-all (a local `.bak` of the previous state is kept).
+- **Google sign-in (optional).** Signed-in users can push their save to the
+  cloud ("Buluta gönder") and pull it on another device. Sync is manual,
+  last-write-wins, one save slot per account (`saves/{userId}/latest.db` on R2;
+  uploads are seed-stripped from ~17 MB to ~8 MB and reconstituted from
+  packaged content on restore). Sign-in is currently in Google's *testing*
+  mode, so only allowlisted accounts can log in.
+- **LLM setup.** The packaged libraries (grammar cheatsheets, kanji, HSK vocab)
+  work with **zero LLM**. Generating new lessons, curricula or chat needs a
+  model you bring: an API key (Anthropic or any OpenAI-compatible endpoint,
+  e.g. DeepSeek/OpenRouter), a local Ollama, or the bundled CLI bridge
+  (`npm run llm:bridge`) that reuses a coding-CLI subscription (Claude, Codex,
+  Copilot, Gemini). The in-app wizard (Settings → LLM) walks through all three.
+  Your key/config stays in your browser's localStorage.
+- **Data sources & licenses** for the packaged content are listed on the
+  in-app attribution page.
+
+## Development
+
+```sh
+npm install
+LLM_PROVIDER=fixture npm run dev   # token-free dev loop (canned LLM fixtures)
+npm run dev                        # real LLM via the local `claude` CLI
+npm test                           # unit tests
+npm run build:static               # static export to out/ (what production serves)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Backend (Cloudflare Worker) lives in `worker/` with its own package:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```sh
+cd worker && npm install
+npm run dev        # local Worker on :8787 with local D1/R2 (no account needed)
+npm test           # test suite on real workerd, includes the auth gate
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Architecture (short)
 
-## Learn More
+- **Hosting:** the Next.js static export is served as Cloudflare Worker static
+  assets on the same origin as the API (`/api/*` is routed to the Worker
+  first) — so the session cookie is first-party, `SameSite=Lax`.
+- **Auth:** [better-auth] on the Worker, Google OAuth only, sessions in D1.
+  Every mutating API route resolves the session before anything else runs,
+  enforced by the route-table types and a test gate.
+- **Cloud saves:** R2, tenant-scoped by the server-derived user id — the key
+  never comes from client input.
+- **Server mode** (`npm run dev` at the root) is the same app against
+  on-disk SQLite; shared logic lives in the env-agnostic `src/core/*` seam.
+- Deep docs: `CLAUDE.md` (app conventions), `worker/README.md` (backend +
+  deploy runbook), `tickets/` (work log).
 
-To learn more about Next.js, take a look at the following resources:
+[better-auth]: https://better-auth.com
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Status
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Personal project. No license granted yet — external contributions aren't
+accepted for now. Feedback is welcome through the in-app feedback button
+(prefills a GitHub issue).
