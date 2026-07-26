@@ -49,6 +49,21 @@
 // because the packaged content is Turkish. So the strip removes ONLY the `tr`
 // key and preserves `en`; a row holding both comes back with its English content
 // intact and its Turkish half refilled from the CDN.
+//
+// ---------------------------------------------------------------------------
+// THE NATIVE-LANGUAGE GATE (criterion 4 — the one that is easy to miss)
+//
+// All three apply*Seed functions open with `if (nativeLanguage !== "tr") return 0;`
+// — the packaged content is Turkish, and handing it to an English-native user
+// would be the T-031 bug. That refusal is part of the inverse we must respect:
+// stripping a row that apply*Seed will then REFUSE to refill destroys it
+// permanently, silently, with no error anywhere.
+//
+// So strippability is scoped by the profile that would do the refilling. One
+// profile per target language, so we read `profiles.native_language` per
+// language and skip every language whose profile is not tr-native. Concretely,
+// for an en-native profile a row holding {tr: <seed>, en: <user content>} keeps
+// its tr half rather than losing it forever.
 
 import { z } from "zod";
 import {
@@ -140,10 +155,30 @@ const SPECS: Record<keyof StripStats, TableSpec> = {
   vocab: { table: "vocab_entries", keyColumn: "word", schema: VocabContentSchema },
 };
 
+/**
+ * Target languages whose profile is Turkish-native, i.e. the ONLY ones whose
+ * rows apply*Seed will refill. A language with no profile row is excluded: with
+ * nobody to own it, nothing would ever call apply*Seed for it.
+ */
+function trNativeLanguages(exec: StripExec): Set<string> {
+  try {
+    const rows = exec.all(
+      `SELECT target_language AS lang, native_language AS native FROM profiles`
+    );
+    return new Set(
+      rows.filter((r) => (r.native ?? "tr") === "tr").map((r) => r.lang as string)
+    );
+  } catch {
+    // No profiles table → not a save we understand; strip nothing.
+    return new Set();
+  }
+}
+
 function stripTable(
   exec: StripExec,
   spec: TableSpec,
-  byLang: Record<string, Record<string, unknown> | null | undefined> | undefined
+  byLang: Record<string, Record<string, unknown> | null | undefined> | undefined,
+  refillable: Set<string>
 ): number {
   if (!byLang) return 0;
 
@@ -160,7 +195,10 @@ function stripTable(
 
   let stripped = 0;
   for (const row of rows) {
-    const seed = byLang[row.lang as string];
+    const lang = row.lang as string;
+    // apply*Seed would refuse to refill this language → stripping = data loss.
+    if (!refillable.has(lang)) continue;
+    const seed = byLang[lang];
     if (!seed) continue;
     const key = row.k as string;
     const seedContent = seed[key];
@@ -210,9 +248,10 @@ function stripTable(
  * 19.5 MB stays 19.5 MB without VACUUM, becomes ~4 MB with).
  */
 export function stripSeedContent(exec: StripExec, seeds: SeedBundle): StripStats {
+  const refillable = trNativeLanguages(exec);
   return {
-    grammar: stripTable(exec, SPECS.grammar, seeds.grammar),
-    kanji: stripTable(exec, SPECS.kanji, seeds.kanji),
-    vocab: stripTable(exec, SPECS.vocab, seeds.vocab),
+    grammar: stripTable(exec, SPECS.grammar, seeds.grammar, refillable),
+    kanji: stripTable(exec, SPECS.kanji, seeds.kanji, refillable),
+    vocab: stripTable(exec, SPECS.vocab, seeds.vocab, refillable),
   };
 }
