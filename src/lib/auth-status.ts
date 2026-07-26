@@ -51,6 +51,18 @@ const SIGNED_OUT: AuthStatus = {
 
 let cached: AuthStatus | null = null;
 let inflight: Promise<AuthStatus> | null = null;
+/**
+ * Bumped by every invalidation. A probe records the generation it started in
+ * and refuses to write `cached` if that generation is stale.
+ *
+ * Not paranoia — a measured bug: saving a new API base calls
+ * invalidateAuthStatus() while the FIRST probe (against the old, empty base) is
+ * still in flight. Clearing only `cached` let that stale promise be handed back
+ * and then write its old result into `cached` permanently, so the account UI
+ * stayed hidden until a full page reload. That is the primary first-run path
+ * for the dev topology (:3000 → :8787), which is exactly what the field is for.
+ */
+let generation = 0;
 
 function apiUrl(path: string): string {
   return `${readCloudApiBase()}${path}`;
@@ -95,14 +107,20 @@ async function fetchStatus(): Promise<AuthStatus> {
     return cached;
   }
   if (!inflight) {
+    const startedAt = generation;
     inflight = (async () => {
       const backendAvailable = await probeBackend();
       const user = backendAvailable ? await probeSession() : null;
-      cached = { user, loading: false, backendAvailable };
-      return cached;
-    })().finally(() => {
-      inflight = null;
-    });
+      const result: AuthStatus = { user, loading: false, backendAvailable };
+      // Stale probe (an invalidation landed mid-flight, e.g. the API base
+      // changed under it): return the result to whoever is awaiting, but do
+      // NOT let it become the cache — the next call must re-probe.
+      if (startedAt === generation) {
+        cached = result;
+        inflight = null;
+      }
+      return result;
+    })();
   }
   return inflight;
 }
@@ -113,6 +131,11 @@ async function fetchStatus(): Promise<AuthStatus> {
  */
 export function invalidateAuthStatus(): void {
   cached = null;
+  // Dropping the in-flight promise too is the other half of the fix: without
+  // it the next fetchStatus() would be handed a probe started against the old
+  // configuration.
+  inflight = null;
+  generation += 1;
 }
 
 /** Start the Google sign-in flow. Navigates away on success. */

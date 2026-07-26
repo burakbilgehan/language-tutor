@@ -79,9 +79,10 @@ const S = {
       "Buluta gönderilmiş bir kaydın var. Bu cihaza getirip kaldığın yerden devam edebilirsin.",
     returnPull: "⬇️ Buluttan getir",
     returnPulling: "Getiriliyor…",
-    returnNoneTitle: "Buluta henüz kayıt göndermemişsin",
+    returnNoneTitle: "Buluttan kayıt getirilemedi",
     returnNoneDesc:
-      "Sorun değil — yeni bir yolculuk başlat, sonra ayarlardan kaydını buluta gönderirsin.",
+      "Henüz buluta kayıt göndermemiş olabilirsin ya da servise şu an ulaşılamıyor. Yeni bir yolculuk başlatabilir, sonra ayarlardan kaydını buluta gönderebilirsin.",
+    returnRetry: "Tekrar dene",
     returnContinue: "Devam et",
     returnPullConfirm:
       "Bu, bu cihazdaki mevcut ilerlemeyi silip buluttaki kayıtla değiştirir. Emin misin?",
@@ -148,9 +149,10 @@ const S = {
       "You have a save in the cloud. Bring it to this device and pick up where you left off.",
     returnPull: "⬇️ Get from cloud",
     returnPulling: "Restoring…",
-    returnNoneTitle: "No save in the cloud yet",
+    returnNoneTitle: "Could not get a save from the cloud",
     returnNoneDesc:
-      "That's fine — start a new journey, then send your save to the cloud from Settings.",
+      "You may not have sent a save to the cloud yet, or the service can't be reached right now. You can start a new journey and send your save from Settings later.",
+    returnRetry: "Try again",
     returnContinue: "Continue",
     returnPullConfirm:
       "This will erase the current progress on this device and replace it with the cloud save. Are you sure?",
@@ -250,12 +252,20 @@ export function OnboardingWizard() {
   const [pullWarnings, setPullWarnings] = useState<UnreconstitutedRow[] | null>(
     null
   );
+  // Only true once profileData() RESOLVED with zero profiles. Default false so
+  // "unknown" and "read failed" both behave as "there may be data here".
+  const [profilesKnownEmpty, setProfilesKnownEmpty] = useState(false);
+  const [infoAttempt, setInfoAttempt] = useState(0);
 
   useEffect(() => {
     if (!IS_STATIC) return;
-    setCloudReturn(
-      new URLSearchParams(window.location.search).get("cloud") === "return"
-    );
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("cloud") !== "return") return;
+    setCloudReturn(true);
+    // Consume the marker. Leaving it in the URL would re-enter the return leg
+    // on every refresh or back-navigation, long after the user dismissed it.
+    url.searchParams.delete("cloud");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
   }, []);
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,16 +334,24 @@ export function OnboardingWizard() {
     return () => {
       alive = false;
     };
-  }, [cloudReturn, auth.loading, auth.user, cloudErrorText]);
+  }, [cloudReturn, auth.loading, auth.user, cloudErrorText, infoAttempt]);
 
   const onCloudPull = async () => {
     // A pull is replace-all, and it must carry the same confirmation weight as
     // the Settings file-import flow. The intro screen's reasoning ("an empty
-    // session has nothing to erase") only holds when local really IS empty, so
-    // the confirm is skipped ONLY on a session confirmed to have no profile.
-    // `checkingProfiles` still true → not confirmed → ask. Fail safe.
-    const localIsEmpty = !checkingProfiles && usedLanguages.length === 0;
-    if (!localIsEmpty && !window.confirm(pick(S, draft.uiLanguage).returnPullConfirm))
+    // session has nothing to erase") only holds when local really IS empty.
+    //
+    // `profilesKnownEmpty` and NOT `usedLanguages.length === 0`: usedLanguages
+    // is curriculum-joined (src/core/profile.ts inner-joins curricula), so a
+    // profile that exists without a curriculum — the ordinary half-finished
+    // state when no LLM is configured — would read as empty and lose its SRS
+    // cards and settings to a silent replace-all. It is also false-by-default
+    // on a REJECTED profileData(), so a transient read failure asks rather
+    // than assumes.
+    if (
+      !profilesKnownEmpty &&
+      !window.confirm(pick(S, draft.uiLanguage).returnPullConfirm)
+    )
       return;
     setPulling(true);
     setCloudError(null);
@@ -386,6 +404,10 @@ export function OnboardingWizard() {
         // Adding a 2nd+ language already has profiles, so it skips straight
         // to the wizard as before.
         setShowIntro((d.profiles ?? []).length === 0);
+        // T-048: set ONLY here, never in the catch. A rejected read must not
+        // read as "empty" — that is the state in which a silent replace-all
+        // would be most damaging.
+        setProfilesKnownEmpty((d.profiles ?? []).length === 0);
       })
       .catch(() => {
         // profileData() failing (e.g. fresh static DB before first read)
@@ -514,9 +536,24 @@ export function OnboardingWizard() {
               <p className="mt-1 mb-4 text-sm text-ink-soft">
                 {t.returnNoneDesc}
               </p>
-              <CozyButton onClick={() => setCloudReturn(false)}>
-                {t.returnContinue}
-              </CozyButton>
+              <div className="flex flex-wrap gap-3">
+                {/* `exists: false` from getCloudInfo is AMBIGUOUS, not
+                    absent — a 403 (origin gate) or 500 lands here too, so the
+                    copy above never asserts absence and a retry is offered. */}
+                <CozyButton
+                  variant="soft"
+                  onClick={() => {
+                    setCloudInfoState(null);
+                    setCloudError(null);
+                    setInfoAttempt((n) => n + 1);
+                  }}
+                >
+                  {t.returnRetry}
+                </CozyButton>
+                <CozyButton onClick={() => setCloudReturn(false)}>
+                  {t.returnContinue}
+                </CozyButton>
+              </div>
             </>
           )}
 

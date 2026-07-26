@@ -42,7 +42,10 @@ const S = {
     pulling: "Getiriliyor…",
     refresh: "Yenile",
     cloudState: "Buluttaki kayıt",
-    noCloudSave: "Buluta henüz kayıt gönderilmedi.",
+    // Deliberately hedged: getCloudInfo() reports `exists: false` for any
+    // non-OK HEAD, so "no save" and "could not reach the service" are
+    // indistinguishable here. Asserting absence would be a guess.
+    noCloudSave: "Buluttan kayıt bilgisi alınamadı (henüz gönderilmemiş olabilir).",
     lastSync: (when: string) => `Son gönderim: ${when}`,
     pushConfirm:
       "Buluttaki kaydın bu cihazdaki kayıtla değiştirilecek. Devam edilsin mi?",
@@ -85,7 +88,7 @@ const S = {
     pulling: "Restoring…",
     refresh: "Refresh",
     cloudState: "Save in the cloud",
-    noCloudSave: "No save has been sent to the cloud yet.",
+    noCloudSave: "Could not read cloud save info (it may not have been sent yet).",
     lastSync: (when: string) => `Last upload: ${when}`,
     pushConfirm:
       "Your cloud save will be replaced with the save on this device. Continue?",

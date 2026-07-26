@@ -79,4 +79,41 @@ ayrık.
   `src/lib/cloud-error.test.ts` (6 test) `npm test` glob'una giriyor —
   tarayıcıya bağımlı bir özelliğin kanıtlanabilir tek parçası.
 - Anonim akış hiç değişmedi: üçüncü kapı yalnız `auth.backendAvailable`
-  true iken render ediliyor, hiçbir yerde kapı/gate değil.
+  true iken render ediliyor, hiçbir yerde kapı/gate değil. **Tek sapma,
+  kayda geçsin:** statik modda her onboarding açılışı artık bir
+  `GET /api/health` probe'u atıyor — anonim Pages aynasında 404 (yutuluyor,
+  kullanıcıya hiçbir şey sızmıyor, yalnız konsolda bir satır). Davranış
+  aynı, ağ isteği bir tane fazla.
+
+**Merge-review'da bulunan + düzeltilen 3 bulgu:**
+
+1. **Yıkıcı pull yanlış yüklemde onaysız kalıyordu.** İlk hâl
+   `usedLanguages.length === 0`'ı "yerel boş" diye okuyordu; oysa
+   `usedLanguages` **curriculum-join'lu** (`src/core/profile.ts`
+   `innerJoin(curricula)`). LLM yapılandırılmamış bir cihazda profil var ama
+   müfredat yok — o durumda `usedLanguages` boş görünür ve replace-all
+   SESSİZCE çalışırdı (SRS kartları, ayarlar gider). Ayrıca `profileData()`
+   reddedince de boş görünüyordu, yani geçici bir okuma hatası en tehlikeli
+   anda onayı atlatıyordu. Artık `profilesKnownEmpty` var: yalnız
+   `profileData()` ÇÖZÜLÜP sıfır profil dönerse true, varsayılan false —
+   "bilinmiyor" ve "okunamadı" ikisi de sorar.
+2. **`getCloudInfo()` her 404-olmayan hatayı da `exists:false` yapıyor**
+   (403 origin-gate, 500…), dolayısıyla "buluta hiç göndermemişsin" demek
+   yanlış bilgi olurdu — üstelik kullanıcıyı sıfırdan başlamaya yönlendirirdi.
+   `cloud.ts` fence dışı olduğu için kopya tarafında çözüldü: metin artık
+   yokluk İDDİA ETMİYOR ("henüz göndermemiş olabilirsin ya da servise
+   ulaşılamıyor") ve o dalda "Tekrar dene" var.
+3. **`invalidateAuthStatus()` `inflight`'ı temizlemiyordu.** API adresi
+   kaydedilirken ilk probe (eski, boş adrese karşı) hâlâ uçuyorsa, bayat
+   promise geri veriliyor ve sonucunu kalıcı olarak `cached`'e yazıyordu →
+   hesap UI'ı tam sayfa yenilemeye kadar gizli kalırdı. Bu, alanın var olma
+   sebebi olan dev topolojisinin (:3000 → :8787) birinci-koşum yolu. Artık
+   `inflight` da sıfırlanıyor + bir `generation` sayacı bayat probe'un
+   `cached`'e yazmasını engelliyor.
+4. `?cloud=return` marker'ı okunduktan sonra `history.replaceState` ile
+   URL'den siliniyor — yoksa her yenilemede dönüş ekranı tekrar açılıyordu.
+
+**Sahibe deploy notu (fence dışı, ama çalışması buna bağlı):** site origin'i
+Worker'ın `TRUSTED_ORIGINS`'inde olmalı. Değilse better-auth callback'i
+reddeder ve kullanıcı uygulamaya dönüş yolu OLMAYAN bir Worker sayfasında
+kalır — uygulama içi hiçbir çıkış düğmesiyle kurtarılamayan tek çıkmaz.
