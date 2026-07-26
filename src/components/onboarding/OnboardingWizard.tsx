@@ -13,7 +13,14 @@ import {
   createProfileApi,
   curriculumGenerate,
   saveImportApi,
+  cloudInfo,
+  cloudPull,
+  IS_STATIC,
 } from "@/lib/client-api";
+import { startGoogleSignIn, useAuthStatus } from "@/lib/auth-status";
+import { describeCloudError } from "@/lib/cloud-error";
+import { CloudWarnings } from "@/components/shared/CloudWarnings";
+import type { UnreconstitutedRow } from "@/lib/save/seed-strip";
 import { useLlmStatus } from "@/lib/llm-status";
 import { LlmSetupWizard } from "@/components/settings/LlmSetupWizard";
 import {
@@ -57,6 +64,34 @@ const S = {
     newTitle: "Yeni başla",
     newDesc: "Sıfırdan bir dil yolculuğuna başla — birkaç soruyla seni tanıyalım.",
     newButton: "✨ Yeni başla",
+    signInTitle: "Giriş yap",
+    signInDesc:
+      "Google hesabınla giriş yap, buluttaki kaydını bu cihaza getir. (Giriş isteğe bağlı — istemezsen anonim devam edebilirsin.)",
+    signInButton: "🔑 Google ile giriş yap",
+    signInStarting: "Yönlendiriliyor…",
+    signInFailed: "Giriş başlatılamadı",
+    returnTitle: "Hoş geldin!",
+    returnChecking: "Buluttaki kaydın kontrol ediliyor…",
+    returnFoundTitle: "Buluttaki kaydın bulundu",
+    returnFoundDesc: (when: string) =>
+      `Son gönderim: ${when}. Bu cihaza getirip kaldığın yerden devam edebilirsin.`,
+    returnFoundNoDate:
+      "Buluta gönderilmiş bir kaydın var. Bu cihaza getirip kaldığın yerden devam edebilirsin.",
+    returnPull: "⬇️ Buluttan getir",
+    returnPulling: "Getiriliyor…",
+    returnNoneTitle: "Buluttan kayıt getirilemedi",
+    returnNoneDesc:
+      "Henüz buluta kayıt göndermemiş olabilirsin ya da servise şu an ulaşılamıyor. Yeni bir yolculuk başlatabilir, sonra ayarlardan kaydını buluta gönderebilirsin.",
+    returnRetry: "Tekrar dene",
+    returnContinue: "Devam et",
+    returnPullConfirm:
+      "Bu, bu cihazdaki mevcut ilerlemeyi silip buluttaki kayıtla değiştirir. Emin misin?",
+    errNotSignedIn: "Oturum açılamadı. Tekrar giriş yapmayı dene.",
+    errUnavailable:
+      "Bulut servisine ulaşılamadı ya da buluta gönderilmiş bir kayıt yok.",
+    errVersion: (file: string, app: string) =>
+      `Buluttaki kaydın sürümü uyumsuz (bulut: v${file}, uygulama: v${app}).`,
+    errUnknown: "Bir şeyler ters gitti.",
     importFailed: "Kayıt yüklenemedi",
     profileSaveFailed: "Profil kaydedilemedi",
     curriculumStartFailed: "Müfredat üretimi başlatılamadı",
@@ -99,6 +134,34 @@ const S = {
     newTitle: "New game",
     newDesc: "Start a fresh language journey — a few questions and we'll get to know you.",
     newButton: "✨ Start new",
+    signInTitle: "Sign in",
+    signInDesc:
+      "Sign in with your Google account and bring your cloud save to this device. (Optional — you can continue anonymously instead.)",
+    signInButton: "🔑 Sign in with Google",
+    signInStarting: "Redirecting…",
+    signInFailed: "Could not start sign-in",
+    returnTitle: "Welcome back!",
+    returnChecking: "Checking your cloud save…",
+    returnFoundTitle: "Found your cloud save",
+    returnFoundDesc: (when: string) =>
+      `Last upload: ${when}. Bring it to this device and pick up where you left off.`,
+    returnFoundNoDate:
+      "You have a save in the cloud. Bring it to this device and pick up where you left off.",
+    returnPull: "⬇️ Get from cloud",
+    returnPulling: "Restoring…",
+    returnNoneTitle: "Could not get a save from the cloud",
+    returnNoneDesc:
+      "You may not have sent a save to the cloud yet, or the service can't be reached right now. You can start a new journey and send your save from Settings later.",
+    returnRetry: "Try again",
+    returnContinue: "Continue",
+    returnPullConfirm:
+      "This will erase the current progress on this device and replace it with the cloud save. Are you sure?",
+    errNotSignedIn: "Could not establish a session. Try signing in again.",
+    errUnavailable:
+      "The cloud service could not be reached, or there is no save stored in the cloud.",
+    errVersion: (file: string, app: string) =>
+      `The cloud save's version does not match (cloud: v${file}, app: v${app}).`,
+    errUnknown: "Something went wrong.",
     importFailed: "Could not load the save",
     profileSaveFailed: "Could not save the profile",
     curriculumStartFailed: "Could not start curriculum generation",
@@ -173,6 +236,38 @@ export function OnboardingWizard() {
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ---- T-048: the third door (Google sign-in) + the OAuth return leg -------
+  //
+  // The marker is read from window.location.search rather than useSearchParams
+  // on purpose: this page has no <Suspense> boundary, and useSearchParams
+  // requires one under static export. A plain read has no such constraint.
+  const auth = useAuthStatus();
+  const [cloudReturn, setCloudReturn] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [cloudInfoState, setCloudInfoState] = useState<
+    { exists: boolean; updatedAt: string | null } | null | "error"
+  >(null);
+  const [pulling, setPulling] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [pullWarnings, setPullWarnings] = useState<UnreconstitutedRow[] | null>(
+    null
+  );
+  // Only true once profileData() RESOLVED with zero profiles. Default false so
+  // "unknown" and "read failed" both behave as "there may be data here".
+  const [profilesKnownEmpty, setProfilesKnownEmpty] = useState(false);
+  const [infoAttempt, setInfoAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!IS_STATIC) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("cloud") !== "return") return;
+    setCloudReturn(true);
+    // Consume the marker. Leaving it in the URL would re-enter the return leg
+    // on every refresh or back-navigation, long after the user dismissed it.
+    url.searchParams.delete("cloud");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }, []);
+
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file later
@@ -187,6 +282,92 @@ export function OnboardingWizard() {
     } catch (err) {
       setImportError(localizeError(err, resolveUiLang(draft.uiLanguage)));
       setImporting(false);
+    }
+  };
+
+  const cloudErrorText = useCallback(
+    (err: unknown): string => {
+      const tt = pick(S, draft.uiLanguage);
+      const { kind, params } = describeCloudError(err);
+      // `local_empty` and `too_large` belong to PUSH, which onboarding never
+      // does — only a pull happens here.
+      if (kind === "not_signed_in") return tt.errNotSignedIn;
+      if (kind === "unavailable") return tt.errUnavailable;
+      if (kind === "version_mismatch")
+        return tt.errVersion(String(params?.file ?? "?"), String(params?.app ?? "?"));
+      return tt.errUnknown;
+    },
+    [draft.uiLanguage]
+  );
+
+  const onSignIn = async () => {
+    setSigningIn(true);
+    setCloudError(null);
+    try {
+      // Absolute URL, and back to THIS page with a marker: with an API-base
+      // override in play a relative callbackURL would resolve against the
+      // Worker's origin and drop the user on the backend instead of the app.
+      await startGoogleSignIn(
+        `${window.location.origin}${withBase("/onboarding")}?cloud=return`
+      );
+    } catch {
+      setCloudError(pick(S, draft.uiLanguage).signInFailed);
+      setSigningIn(false);
+    }
+  };
+
+  // On the return leg: ask the cloud what it holds (HEAD — no egress, no
+  // download) instead of blind-pulling, which would throw save_load_failed for
+  // the perfectly normal "first device, nothing stored yet" case.
+  useEffect(() => {
+    if (!cloudReturn || auth.loading || !auth.user) return;
+    let alive = true;
+    cloudInfo()
+      .then((i) => {
+        if (alive) setCloudInfoState({ exists: i.exists, updatedAt: i.updatedAt });
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setCloudInfoState("error");
+        setCloudError(cloudErrorText(err));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [cloudReturn, auth.loading, auth.user, cloudErrorText, infoAttempt]);
+
+  const onCloudPull = async () => {
+    // A pull is replace-all, and it must carry the same confirmation weight as
+    // the Settings file-import flow. The intro screen's reasoning ("an empty
+    // session has nothing to erase") only holds when local really IS empty.
+    //
+    // `profilesKnownEmpty` and NOT `usedLanguages.length === 0`: usedLanguages
+    // is curriculum-joined (src/core/profile.ts inner-joins curricula), so a
+    // profile that exists without a curriculum — the ordinary half-finished
+    // state when no LLM is configured — would read as empty and lose its SRS
+    // cards and settings to a silent replace-all. It is also false-by-default
+    // on a REJECTED profileData(), so a transient read failure asks rather
+    // than assumes.
+    if (
+      !profilesKnownEmpty &&
+      !window.confirm(pick(S, draft.uiLanguage).returnPullConfirm)
+    )
+      return;
+    setPulling(true);
+    setCloudError(null);
+    try {
+      const r = await cloudPull();
+      if (r.warnings.length > 0) {
+        // Do NOT navigate yet — the navigation would discard the list, making
+        // seed-drift content loss silent. Acknowledge first.
+        setPullWarnings(r.warnings);
+        setPulling(false);
+        return;
+      }
+      window.location.href = withBase("/map"); // full reload → fresh reads
+    } catch (err) {
+      setCloudError(cloudErrorText(err));
+      setPulling(false);
     }
   };
 
@@ -223,6 +404,10 @@ export function OnboardingWizard() {
         // Adding a 2nd+ language already has profiles, so it skips straight
         // to the wizard as before.
         setShowIntro((d.profiles ?? []).length === 0);
+        // T-048: set ONLY here, never in the catch. A rejected read must not
+        // read as "empty" — that is the state in which a silent replace-all
+        // would be most damaging.
+        setProfilesKnownEmpty((d.profiles ?? []).length === 0);
       })
       .catch(() => {
         // profileData() failing (e.g. fresh static DB before first read)
@@ -284,6 +469,104 @@ export function OnboardingWizard() {
     );
   }
 
+  // T-048 OAuth return leg. Deliberately ABOVE the checkingProfiles/showIntro
+  // branches: showIntro only turns true for a truly empty session, but someone
+  // can sign in from a device that already has a profile, and they still need
+  // the "pull your cloud save?" offer.
+  if (cloudReturn && !auth.loading) {
+    const info = cloudInfoState;
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
+        <div className="rounded-cozy bg-surface p-5 shadow-cozy sm:p-8">
+          <h1 className="text-2xl font-semibold">{t.returnTitle}</h1>
+          <p className="mt-2 mb-6 text-ink-soft">
+            {auth.user?.email ?? auth.user?.name ?? ""}
+          </p>
+
+          {!auth.user ? (
+            // Came back from Google but no session resolved (cancelled, or the
+            // callback failed). Say so and let them out — never a dead end.
+            <>
+              <p className="mb-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
+                {t.errNotSignedIn}
+              </p>
+              <CozyButton onClick={() => setCloudReturn(false)}>
+                {t.returnContinue}
+              </CozyButton>
+            </>
+          ) : pullWarnings ? (
+            <>
+              <CloudWarnings rows={pullWarnings} uiLanguage={draft.uiLanguage} />
+              <div className="mt-5">
+                <CozyButton
+                  onClick={() => {
+                    window.location.href = withBase("/map");
+                  }}
+                >
+                  {t.returnContinue}
+                </CozyButton>
+              </div>
+            </>
+          ) : info === null ? (
+            <p className="text-ink-soft">{t.returnChecking}</p>
+          ) : info !== "error" && info.exists ? (
+            <>
+              <div className="font-semibold">{t.returnFoundTitle}</div>
+              <p className="mt-1 mb-4 text-sm text-ink-soft">
+                {info.updatedAt
+                  ? t.returnFoundDesc(new Date(info.updatedAt).toLocaleString())
+                  : t.returnFoundNoDate}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <CozyButton onClick={() => void onCloudPull()} disabled={pulling}>
+                  {pulling ? t.returnPulling : t.returnPull}
+                </CozyButton>
+                <CozyButton
+                  variant="ghost"
+                  onClick={() => setCloudReturn(false)}
+                  disabled={pulling}
+                >
+                  {t.returnContinue}
+                </CozyButton>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="font-semibold">{t.returnNoneTitle}</div>
+              <p className="mt-1 mb-4 text-sm text-ink-soft">
+                {t.returnNoneDesc}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {/* `exists: false` from getCloudInfo is AMBIGUOUS, not
+                    absent — a 403 (origin gate) or 500 lands here too, so the
+                    copy above never asserts absence and a retry is offered. */}
+                <CozyButton
+                  variant="soft"
+                  onClick={() => {
+                    setCloudInfoState(null);
+                    setCloudError(null);
+                    setInfoAttempt((n) => n + 1);
+                  }}
+                >
+                  {t.returnRetry}
+                </CozyButton>
+                <CozyButton onClick={() => setCloudReturn(false)}>
+                  {t.returnContinue}
+                </CozyButton>
+              </div>
+            </>
+          )}
+
+          {cloudError && (
+            <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
+              {cloudError}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (checkingProfiles) {
     return (
       <div className="flex min-h-dvh items-center justify-center text-ink-soft">
@@ -326,7 +609,31 @@ export function OnboardingWizard() {
                 {t.newButton}
               </CozyButton>
             </div>
+
+            {/* T-048 third door. Rendered only where a cloud backend actually
+                exists — the GitHub Pages mirror is anonymous-only and shows
+                exactly the two original doors, unchanged. Signing in is never
+                a gate: the anonymous path above is untouched. */}
+            {auth.backendAvailable && (
+              <div className="rounded-xl border-2 border-surface-2 bg-background p-5 sm:col-span-2">
+                <div className="font-semibold">{t.signInTitle}</div>
+                <p className="mt-1 mb-4 text-sm text-ink-soft">{t.signInDesc}</p>
+                <CozyButton
+                  variant="soft"
+                  onClick={() => void onSignIn()}
+                  disabled={signingIn}
+                >
+                  {signingIn ? t.signInStarting : t.signInButton}
+                </CozyButton>
+              </div>
+            )}
           </div>
+
+          {cloudError && (
+            <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
+              {cloudError}
+            </p>
+          )}
 
           {importError && (
             <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">

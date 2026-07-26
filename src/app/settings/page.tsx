@@ -8,6 +8,7 @@ import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { BackupSection } from "@/components/settings/BackupSection";
+import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { AppError } from "@/lib/errors";
@@ -239,6 +240,11 @@ export default function SettingsPage() {
           </p>
           {saveMsg && <p className="mt-3 text-sm">{saveMsg}</p>}
         </section>
+
+        {/* Cloud account + manual push/pull (T-046/T-047, surfaced by T-048).
+            Sits beside the Drive section, not instead of it: Drive stays the
+            anonymous default, this is the signed-in alternative. Static only. */}
+        <CloudAccountSection />
 
         {/* Drive sync + local snapshots (T-032) — static mode only. */}
         <BackupSection />
