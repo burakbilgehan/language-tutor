@@ -1,0 +1,5 @@
+# Copy to `.dev.vars` for local `wrangler dev`. `.dev.vars` is gitignored.
+# Any random string works locally; production uses `wrangler secret put`.
+BETTER_AUTH_SECRET=dev-only-secret-not-for-production
+GOOGLE_CLIENT_ID=dummy-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=dummy-client-secret
