@@ -74,8 +74,12 @@ content (seed+strokes, 39MB) Pages/CDN'de kalır. Ölçüm: save'in %71'i
 seed-türevi content → upload'ta seed-strip ile buluta giden blob ~2-4MB.
 
 **SERİ zincir** (birbirine bağımlı, T-046/47 aynı Worker codebase):
-`T-045 → T-046 → T-047 → T-048`, hepsi **opus** (backend/auth/güvenlik/yeni
-platform). hive-wave'in paralel-batch'i değil — her biri ayrı session, seri.
+`T-045:opus -> T-046:opus -> T-047:opus -> T-048:opus`, hepsi opus (backend/
+auth/güvenlik/yeni platform). hive-wave seri-zincir modu: **tek master fable
+session** zinciri baştan sona sürer — her adım izole worktree agent, tamamlanınca
+merge + gate, yeşilse sonrakini başlat. `->` = launch bariyeri (sonraki adım
+öncekinin merge'ini bekler). Paralel batch değil; context adım başına distilled
+raporla temiz kalır. Başlatma: `/hive-wave T-045:opus -> T-046:opus -> T-047:opus -> T-048:opus`.
 
 | Adım | Ticket | Not |
 |---|---|---|
