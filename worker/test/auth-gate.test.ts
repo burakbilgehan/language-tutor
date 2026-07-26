@@ -123,12 +123,23 @@ describe("auth-before-execute (criterion 3), enforced at runtime", () => {
     expect(await res.json()).toEqual({ error: "unauthorized" });
   });
 
-  it("an unauthenticated PUT causes NO side effect in R2", async () => {
+  // Parameterized over EVERY authed mutating route, not just /api/save, so a
+  // second write route added to the table inherits this assertion instead of
+  // quietly shipping without one.
+  it.each(
+    routes
+      .filter((r) => r.auth === "required")
+      .flatMap((r) =>
+        r.methods
+          .filter((m) => ["POST", "PUT", "PATCH", "DELETE"].includes(m))
+          .map((m) => [r.path, m] as const)
+      )
+  )("unauthenticated %s %s causes NO side effect in R2", async (pathname, method) => {
     await migrate();
     const before = await env.SAVES.list();
 
     const res = await SELF.fetch(
-      req("/api/save", { method: "PUT", body: "malicious payload" })
+      req(pathname, { method, body: "malicious payload" })
     );
     expect(res.status).toBe(401);
 
