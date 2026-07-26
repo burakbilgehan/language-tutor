@@ -47,11 +47,17 @@ table.
   CSRF attack would imitate. Cost: **curl must pass `-H "Origin: …"`**.
 - `OPTIONS` from an allowlisted origin → 204, echoing that exact origin
   (`*` is invalid with credentials). `Vary: Origin` on everything.
-- `/api/auth/*` is exempt from our allowlist **for real methods only** — the
-  Google callback is a legitimate cross-site redirect. better-auth guards those
-  endpoints itself, using the *same parsed list*. OPTIONS is deliberately **not**
-  exempt: better-auth 404s on it, and a non-2xx preflight makes the browser
-  block the real request.
+- The `/api/auth/*` exemption is narrow: **only the OAuth handshake**
+  (`callback/*`, `sign-in/social`, `oauth2/*`) and **only for non-OPTIONS
+  methods**. Those genuinely are cross-site — Google redirects the user to the
+  callback — and better-auth guards them itself using the *same parsed list*.
+  Everything else under `/api/auth/*` (notably `sign-out`) gets the full
+  allowlist check. Two footguns closed here, both measured:
+  - OPTIONS was originally exempt too, so preflights 404'd (better-auth's router
+    does not answer OPTIONS) and browsers would have blocked the real request.
+  - A cross-site `POST /api/auth/sign-out` from `evil.example` returned 200 and
+    cleared the session cookies — forced-sign-out CSRF. Nuisance-grade (no data
+    access), now 403.
 
 Dev note: `localhost:3000` → `localhost:8787` is cross-**origin** (so it needs
 CORS) but same-**site** (port is not part of a site), so `SameSite=Lax` cookies
@@ -113,6 +119,12 @@ Adding an unauthenticated mutating route fails the first two; adding one
 directly in `index.ts` fails the last. Both were demonstrated red before
 shipping.
 
+`test/set-cookie.test.ts` guards the one path that **cannot** be exercised
+locally. The dispatcher re-wraps every response to attach CORS headers, and a
+`Headers` copy can collapse multiple `Set-Cookie` values into one — which would
+silently break the real Google callback (the response most likely to carry two).
+Verified it does not.
+
 **Sessions in tests** are minted through better-auth's internal adapter with a
 hand-signed cookie (`test/helpers/session.ts`), because Google is the only
 provider and there is deliberately **no** signup endpoint to call. Test-only
@@ -131,6 +143,9 @@ absent (verified), so it works on a fresh clone.
 | `OPTIONS /api/save` from `evil.example` | `403`, **no** `Allow-Origin` header |
 | `OPTIONS /api/save` from `localhost:3000` | `204` + exact origin + `Allow-Credentials` |
 | `OPTIONS /api/auth/sign-in/social` from `localhost:3000` | `204` (was `404` — fixed) |
+| `POST /api/auth/sign-in/social` from `localhost:3000` (cross-origin) | `200` + `Allow-Origin: http://localhost:3000` |
+| `POST /api/auth/sign-out` from `evil.example` | `403` (was `200` + cookies cleared — fixed) |
+| `POST /api/auth/sign-out` same-origin | `200`, two `Set-Cookie` headers preserved |
 | `PUT /api/save` allowed origin, **no session** | `401` |
 | R2 after those rejected PUTs | **empty** — no side effect |
 | `GET /api/auth/get-session` w/ signed cookie | session + user resolved from D1 |

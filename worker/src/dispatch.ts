@@ -40,10 +40,24 @@ export async function dispatch(request: Request, env: Env): Promise<Response> {
   // CORS-safelisted, so it preflights). Answering the preflight from the
   // allowlist is safe: a preflight carries no cookies and no body, and the
   // Google callback is a GET, so it is unaffected.
+  //
+  // The exemption is further narrowed to the endpoints that actually need it:
+  // the OAuth start/callback pair. Everything else under /api/auth/* —
+  // sign-out in particular — is a same-origin XHR from our own app and gets the
+  // full allowlist check. Measured before narrowing: a cross-site
+  // `POST /api/auth/sign-out` from evil.example returned 200 and cleared the
+  // session cookies (forced-sign-out CSRF: a nuisance, not data access, but
+  // free to close).
+  const isOAuthHandshake =
+    url.pathname.startsWith("/api/auth/callback/") ||
+    url.pathname.startsWith("/api/auth/sign-in/social") ||
+    url.pathname.startsWith("/api/auth/oauth2/");
+
   const exemptFromOriginGate =
     request.method !== "OPTIONS" &&
     route !== "method_not_allowed" &&
-    route.path === "/api/auth/";
+    route.path === "/api/auth/" &&
+    isOAuthHandshake;
 
   if (!exemptFromOriginGate) {
     const denied = guardOrigin(request, allowed);
@@ -71,8 +85,10 @@ export async function dispatch(request: Request, env: Env): Promise<Response> {
   return withCors(await route.handler({ ...base, session: resolved }), origin, allowed);
 }
 
-/** Attach CORS/Vary without discarding the handler's own headers or body. */
-function withCors(res: Response, origin: string | null, allowed: string[]): Response {
+/** Attach CORS/Vary without discarding the handler's own headers or body.
+ * Exported for test/set-cookie.test.ts, which guards the Set-Cookie behaviour
+ * on the one path (the real Google callback) we cannot exercise locally. */
+export function withCors(res: Response, origin: string | null, allowed: string[]): Response {
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(corsHeaders(origin, allowed))) {
     headers.set(k, v);

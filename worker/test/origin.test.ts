@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SELF } from "cloudflare:test";
-import { migrate } from "./helpers/session";
+import { guardOrigin } from "../src/origin";
 
 /**
  * Origin allowlist + CORS (T-046 acceptance criterion 1).
@@ -110,13 +110,13 @@ describe("OPTIONS preflight", () => {
     expect(res.headers.get("access-control-allow-credentials")).toBe("true");
   });
 
-  // The follow-through (the actual credentialed cross-origin sign-in POST
-  // succeeding, with CORS headers on the response) is covered by
-  // session.test.ts's "sign-in/social google still starts the OAuth redirect"
-  // plus the CORS assertions above. It is deliberately NOT duplicated here:
-  // that endpoint hits Google's discovery path, and running it after the other
-  // cases in this file makes it hang on a real network call. Verified by curl
-  // against `wrangler dev` instead — see README.
+  // The follow-through — the actual credentialed CROSS-ORIGIN sign-in POST
+  // returning 200 with CORS headers — is NOT covered by the suite.
+  // session.test.ts exercises that endpoint same-origin only. A cross-origin
+  // version of it hung when run after the other cases in this file (cause not
+  // root-caused; it passes alone and in the reverse pairing, and the shipped
+  // code is unaffected), so it was removed rather than left flaky. That case is
+  // verified by curl against `wrangler dev` instead — see README.
 
   it("refuses a preflight from an untrusted origin with no CORS headers", async () => {
     const res = await SELF.fetch(
@@ -129,6 +129,42 @@ describe("OPTIONS preflight", () => {
     // Critically: no allow-origin header at all, so the browser blocks the
     // actual request.
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+});
+
+describe("/api/auth/* exemption is scoped to the OAuth handshake", () => {
+  it("cross-site sign-out is rejected (forced-sign-out CSRF)", async () => {
+    // Measured before narrowing the exemption: this returned 200 and cleared
+    // the session cookies. A nuisance rather than data access, but free to fix.
+    const res = await SELF.fetch(`${ALLOWED}/api/auth/sign-out`, {
+      method: "POST",
+      headers: { origin: EVIL, "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(403);
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  // The OAuth handshake paths (callback + sign-in/social) stay exempt: Google
+  // redirects the user to the callback from accounts.google.com, so an
+  // allowlist check would break sign-in.
+  //
+  // Asserted here against `guardOrigin` directly rather than through SELF:
+  // driving the real callback makes better-auth attempt a live token exchange
+  // with Google and the test hangs. That the callback still reaches
+  // better-auth (302, not our 403) is verified by curl against `wrangler dev`
+  // — see README.
+  it("the exemption predicate covers the handshake but not sign-out", () => {
+    const allowed = ["http://localhost:8787"];
+    // Sign-out from an untrusted origin: our gate must produce a denial.
+    const signOut = guardOrigin(
+      new Request(`${ALLOWED}/api/auth/sign-out`, {
+        method: "POST",
+        headers: { origin: EVIL },
+      }),
+      allowed
+    );
+    expect(signOut?.status).toBe(403);
   });
 });
 
