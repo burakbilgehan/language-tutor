@@ -83,7 +83,12 @@ ayrık.
   kayda geçsin:** statik modda her onboarding açılışı artık bir
   `GET /api/health` probe'u atıyor — anonim Pages aynasında 404 (yutuluyor,
   kullanıcıya hiçbir şey sızmıyor, yalnız konsolda bir satır). Davranış
-  aynı, ağ isteği bir tane fazla.
+  aynı, ağ isteği bir tane fazla. İkinci (ölçülmemiş, davranışsal etkisi yok)
+  sapma: `src/lib/cloud-error.ts` `@/lib/backup/cloud`'u STATİK import ediyor
+  (hata sınıfları `instanceof` için gerekli), yani `cloud.ts` +
+  `save/seed-strip.ts` artık onboarding giriş bundle'ına da giriyor — daha
+  önce yalnız `cloudPush`/`cloudPull` seam'lerinden dinamik geliyordu. sql.js
+  hâlâ dinamik, yani ağır kısım etkilenmiyor.
 
 **Merge-review'da bulunan + düzeltilen 3 bulgu:**
 
@@ -112,6 +117,18 @@ ayrık.
    `cached`'e yazmasını engelliyor.
 4. `?cloud=return` marker'ı okunduktan sonra `history.replaceState` ile
    URL'den siliniyor — yoksa her yenilemede dönüş ekranı tekrar açılıyordu.
+
+**Bilinen cila (düzeltilmedi, çıkmaz değil):** dönüş ekranında "Devam et"e
+basan ZATEN GİRİŞ YAPMIŞ kullanıcıya intro ekranı hâlâ "Giriş yap" kapısını
+gösteriyor. Hesap durumu ayarlarda doğru görünüyor, akış kilitlenmiyor.
+
+**Tarayıcı gerektiren, ELLE doğrulanacaklar** (bu ticket'ta koşulamadı —
+build çalıştırma izni yoktu, gerçek Google OAuth istemcisi yok):
+`npm run build:static`; gerçek Google giriş tur-dönüşü; profili olup
+müfredatı OLMAYAN cihazda pull → onay diyaloğu ÇIKMALI (yukarıdaki 1.
+bulgunun vakası); sayfa yeni yüklenmişken Ayarlar → Gelişmiş → API adresi
+kaydet → hesap kontrolleri tam sayfa yenilemeden görünmeli (3. bulgu);
+dönüş ekranını "Devam et" ile kapatıp yenile → normal intro gelmeli (4.).
 
 **Sahibe deploy notu (fence dışı, ama çalışması buna bağlı):** site origin'i
 Worker'ın `TRUSTED_ORIGINS`'inde olmalı. Değilse better-auth callback'i
