@@ -593,31 +593,18 @@ export async function saveImportApi(file: File): Promise<void> {
     }
     return;
   }
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  // Sunucu import'uyla aynı kontroller: SQLite başlığı + şema sürümü.
-  const header = new TextDecoder().decode(bytes.slice(0, 15));
-  if (header !== "SQLite format 3") {
+  // T-041 S4: boyutu wasm'a DOKUNMADAN önce ele. `browserDb()` sql.js'i
+  // başlatır ve `file.arrayBuffer()` dosyayı belleğe alır — çok-GB'lık sahte
+  // bir "save" ikisinden önce reddedilmeli.
+  const { MAX_SAVE_BYTES } = await import("@/lib/save/limits");
+  if (file.size > MAX_SAVE_BYTES) {
     throw new AppError("save_invalid");
   }
-  const { SAVE_SCHEMA_VERSION } = await import("@/lib/save/version");
-  const initSqlJs = (await import("sql.js")).default;
-  const { withBase } = await import("@/lib/base-path");
-  const SQL = await initSqlJs({ locateFile: (f: string) => withBase(`/${f}`) });
-  const probe = new SQL.Database(bytes);
-  try {
-    const res = probe.exec(
-      "SELECT value FROM save_meta WHERE key='schemaVersion'"
-    );
-    const version = Number(res[0]?.values?.[0]?.[0]);
-    if (version !== SAVE_SCHEMA_VERSION) {
-      throw new AppError("save_version_mismatch", {
-        file: version || "?",
-        app: SAVE_SCHEMA_VERSION,
-      });
-    }
-  } finally {
-    probe.close();
-  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Başlık + şema sürümü + kötücül trigger/view kontrolü tek yerde:
+  // importBytes → validateSaveImage (src/lib/backup/save-image.ts). Buradaki
+  // kopya doğrulama T-041'de kaldırıldı — iki ayrı validator ikisinin
+  // birbirinden ayrışmasına yol açıyordu.
   const handle = await browserDb();
   await handle.importBytes(bytes);
 }

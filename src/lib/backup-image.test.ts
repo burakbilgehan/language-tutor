@@ -91,6 +91,51 @@ test("validateSaveImage rejects a wrong schema version", async () => {
   );
 });
 
+// ---------------------------------------------------------------- T-041 S1/S4
+
+test("validateSaveImage rejects an image carrying a user-defined trigger", async () => {
+  const db = freshImage();
+  // The ticket's exact attack shape: fires on the first legitimate app write
+  // after the image has been swapped in as the live read-write DB.
+  db.run(
+    "CREATE TRIGGER evil AFTER INSERT ON generation_jobs BEGIN DELETE FROM profiles; END"
+  );
+  const bytes = stampAndSerialize(db);
+  db.close();
+  await assert.rejects(
+    () => validateSaveImage(bytes, getSql),
+    (err) => err instanceof AppError && err.code === "save_invalid"
+  );
+});
+
+test("validateSaveImage rejects an image carrying a user-defined view", async () => {
+  const db = freshImage();
+  db.run("CREATE VIEW sneaky AS SELECT id FROM profiles");
+  const bytes = stampAndSerialize(db);
+  db.close();
+  await assert.rejects(
+    () => validateSaveImage(bytes, getSql),
+    (err) => err instanceof AppError && err.code === "save_invalid"
+  );
+});
+
+test("validateSaveImage rejects an oversized image before touching sql.js", async () => {
+  const { MAX_SAVE_BYTES } = await import("./save/limits");
+  // Fake length only — allocating 100 MB+ of real bytes just to prove a length
+  // comparison would be wasteful. The point is that getSql() is never called.
+  const huge = { byteLength: MAX_SAVE_BYTES + 1 } as unknown as Uint8Array;
+  let sqlInitialized = false;
+  await assert.rejects(
+    () =>
+      validateSaveImage(huge, async () => {
+        sqlInitialized = true;
+        return getSql();
+      }),
+    (err) => err instanceof AppError && err.code === "save_invalid"
+  );
+  assert.equal(sqlInitialized, false, "wasm must not be initialized");
+});
+
 test("validateSaveImage rejects an image with no save_meta (NaN version)", async () => {
   // A valid SQLite file that isn't a stamped save — the pre-existing broken case.
   const db = new SQL.Database();

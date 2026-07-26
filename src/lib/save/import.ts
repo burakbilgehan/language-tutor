@@ -5,6 +5,11 @@ import { nanoid } from "nanoid";
 import { inArray } from "drizzle-orm";
 import { db, tables, resetDb, DB_PATH } from "@/db";
 import { SAVE_SCHEMA_VERSION } from "./version";
+import {
+  MAX_SAVE_BYTES,
+  SQLITE_HEADER,
+  FORBIDDEN_SQLITE_OBJECT_TYPES,
+} from "./limits";
 
 import type { ErrorCode } from "@/lib/errors";
 
@@ -33,6 +38,22 @@ export class SaveImportError extends Error {
  * check passes.
  */
 export function importSave(bytes: Buffer): void {
+  // ---- Cheap byte-level gates, BEFORE anything touches disk or sqlite ------
+  // (T-041 S2/S4) The route has its own request-size early-out, but importSave
+  // is also reachable from tests/scripts and must not depend on its caller.
+  if (bytes.length > MAX_SAVE_BYTES) {
+    throw new SaveImportError("save_invalid", "Kayıt dosyası çok büyük.");
+  }
+  if (
+    bytes.length < SQLITE_HEADER.length ||
+    bytes.subarray(0, SQLITE_HEADER.length).toString("latin1") !== SQLITE_HEADER
+  ) {
+    throw new SaveImportError(
+      "save_invalid",
+      "Kayıt dosyası bir SQLite veritabanı değil."
+    );
+  }
+
   const dataDir = path.dirname(DB_PATH);
   fs.mkdirSync(dataDir, { recursive: true });
   const tmpPath = path.join(dataDir, `import-${nanoid()}.db`);
@@ -72,6 +93,28 @@ export function importSave(bytes: Buffer): void {
 
       // Sanity: it must actually be this app's DB.
       probe.prepare("SELECT count(*) FROM profiles").get();
+
+      // ---- T-041 S1: refuse user-defined triggers/views -------------------
+      // This readonly probe never fires triggers (integrity_check + SELECT
+      // only), but after the swap the very same file becomes the live
+      // read-write DB and the first app write detonates anything attached to
+      // a table. Our schema contains no triggers and no views, so their mere
+      // presence means the file was not produced by this app.
+      const hostile = probe
+        .prepare(
+          `SELECT type, name FROM sqlite_master WHERE type IN (${FORBIDDEN_SQLITE_OBJECT_TYPES.map(
+            () => "?"
+          ).join(", ")}) LIMIT 1`
+        )
+        .get(...FORBIDDEN_SQLITE_OBJECT_TYPES) as
+        | { type: string; name: string }
+        | undefined;
+      if (hostile) {
+        throw new SaveImportError(
+          "save_invalid",
+          `Kayıt dosyası beklenmeyen bir veritabanı nesnesi içeriyor (${hostile.type}: ${hostile.name}).`
+        );
+      }
     } finally {
       probe?.close();
     }
