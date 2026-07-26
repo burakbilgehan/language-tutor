@@ -64,5 +64,47 @@
       "binding": "SAVES",
       "bucket_name": "lt-saves"
     }
-  ]
+  ],
+
+  // PRODUCTION (okumo.dev) — deploy with `wrangler deploy --env production`.
+  //
+  // A separate environment rather than editing the top-level config in place:
+  // the top-level block is what `wrangler dev` and vitest-pool-workers read, so
+  // it must keep the localhost origins and the `./public` placeholder (the
+  // test suite must not require a `../out` build to exist). Bindings/vars are
+  // non-inheritable in wrangler environments, hence the repetition below.
+  "env": {
+    "production": {
+      "name": "okumo",
+      "routes": [{ "pattern": "okumo.dev", "custom_domain": true }],
+      "vars": {
+        // https origin also flips better-auth cookies to `Secure`/__Secure-.
+        "BETTER_AUTH_URL": "https://okumo.dev",
+        // Same-origin design: the site IS this origin. No localhost in prod.
+        "TRUSTED_ORIGINS": "https://okumo.dev"
+      },
+      "assets": {
+        // The app's static export. Build with `npm run build:static` at the
+        // repo root, WITHOUT NEXT_PUBLIC_BASE_PATH (see README "Deploy").
+        "directory": "../out",
+        "binding": "ASSETS",
+        "run_worker_first": ["/api/*"]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "lt-auth",
+          // Replaced with the real id printed by `wrangler d1 create lt-auth`.
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "./migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "SAVES",
+          "bucket_name": "lt-saves"
+        }
+      ]
+    }
+  }
 }

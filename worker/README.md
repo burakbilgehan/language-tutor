@@ -213,38 +213,40 @@ absent (verified), so it works on a fresh clone.
 Everything below needs an authenticated Cloudflare account and is intentionally
 not automated.
 
-1. **Create resources** and paste the printed D1 id into `wrangler.jsonc`
-   (replacing the all-zeros placeholder):
+Production lives in the `env.production` block of `wrangler.jsonc`: worker name
+`okumo`, custom domain **okumo.dev** (bought via Cloudflare Registrar, zone on
+this account), `../out` assets, prod origins. The top-level block stays
+localhost/placeholder — it is what `wrangler dev` and the test suite read.
+
+1. **Create resources** and paste the printed D1 id into the `env.production`
+   d1 block (replacing the all-zeros placeholder):
    ```sh
    npx wrangler d1 create lt-auth
    npx wrangler r2 bucket create lt-saves
-   npx wrangler d1 migrations apply lt-auth --remote
+   npx wrangler d1 migrations apply lt-auth --remote --env production
    ```
 2. **Secrets** (never in `wrangler.jsonc`, which is committed):
    ```sh
-   npx wrangler secret put BETTER_AUTH_SECRET     # openssl rand -base64 32
-   npx wrangler secret put GOOGLE_CLIENT_ID
-   npx wrangler secret put GOOGLE_CLIENT_SECRET
+   npx wrangler secret put BETTER_AUTH_SECRET --env production   # openssl rand -base64 32
+   npx wrangler secret put GOOGLE_CLIENT_ID --env production
+   npx wrangler secret put GOOGLE_CLIENT_SECRET --env production
    ```
-3. **Point `vars` at the real origin.** After the first deploy the Worker is at
-   `https://<name>.<subdomain>.workers.dev`. Set both — exactly, no trailing
-   slash:
-   - `BETTER_AUTH_URL` = that origin (this also flips cookies to `Secure`)
-   - `TRUSTED_ORIGINS` = that same origin (drop the localhost entries in prod)
-4. **Google OAuth client** (Cloud Console → Credentials → OAuth client ID, type
-   "Web application"). Authorized redirect URI, exactly:
+3. **Google OAuth client** (Cloud Console → Credentials → OAuth client ID, type
+   "Web application"). Authorized redirect URIs, exactly (localhost one keeps
+   the local round-trip testable with the same client):
    ```
-   https://<name>.<subdomain>.workers.dev/api/auth/callback/google
+   https://okumo.dev/api/auth/callback/google
+   http://localhost:8787/api/auth/callback/google
    ```
    (Verified path — it is what the sign-in redirect actually requests.)
-5. **Static assets.** Point `assets.directory` at the app's static export
-   (`../out`) instead of the `./public` placeholder, and build it **without**
-   `NEXT_PUBLIC_BASE_PATH`. That variable is set only by
-   `.github/workflows/pages.yml` (for the `/language-tutor` project path), so a
-   plain local `npm run build:static` already produces a root-relative build —
+4. **Static assets.** `env.production` points at `../out`. Build it at the repo
+   root with a plain `npm run build:static`, **without** `NEXT_PUBLIC_BASE_PATH`.
+   That variable is set only by `.github/workflows/pages.yml` (for the
+   `/language-tutor` project path), so a local build is already root-relative —
    but do not reuse a Pages-built `out/`, or every asset URL will be off by one
    path segment.
-6. `npx wrangler deploy`.
+5. `npx wrangler deploy --env production`. The custom-domain route attaches
+   okumo.dev on first deploy (DNS + cert are automatic on the zone).
 
 ## Notes / risks
 
