@@ -12,7 +12,7 @@ import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { AppError } from "@/lib/errors";
 import { stats, saveExportApi, saveImportApi, cloudPush } from "@/lib/client-api";
-import { useAuthStatus } from "@/lib/auth-status";
+import { fetchAuthStatus } from "@/lib/auth-status";
 import { describeCloudError } from "@/lib/cloud-error";
 import { withBase } from "@/lib/base-path";
 
@@ -156,7 +156,6 @@ export default function SettingsPage() {
   const [pushOffer, setPushOffer] = useState<
     null | "idle" | "pushing" | "done"
   >(null);
-  const auth = useAuthStatus();
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -167,11 +166,17 @@ export default function SettingsPage() {
 
     setImporting(true);
     setSaveMsg(null);
+    // Clear any offer from a PREVIOUS import: without this a second import
+    // while the offer is on screen changes nothing visually, and the user
+    // would push file B believing they pushed file A.
+    setPushOffer(null);
     try {
       await saveImportApi(file);
       // Signed in → offer to push the freshly-imported save before leaving the
       // page; the cloud still holds the OLD save and nothing else would tell
       // the user that. Signed-out / no backend behaves exactly as before.
+      // Awaited, not the hook snapshot — see fetchAuthStatus's doc comment.
+      const auth = await fetchAuthStatus();
       if (auth.backendAvailable && auth.user) {
         setImporting(false);
         setPushOffer("idle");
@@ -278,7 +283,7 @@ export default function SettingsPage() {
             <CozyButton
               variant="soft"
               onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
+              disabled={importing || pushOffer === "pushing"}
             >
               {importing ? t.uploading : t.upload}
             </CozyButton>

@@ -18,7 +18,11 @@ import {
   cloudPush,
   IS_STATIC,
 } from "@/lib/client-api";
-import { startGoogleSignIn, useAuthStatus } from "@/lib/auth-status";
+import {
+  fetchAuthStatus,
+  startGoogleSignIn,
+  useAuthStatus,
+} from "@/lib/auth-status";
 import { describeCloudError } from "@/lib/cloud-error";
 import { CloudWarnings } from "@/components/shared/CloudWarnings";
 import type { UnreconstitutedRow } from "@/lib/save/seed-strip";
@@ -327,6 +331,7 @@ export function OnboardingWizard() {
     // erase, so the "this replaces your progress" warning doesn't apply.
     setImporting(true);
     setImportError(null);
+    setPushOffer(null); // drop any offer left by a previous import
     try {
       await saveImportApi(file);
       // T-049 fix 1+2 (import→push bridge). A signed-in user's device now
@@ -335,7 +340,17 @@ export function OnboardingWizard() {
       // where the owner failed to find it in the first place. Signed-out (or
       // no backend) users keep the original behaviour exactly: straight to
       // /map, no extra screen.
-      if (auth.backendAvailable && auth.user) {
+      //
+      // AWAIT the settled status rather than reading the `auth` snapshot: the
+      // import is entirely local (no network) while useAuthStatus needs two
+      // sequential cross-origin probes, and it defaults pessimistic. Reading
+      // the snapshot would hard-navigate a signed-in user straight past the
+      // offer whenever the probes hadn't landed yet — the very dead end this
+      // ticket closes, failing intermittently and looking like correct
+      // signed-out behaviour. fetchStatus() is cached, so this is free once
+      // resolved.
+      const settled = await fetchAuthStatus();
+      if (settled.backendAvailable && settled.user) {
         setImporting(false);
         setPushOffer("idle");
         return;
