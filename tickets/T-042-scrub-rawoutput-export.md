@@ -1,7 +1,7 @@
 ---
 id: T-042
 title: Save export'tan provider hata gövdesini (raw_output) scrub'la
-status: backlog
+status: done
 priority: p3
 effort: S
 confidence: high

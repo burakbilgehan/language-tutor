@@ -13,7 +13,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-039](T-039-bridge-csrf-rebinding.md) | Bridge CSRF quota-burn + DNS-rebinding exfil (frame A, CONFIRMED) | backlog | p1 | S | high |
 | [T-040](T-040-server-mode-auth-gate.md) | Server modu env-token auth gate (frame B, public blocker) | backlog | p1 | M | high |
 | [T-041](T-041-save-import-hardening.md) | Save import sertleştirme (kötücül trigger + statik boyut cap) | backlog | p2 | M | high |
-| [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | backlog | p3 | S | high |
+| [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | done | p3 | S | high |
 | [T-043](T-043-multi-tenant-isolation.md) | Gerçek multi-tenant izolasyon (T-040 sonrası, monetize'e gate'li) | backlog | p3 | XL | low |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
