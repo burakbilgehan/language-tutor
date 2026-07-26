@@ -265,7 +265,8 @@ function isJsonContentType(req) {
   return raw.split(";")[0].trim().toLowerCase() === "application/json";
 }
 
-function deny(res, { status, reason }) {
+function deny(req, res, { status, reason }) {
+  req.resume(); // gövdeyi tüket: bağlantı temiz kapansın (gövde okunmaz)
   console.warn(`[bridge] REDDEDİLDİ (${status}): ${reason}`);
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify({ error: { message: `bridge: request rejected (${reason})` } }));
@@ -276,7 +277,7 @@ const server = http.createServer(async (req, res) => {
   // Tek kapı: Host + Origin (+ token). Başarısızsa hiçbir yol çalışmaz —
   // preflight bile ACAO/PNA almaz, POST ise runCli'ya asla ulaşmaz.
   const auth = authorize(req);
-  if (!auth.ok) return deny(res, auth);
+  if (!auth.ok) return deny(req, res, auth);
   const cors = corsHeaders(auth);
 
   if (req.method === "OPTIONS") {
@@ -293,8 +294,7 @@ const server = http.createServer(async (req, res) => {
     // CORS "simple request" (text/plain) yolunu kapat: preflight'sız
     // cross-origin POST artık gövde okunmadan reddedilir.
     if (!isJsonContentType(req)) {
-      req.resume();
-      return deny(res, {
+      return deny(req, res, {
         status: 415,
         reason: `content_type (${req.headers["content-type"] ?? "-"})`,
       });
