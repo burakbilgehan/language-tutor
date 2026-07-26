@@ -1,7 +1,7 @@
 ---
 id: T-047
 title: Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull)
-status: done
+status: review
 priority: p1
 effort: L
 confidence: medium

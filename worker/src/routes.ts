@@ -123,7 +123,10 @@ export const routes: Route[] = [
  */
 const MAX_UPLOAD_BYTES = 30 * 1024 * 1024;
 
-/** Client-declared save-format version, stored opaquely alongside the blob. */
+/** Client-declared save-format version, stored opaquely alongside the blob.
+ * Spelled again in src/lib/backup/cloud.ts (the client half) — the Worker is a
+ * separate package with its own lockfile and no path into the app's src/, so
+ * the two ends cannot share a constant. Change one, change the other. */
 const VERSION_HEADER = "x-lt-schema-version";
 
 async function putSave(request: Request, env: Env, key: string): Promise<Response> {
@@ -225,6 +228,22 @@ async function getSave(request: Request, env: Env, key: string): Promise<Respons
       { error: "save_version_mismatch", stored, expected: wanted, updatedAt },
       409
     );
+  }
+
+  // HEAD ("what is in the cloud?") must not read the object. matchRoute maps
+  // HEAD onto the GET handler and the runtime drops the body — but R2 would
+  // already have served every byte, so a metadata check would cost a full
+  // multi-MB egress. head() above is all this needs.
+  if (request.method === "HEAD") {
+    return new Response(null, {
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": String(meta.size),
+        "x-lt-key": key,
+        "x-lt-updated-at": updatedAt,
+        [VERSION_HEADER]: stored,
+      },
+    });
   }
 
   const object = await env.SAVES.get(key);

@@ -21,6 +21,15 @@ re-applied on pull), which measured 17.5 MB → 8.6 MB on the owner's real DB.
 | Lying `Content-Length` | Body streams through a `FixedLengthStream` pinned to the declared size. Overrunning it errors the write and the partial object is deleted. |
 | `schemaVersion` | Client-declared, stored in R2 `customMetadata`, echoed on GET as `x-lt-schema-version`. A GET declaring a different version is refused **409** — via `head()`, so no egress and, crucially, before the client overwrites local data. |
 | `updatedAt` | ISO timestamp in `customMetadata`, returned as `x-lt-updated-at`. Last-write-wins. |
+| `HEAD` | Metadata only — returns early **before** `get()`, so a "what is in the cloud?" check costs no egress. Without that early return the runtime would drop the body only after R2 had served every byte. |
+
+**Known hole in the server-side version gate, deliberately left:** the 409 fires
+only when the stored version is non-empty *and* the client declared one. A blob
+stored without a version (a T-045-era object, or a client that omits the header)
+is served unchecked. That is safe rather than lucky: the client validates again
+before swapping — `importBytes` → `validateSaveImage` refuses a wrong/absent
+version, so an unloadable blob cannot replace live data. The server gate is
+defence in depth and an egress saver, not the only check.
 
 Why `customMetadata` and not D1: one write, no divergence window between blob
 and version, and readable via `head()` without fetching the body. D1 would only

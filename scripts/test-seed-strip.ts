@@ -18,7 +18,15 @@ import Database from "better-sqlite3";
 import initSqlJs from "sql.js";
 import { drizzle as drizzleSqlJs } from "drizzle-orm/sql-js";
 import * as schema from "@/db/schema";
-import { stripSeedContent, type StripExec, type SeedBundle } from "@/lib/save/seed-strip";
+// sqlJsStripExec is imported, NOT redefined here: the browser upload path
+// (src/lib/backup/cloud.ts) uses this exact function, so the harness exercises
+// shipped code rather than a private lookalike that could silently drift.
+import {
+  stripSeedContent,
+  sqlJsStripExec,
+  type StripExec,
+  type SeedBundle,
+} from "@/lib/save/seed-strip";
 import { normalizeLangContent } from "@/lib/llm/lang-content";
 import { applyGrammarSeed } from "@/core/grammar";
 import { applyKanjiSeed } from "@/core/kanji";
@@ -45,22 +53,7 @@ function betterSqlite3Exec(db: Database.Database): StripExec {
   };
 }
 
-type SqlJsDb = import("sql.js").Database;
-function sqlJsExec(db: SqlJsDb): StripExec {
-  return {
-    all: (sql, params = []) => {
-      // sql.js exec() returns [{columns, values}] — reshape to plain objects so
-      // the strip module never learns which driver it is talking to.
-      const res = db.exec(sql, params as never);
-      if (!res.length) return [];
-      const { columns, values } = res[0];
-      return values.map((row) =>
-        Object.fromEntries(columns.map((c, i) => [c, row[i]]))
-      ) as Record<string, unknown>[];
-    },
-    run: (sql, params = []) => db.run(sql, params as never),
-  };
-}
+const sqlJsExec = sqlJsStripExec;
 
 function readSeedFile<T>(dir: string, lang: string, field: string): Record<string, T> | null {
   const file = path.join("public", dir, `${lang}.json`);

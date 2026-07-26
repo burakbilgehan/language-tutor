@@ -27,8 +27,8 @@ import { AppError } from "@/lib/errors";
 import { SAVE_SCHEMA_VERSION } from "@/lib/save/version";
 import {
   stripSeedContent,
+  sqlJsStripExec,
   type SeedBundle,
-  type StripExec,
   type StripStats,
 } from "@/lib/save/seed-strip";
 
@@ -71,7 +71,10 @@ function apiUrl(path: string): string {
   return `${readCloudApiBase()}${path}`;
 }
 
-/** Header carrying the save-format version, matched in worker/src/routes.ts. */
+/** Header carrying the save-format version. Spelled again in
+ * worker/src/routes.ts (the server half) — the Worker is a separate package
+ * with its own lockfile and no path into this src/, so the two ends cannot
+ * share a constant. Change one, change the other. */
 const VERSION_HEADER = "x-lt-schema-version";
 
 /** Thrown when the user is not signed in. T-048 turns this into a sign-in
@@ -111,28 +114,6 @@ export async function isSignedIn(): Promise<boolean> {
 
 async function requireSession(): Promise<void> {
   if (!(await isSignedIn())) throw new NotSignedInError();
-}
-
-// ---------------------------------------------------------------------------
-// sql.js adapter for the env-agnostic strip module
-// ---------------------------------------------------------------------------
-
-type SqlJsDatabase = import("sql.js").Database;
-
-function sqlJsExec(db: SqlJsDatabase): StripExec {
-  return {
-    all: (sql, params = []) => {
-      // sql.js returns [{columns, values}]; reshape into plain row objects so
-      // the strip module stays driver-agnostic.
-      const res = db.exec(sql, params as never);
-      if (!res.length) return [];
-      const { columns, values } = res[0];
-      return values.map((row) =>
-        Object.fromEntries(columns.map((c, i) => [c, row[i]]))
-      ) as Record<string, unknown>[];
-    },
-    run: (sql, params = []) => db.run(sql, params as never),
-  };
 }
 
 /** Fetch the three packaged seeds for every language present in this save.
@@ -198,7 +179,7 @@ async function buildStrippedBlob(): Promise<{
   const SQL = await initSqlJs({ locateFile: (file: string) => withBase(`/${file}`) });
   const copy = new SQL.Database(original);
   try {
-    const exec = sqlJsExec(copy);
+    const exec = sqlJsStripExec(copy);
     // Which languages does this save contain? Drives which seeds to fetch.
     const languages = exec
       .all(`SELECT DISTINCT target_language AS lang FROM profiles`)

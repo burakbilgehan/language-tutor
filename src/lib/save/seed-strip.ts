@@ -89,6 +89,32 @@ export interface StripExec {
 }
 
 /**
+ * sql.js adapter for the port above — THE one the browser uses.
+ *
+ * Exported (rather than re-written at each call site) on purpose: the upload
+ * path in src/lib/backup/cloud.ts and the round-trip harness in
+ * scripts/test-seed-strip.ts must run the SAME adapter, or the harness only
+ * proves that its own private copy works while the shipped browser path goes
+ * unexercised. Type-only import, so nothing pulls sql.js into a bundle that
+ * does not already have it.
+ */
+export function sqlJsStripExec(db: import("sql.js").Database): StripExec {
+  return {
+    all: (sql, params = []) => {
+      // sql.js exec() returns [{columns, values}] — reshape into plain row
+      // objects so the strip module never learns which driver it is talking to.
+      const res = db.exec(sql, params as never);
+      if (!res.length) return [];
+      const { columns, values } = res[0];
+      return values.map((row) =>
+        Object.fromEntries(columns.map((c, i) => [c, row[i]]))
+      ) as Record<string, unknown>[];
+    },
+    run: (sql, params = []) => db.run(sql, params as never),
+  };
+}
+
+/**
  * The three packaged seeds, PER TARGET LANGUAGE — exactly as the fetch/read
  * helpers return them (a map from the row's natural key: slug / char / word).
  * Any entry may be absent; a missing seed simply means nothing is strippable

@@ -82,6 +82,32 @@ describe("save round-trip", () => {
     expect(await sha256(got)).toBe(await sha256(payload.buffer as ArrayBuffer));
   });
 
+  it("HEAD returns metadata with no body (the cheap 'what is in the cloud?' check)", async () => {
+    const { cookie } = await createTestSession("head@example.com");
+    const payload = new Uint8Array(2048).fill(3);
+    await SELF.fetch(
+      req("/api/save", {
+        method: "PUT",
+        body: payload,
+        headers: { cookie, [VERSION]: "8" },
+      })
+    );
+
+    const res = await SELF.fetch(req("/api/save", { method: "HEAD", headers: { cookie } }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get(VERSION)).toBe("8");
+    expect(res.headers.get("x-lt-updated-at")).toBeTruthy();
+    expect(res.headers.get("content-length")).toBe(String(payload.byteLength));
+    // The whole point: the size is reported without the object being read.
+    expect((await res.arrayBuffer()).byteLength).toBe(0);
+  });
+
+  it("HEAD with no stored save is 404", async () => {
+    const { cookie } = await createTestSession("head404@example.com");
+    const res = await SELF.fetch(req("/api/save", { method: "HEAD", headers: { cookie } }));
+    expect(res.status).toBe(404);
+  });
+
   it("GET with no stored save is 404", async () => {
     const { cookie } = await createTestSession("empty@example.com");
     const res = await SELF.fetch(req("/api/save", { headers: { cookie } }));
