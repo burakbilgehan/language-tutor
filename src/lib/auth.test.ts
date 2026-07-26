@@ -6,12 +6,18 @@ import { authEnabled, isAuthed, requireAuth, tokenMatches } from "./auth";
 
 // ---------------------------------------------------------------- helpers
 
-function withToken<T>(value: string | undefined, fn: () => T): T {
+/** Run fn with APP_AUTH_TOKEN set to `value`, then restore. Async-aware: it
+ * awaits fn before restoring, so assertions after an `await` inside fn still
+ * see the intended env (a sync-only version would restore at the first await). */
+async function withToken<T>(
+  value: string | undefined,
+  fn: () => T | Promise<T>
+): Promise<T> {
   const prev = process.env.APP_AUTH_TOKEN;
   if (value === undefined) delete process.env.APP_AUTH_TOKEN;
   else process.env.APP_AUTH_TOKEN = value;
   try {
-    return fn();
+    return await fn();
   } finally {
     if (prev === undefined) delete process.env.APP_AUTH_TOKEN;
     else process.env.APP_AUTH_TOKEN = prev;
@@ -23,8 +29,8 @@ const req = (headers: Record<string, string> = {}) =>
 
 // ------------------------------------------------- gate OFF = strict no-op
 
-test("gate off: unset token is a complete no-op", () => {
-  withToken(undefined, () => {
+test("gate off: unset token is a complete no-op", async () => {
+  await withToken(undefined, () => {
     assert.equal(authEnabled(), false);
     assert.equal(isAuthed(req()), true);
     assert.equal(requireAuth(req()), null);
@@ -34,9 +40,9 @@ test("gate off: unset token is a complete no-op", () => {
   });
 });
 
-test("gate off: empty / whitespace-only APP_AUTH_TOKEN stays off", () => {
+test("gate off: empty / whitespace-only APP_AUTH_TOKEN stays off", async () => {
   for (const v of ["", "   ", "\t\n"]) {
-    withToken(v, () => {
+    await withToken(v, () => {
       assert.equal(authEnabled(), false, `value ${JSON.stringify(v)}`);
       assert.equal(requireAuth(req()), null);
     });
@@ -56,8 +62,8 @@ test("gate on: no credential → 401 with a stable error code", async () => {
   });
 });
 
-test("gate on: bearer header", () => {
-  withToken("s3cret", () => {
+test("gate on: bearer header", async () => {
+  await withToken("s3cret", () => {
     assert.equal(requireAuth(req({ authorization: "Bearer s3cret" })), null);
     assert.equal(requireAuth(req({ authorization: "bearer s3cret" })), null);
     assert.ok(requireAuth(req({ authorization: "Bearer wrong" })));
@@ -65,8 +71,8 @@ test("gate on: bearer header", () => {
   });
 });
 
-test("gate on: cookie", () => {
-  withToken("s3cret", () => {
+test("gate on: cookie", async () => {
+  await withToken("s3cret", () => {
     assert.equal(requireAuth(req({ cookie: "lt_auth=s3cret" })), null);
     // Coexisting with other cookies, in any position.
     assert.equal(
@@ -78,8 +84,8 @@ test("gate on: cookie", () => {
   });
 });
 
-test("gate on: wrong token is a clean 401, never a throw", () => {
-  withToken("s3cret", () => {
+test("gate on: wrong token is a clean 401, never a throw", async () => {
+  await withToken("s3cret", () => {
     // Different length used to make timingSafeEqual throw — must not.
     for (const bad of ["", "x", "s3cre", "s3crets3cret", "S3CRET"]) {
       assert.ok(requireAuth(req({ authorization: `Bearer ${bad}` })), bad);
@@ -87,8 +93,8 @@ test("gate on: wrong token is a clean 401, never a throw", () => {
   });
 });
 
-test("tokenMatches: exact, whole-value comparison", () => {
-  withToken("s3cret", () => {
+test("tokenMatches: exact, whole-value comparison", async () => {
+  await withToken("s3cret", () => {
     assert.equal(tokenMatches("s3cret"), true);
     assert.equal(tokenMatches(" s3cret"), false);
     assert.equal(tokenMatches(null), false);
