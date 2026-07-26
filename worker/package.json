@@ -1,0 +1,21 @@
+{
+  "name": "language-tutor-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "migrate:local": "wrangler d1 execute lt-auth --local --file=./migrations/0001_better_auth.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-auth": "^1.6.25",
+    "kysely": "^0.29.4",
+    "kysely-d1": "^0.4.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260726.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.114.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "language-tutor-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  // better-auth pulls in Node builtins (crypto/buffer) for hashing + jose.
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": { "enabled": true },
+
+  "vars": {
+    // Dev defaults. In production these are set per-environment.
+    "BETTER_AUTH_URL": "http://localhost:8787",
+    // Comma-separated. The GitHub Pages origin goes here in prod.
+    "TRUSTED_ORIGINS": "http://localhost:8787,http://localhost:3000"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lt-auth",
+      // Placeholder: `wrangler dev`/`d1 execute --local` never contact the API,
+      // so local development needs no real database id. The owner replaces this
+      // with the id printed by `wrangler d1 create lt-auth` before deploying.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "./migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "SAVES",
+      "bucket_name": "lt-saves"
+    }
+  ]
+}
