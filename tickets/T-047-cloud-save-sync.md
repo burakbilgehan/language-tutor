@@ -36,5 +36,6 @@ yerine bizim R2.
 route'lar için de geçerli — save upload/download authed + tenant-scoped
 (kullanıcı yalnız kendi `saves/{userId}`'ine erişir).
 
-Fence: `src/worker/saves/*` + `src/lib/client-api.ts` + `src/lib/backup/*`.
+Fence: `worker/` (top-level, T-045 iskeleti — `src/worker` DEĞİL) +
+`src/lib/client-api.ts` + `src/lib/backup/*`.
 T-046 ile aynı Worker → **auth önce merge**, sonra bu.

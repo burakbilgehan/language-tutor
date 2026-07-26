@@ -33,5 +33,16 @@ buydu: "handler auth'tan önce koştu"); (4) `src/lib/auth.test.ts` yalnız Next
 `route.ts`'leri yürüyor — **Worker'ın kendi test-gate'i gerekir** (her
 mutating Worker route'u auth kontrolü yapmalı, test'le kilitli).
 
-Fence (T-047 ile aynı Worker codebase): `src/worker/auth/*`. T-047 ile SERİ
-ya da fence-ayrık paralel + **auth önce merge**.
+Fence (T-047 ile aynı Worker codebase): `worker/` (T-045 iskeleti — top-level
+`worker/` dizini, `src/worker` DEĞİL; kendi package.json/lockfile'ı var).
+T-047 ile SERİ ya da fence-ayrık paralel + **auth önce merge**.
+
+T-045 sonrası notlar (2026-07-26): (1) better-auth ≥1.6 raw D1 binding'i
+doğrudan kabul ediyor — `kysely`/`kysely-d1` deps kullanılmıyor, kaldır.
+(2) `emailAndPassword: { enabled: true }` spike-only açık kayıt endpoint'i —
+kaldır. (3) Worker'da CORS/preflight YOK (curl'de görünmez, browser'da
+zorunlu — credentials'lı CORS her domain seçeneğinde şart). (4)
+`schema-gen.config.ts` `src/auth.ts`'in plugin/provider setini elle
+aynalıyor — drift riski, senkron tut. (5) **Custom domain magic-link'in ön
+şartı çıktı** (hiçbir sağlayıcı domain'siz keyfi alıcıya göndermiyor);
+domain yoksa kapsam Google-only'ye düşer.

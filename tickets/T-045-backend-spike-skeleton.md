@@ -1,7 +1,7 @@
 ---
 id: T-045
 title: Backend spike + iskelet (Cloudflare Worker + R2 + D1 + auth uçtan uca)
-status: backlog
+status: done
 priority: p1
 effort: M
 confidence: medium
