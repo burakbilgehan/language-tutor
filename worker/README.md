@@ -1,8 +1,40 @@
-# worker/ — language-tutor backend (T-046)
+# worker/ — language-tutor backend (T-046, T-047)
 
 Cloudflare Worker holding **identity** (better-auth, Google-only, sessions in
 D1) and the **per-user save blob** in R2. T-045 was the spike that proved the
-stack; T-046 hardened it. T-047 builds real save-sync on top.
+stack; T-046 hardened it; T-047 built real save-sync on top.
+
+## Save-sync (T-047)
+
+`GET`/`PUT /api/save`, authed, key `saves/{userId}/latest.db` derived from the
+**session** — never from client input, so no user can address another's object.
+
+The backend is deliberately **format-blind**: it stores an opaque byte string
+plus an opaque version label. It never parses SQLite and never decides
+compatibility; the client owns the save format. What the client uploads is a
+**seed-stripped** image (content the CDN already serves is removed and
+re-applied on pull), which measured 17.5 MB → 8.6 MB on the owner's real DB.
+
+| Concern | Behaviour |
+| --- | --- |
+| Size cap | 30 MB. `Content-Length` missing → **411**; over cap → **413**, decided *before* `request.body` is touched (no R2 write, no streaming). |
+| Lying `Content-Length` | Body streams through a `FixedLengthStream` pinned to the declared size. Overrunning it errors the write and the partial object is deleted. |
+| `schemaVersion` | Client-declared, stored in R2 `customMetadata`, echoed on GET as `x-lt-schema-version`. A GET declaring a different version is refused **409** — via `head()`, so no egress and, crucially, before the client overwrites local data. |
+| `updatedAt` | ISO timestamp in `customMetadata`, returned as `x-lt-updated-at`. Last-write-wins. |
+
+Why `customMetadata` and not D1: one write, no divergence window between blob
+and version, and readable via `head()` without fetching the body. D1 would only
+buy cross-user queries that manual push/pull does not need.
+
+Why a `FixedLengthStream` rather than a counting `TransformStream`: R2's `put()`
+rejects a stream of unknown length, and `pipeThrough` erases it. The
+`TransformStream` variant broke *every* upload — caught by the suite, not by
+reasoning.
+
+`scripts/mint-dev-session.mjs` mints a signed session cookie against the local
+D1 so `curl` can exercise the authed routes without a real Google sign-in. Sign
+with better-auth's own `makeSignature` — it emits standard base64, and a
+hand-rolled base64url signature silently resolves the session to `null`.
 
 ## Architecture
 
@@ -151,6 +183,13 @@ absent (verified), so it works on a fresh clone.
 | `GET /api/auth/get-session` w/ signed cookie | session + user resolved from D1 |
 | `PUT`/`GET /api/save` w/ session | round-trips; key `saves/<userId>/latest.db` |
 | second user `GET /api/save` | `404` on **its own** key — never user A's blob |
+| **T-047** `PUT` real 8.55 MB stripped blob | `200`, `bytes: 8962048` |
+| `GET` it back | **byte-identical** (same SHA-256), `content-length` + version/updatedAt headers |
+| `GET` declaring version 8 vs stored 7 | `409 save_version_mismatch` |
+| `PUT` 35 MB body (cap 30 MB) | `413 too_large`; the stored save is **unchanged** (hash re-verified) |
+| `PUT` chunked, no `Content-Length` | `411 length_required` |
+| unauthed `PUT` then re-`GET` | `401`, stored blob byte-identical — no side effect |
+| pulled blob | `PRAGMA integrity_check` = ok, 3 profiles, 554 grammar rows `pending` (awaiting CDN refill) |
 | `POST /api/auth/sign-up/email` | `400 EMAIL_PASSWORD_SIGN_UP_DISABLED` |
 | `POST /api/auth/sign-in/magic-link` | `404` — plugin removed |
 | `POST /api/auth/sign-in/social` (google) | `200` → `accounts.google.com` with `state` + PKCE `code_challenge` |
