@@ -146,8 +146,11 @@ export interface RestoreCandidate {
   at: number;
 }
 
-/** Does the local browser DB have no profile yet (empty / freshly evicted)? */
-async function isLocalEmpty(): Promise<boolean> {
+/** Does the local browser DB have no profile yet (empty / freshly evicted)?
+ * Exported for the cloud controller (./cloud.ts), which needs the SAME guard:
+ * its destination is a single R2 key with no version history, so overwriting it
+ * with an empty image is even less recoverable than the Drive case below. */
+export async function isLocalEmpty(): Promise<boolean> {
   try {
     const { getBrowserDb } = await import("@/db/browser");
     const { getActiveProfile } = await import("@/core/profile");

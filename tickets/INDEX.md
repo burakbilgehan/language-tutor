@@ -17,7 +17,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-043](T-043-multi-tenant-isolation.md) | Server-mode (self-host) multi-tenant izolasyon — cloud tenancy T-046/47'ye taşındı | backlog | p3 | XL | low |
 | [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) — stack DOĞRULANDI | done | p1 | M | medium |
 | [T-046](T-046-auth-better-auth.md) | Auth — better-auth Worker'da (Google-only, same-origin, test-gate'li) | done | p1 | L | medium |
-| [T-047](T-047-cloud-save-sync.md) | Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull) | backlog | p1 | L | medium |
+| [T-047](T-047-cloud-save-sync.md) | Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull) | review | p1 | L | medium |
 | [T-048](T-048-login-entry-ui.md) | Giriş UI (anonim/load + login + buluttan getir) | backlog | p2 | M | high |
 | [T-044](T-044-mcq-bracket-grading.md) | mcq'da doğru şık "yanlış" sayılıyor (bracket strip asimetrisi) | done | p1 | S | high |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |

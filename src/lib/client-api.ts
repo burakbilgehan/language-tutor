@@ -580,6 +580,38 @@ export async function saveExportApi(): Promise<void> {
   recordManualExport();
 }
 
+// ------------------------------------------------------------------ Bulut save-sync (T-047)
+//
+// Üçüncü yol: statik mod + oturum açılmış → kendi Worker API'mize senkron.
+// Drive (src/lib/backup/controller.ts) ile aynı mimarinin R2 ikizi; mantık
+// src/lib/backup/cloud.ts'te, burası yalnız seam. Manuel: otomatik yükleme
+// YOK (multi-MB blob her yazımda R2 Class A + kullanıcı uplink'i yakar).
+//
+// Sunuculu modda bulut senkronu yok: orada save zaten diskte, kendi .bak'ıyla.
+// UI T-048'in işi — burada yalnız çağrılabilir fonksiyonlar var.
+
+export async function cloudPush(): Promise<import("@/lib/backup/cloud").PushResult> {
+  const { pushToCloud } = await import("@/lib/backup/cloud");
+  return pushToCloud();
+}
+
+export async function cloudPull(): Promise<import("@/lib/backup/cloud").PullResult> {
+  const { pullFromCloud } = await import("@/lib/backup/cloud");
+  return pullFromCloud();
+}
+
+export async function cloudInfo(): Promise<import("@/lib/backup/cloud").CloudSaveInfo> {
+  const { getCloudInfo } = await import("@/lib/backup/cloud");
+  return getCloudInfo();
+}
+
+/** Bulut senkronu bu ortamda kullanılabilir mi (statik mod + oturum)? */
+export async function cloudAvailable(): Promise<boolean> {
+  if (!IS_STATIC) return false;
+  const { isSignedIn } = await import("@/lib/backup/cloud");
+  return isSignedIn();
+}
+
 export async function saveImportApi(file: File): Promise<void> {
   if (!IS_STATIC) {
     const fd = new FormData();

@@ -34,7 +34,11 @@ describe("authenticated round trip", () => {
       req("/api/save", alice.cookie, { method: "PUT", body: "alice-save-bytes" })
     );
     expect(put.status).toBe(200);
-    expect(await put.json()).toEqual({
+    // Subset match, not exact: T-047 added updatedAt/schemaVersion/bytes to the
+    // PUT response. What this test guards is the AUTH property — that the key
+    // is scoped to the session's user — so it must not break every time the
+    // payload gains a field.
+    expect(await put.json()).toMatchObject({
       ok: true,
       key: `saves/${alice.userId}/latest.db`,
     });
