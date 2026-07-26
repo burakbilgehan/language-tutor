@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
@@ -30,7 +31,10 @@ function loadSeed(lang: string) {
 
 // Deliberately NO auto-queue on list open (unlike /api/kanji): vocab is
 // ~5000 entries — generation is user-triggered only, like grammar.
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {

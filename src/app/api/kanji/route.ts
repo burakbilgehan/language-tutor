@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
@@ -31,7 +32,10 @@ function loadSeed(lang: string) {
   return seedCache.get(lang) ?? null;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {

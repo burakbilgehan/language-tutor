@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getActiveProfile } from "@/lib/profile";
 import { db } from "@/db";
@@ -12,7 +13,10 @@ export const runtime = "nodejs";
  * current native language, in place (T-031). One fast LLM call; structure and
  * all progress (nodes, lessons, SRS, attempts) are preserved.
  */
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const gate = requireLlm();
   if (gate) return gate;
   const profile = getActiveProfile();

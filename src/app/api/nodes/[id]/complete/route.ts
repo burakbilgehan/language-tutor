@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, tables } from "@/db";
@@ -43,9 +44,12 @@ function maybeAutoExtend(
 }
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const { id: nodeId } = await params;
   const profile = getActiveProfile();
   if (!profile) {

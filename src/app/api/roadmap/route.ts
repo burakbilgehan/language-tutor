@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
@@ -6,7 +7,10 @@ import { recoverStaleJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   recoverStaleJobs();
   const profile = getActiveProfile();
   if (!profile) {

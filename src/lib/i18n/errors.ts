@@ -73,6 +73,12 @@ const CATALOG: Record<ErrorCode, { tr: Msg; en: Msg }> = {
     tr: () => "Müfredat çevirisi tamamlanamadı, tekrar dene.",
     en: () => "Curriculum translation couldn't complete, try again.",
   },
+  unauthorized: {
+    tr: () =>
+      "Bu sunucu bir erişim token'ı ile korunuyor. Adres çubuğuna /api/auth?token=… yazarak giriş yapabilirsin.",
+    en: () =>
+      "This server is protected by an access token. Visit /api/auth?token=… to authenticate.",
+  },
   llm_unconfigured: {
     tr: () =>
       "Bu işlem için bir LLM sağlayıcısı gerekli. Ayarlar → LLM Sağlayıcı bölümünden yapılandırabilirsin.",

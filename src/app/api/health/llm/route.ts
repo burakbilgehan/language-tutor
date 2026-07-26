@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getProvider, LlmAuthError } from "@/lib/llm/provider";
@@ -14,7 +15,10 @@ export function GET() {
   });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const started = Date.now();
   try {
     const result = await getProvider().generateJson({

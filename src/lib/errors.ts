@@ -29,6 +29,8 @@ export const ERROR_CODES = [
   "curriculum_translate_failed",
   // Kept verbatim: useLlmStatus/client gating already key on this string.
   "llm_unconfigured",
+  // T-040: server-mode env-token gate (APP_AUTH_TOKEN) rejected the request.
+  "unauthorized",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
@@ -18,7 +19,10 @@ const Input = z.object({
   contextNodeId: z.string().nullish(),
 });
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   // Latest session's history, so the chat page can restore it.
   const profile = getActiveProfile();
   if (!profile) return NextResponse.json({ sessionId: null, messages: [] });
@@ -26,6 +30,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const gate = requireLlm();
   if (gate) return gate;
   const parsed = Input.safeParse(await req.json());

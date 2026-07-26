@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getActiveProfile } from "@/lib/profile";
@@ -14,6 +15,9 @@ const Input = z.object({ level: z.string().min(1).max(8) });
  * the automatic current-level fill).
  */
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const gate = requireLlm();
   if (gate) return gate;
   recoverStaleJobs();

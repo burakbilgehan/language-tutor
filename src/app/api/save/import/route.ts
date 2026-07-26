@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { importSave, SaveImportError } from "@/lib/save/import";
 
@@ -6,6 +7,9 @@ export const runtime = "nodejs";
 const MAX_BYTES = 100 * 1024 * 1024; // 100 MB guard
 
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   let form: FormData;
   try {
     form = await req.formData();
