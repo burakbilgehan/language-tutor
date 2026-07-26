@@ -1,7 +1,7 @@
 ---
 id: T-041
 title: Save import sertleştirme (kötücül trigger + statik boyut cap)
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: high
