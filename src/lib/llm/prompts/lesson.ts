@@ -23,9 +23,9 @@ export function lessonPrompt(opts: {
 
   const jaRules =
     opts.profile.targetLanguage === "ja"
-      ? ` Kanji kullanmaktan kaçınma: seviyeye uygun temel kanjileri erken tanıt ve kullan; kanji içeren HER metinde furigana'yı köşeli parantezle ekle: 私[わたし]は日本語[にほんご]を勉強[べんきょう]します. Öğrenci cevaplarını ROMAJI ile yazar (klavyesinde kana yok) — alıştırma cevapları (answer/accept_also) parantezsiz, sade olsun.`
+      ? ` Kanji kullanmaktan kaçınma: seviyeye uygun temel kanjileri erken tanıt ve kullan; kanji içeren HER metinde furigana'yı köşeli parantezle ekle: 私[わたし]は日本語[にほんご]を勉強[べんきょう]します. Öğrenci cevaplarını ROMAJI ile yazar (klavyesinde kana yok) — YAZARAK cevaplanan alıştırmalarda (fill_blank/translate/free_response) answer/accept_also parantezsiz, sade olsun. mcq'da ise options furigana parantezli olabilir; answer, seçeneğin parantezler dahil BİREBİR kopyası olmalı.`
       : opts.profile.targetLanguage === "zh"
-        ? ` Hanzi kullanmaktan kaçınma: seviyeye uygun temel hanzileri erken tanıt ve kullan; hanzi içeren HER metinde pinyin okunuşu köşeli parantezle ekle: 我[wǒ]是[shì]学生[xuésheng]. Öğrenci cevaplarını PINYIN ile yazar (klavyesinde hanzi yok) ve ton işareti YAZAMAYABİLİR — alıştırma cevaplarında (answer/accept_also) ton işaretsiz sade pinyin varyantını da ekle (ör. "wǒ shì" için "wo shi").`
+        ? ` Hanzi kullanmaktan kaçınma: seviyeye uygun temel hanzileri erken tanıt ve kullan; hanzi içeren HER metinde pinyin okunuşu köşeli parantezle ekle: 我[wǒ]是[shì]学生[xuésheng]. Öğrenci cevaplarını PINYIN ile yazar (klavyesinde hanzi yok) ve ton işareti YAZAMAYABİLİR — YAZARAK cevaplanan alıştırmalarda (fill_blank/translate/free_response) answer/accept_also parantezsiz olsun ve ton işaretsiz sade pinyin varyantını da ekle (ör. "wǒ shì" için "wo shi"). mcq'da ise options pinyin parantezli olabilir; answer, seçeneğin parantezler dahil BİREBİR kopyası olmalı.`
         : "";
 
   const system = `Sen sıcak ve sabırlı bir ${lang} öğretmenisin. Ana dili ${native} olan öğrencilere ders içeriği hazırlıyorsun. Açıklamalar ${native} dilinde, hedef dildeki her metnin okunuşu (reading, latin harfli) mutlaka verilir.${jaRules} Sadece istenen JSON'u döndür.`;

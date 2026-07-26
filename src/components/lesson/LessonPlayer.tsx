@@ -642,7 +642,9 @@ function ExerciseCard({
               <span className="ml-2 text-sm text-gold">+{result.xpAwarded} XP</span>
             )}
           </div>
-          <p className="text-sm">{result.feedbackTr}</p>
+          <p className="text-sm">
+            <Furigana text={result.feedbackTr} lang={cjkLang} />
+          </p>
           <CozyButton
             className="mt-3"
             variant="soft"

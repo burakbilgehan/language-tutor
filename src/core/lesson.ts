@@ -271,8 +271,10 @@ export async function attemptExercise(
   const accepted = [exercise.answer, ...(exercise.acceptAlso ?? [])].map(
     stripFurigana
   );
+  // Strip BOTH sides: mcq responses are machine-copied option text and can
+  // carry bracket readings (姉[あね]); typed responses never do (no-op).
   const isExactMatch = accepted.some((a) =>
-    answersMatchFor(profile.targetLanguage, a, userResponse)
+    answersMatchFor(profile.targetLanguage, a, stripFurigana(userResponse))
   );
 
   let result: Omit<AttemptResultDto, "xpAwarded">;
