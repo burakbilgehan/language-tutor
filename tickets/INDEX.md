@@ -15,6 +15,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-041](T-041-save-import-hardening.md) | Save import sertleştirme (kötücül trigger + statik boyut cap) | done | p2 | M | high |
 | [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | done | p3 | S | high |
 | [T-043](T-043-multi-tenant-isolation.md) | Server-mode (self-host) multi-tenant izolasyon — cloud tenancy T-046/47'ye taşındı | backlog | p3 | XL | low |
+| [T-051](T-051-rebrand-okumo.md) | Rebranding — ürün adı okumo (Kumo maskot kalır); branding geldikçe büyür | backlog | p2 | M | medium |
 | [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) — stack DOĞRULANDI | done | p1 | M | medium |
 | [T-046](T-046-auth-better-auth.md) | Auth — better-auth Worker'da (Google-only, same-origin, test-gate'li) | done | p1 | L | medium |
 | [T-047](T-047-cloud-save-sync.md) | Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull) | done | p1 | L | medium |
