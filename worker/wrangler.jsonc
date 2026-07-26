@@ -94,8 +94,7 @@
         {
           "binding": "DB",
           "database_name": "lt-auth",
-          // Replaced with the real id printed by `wrangler d1 create lt-auth`.
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "57114b13-7271-499b-bd32-13bbac32a9fe",
           "migrations_dir": "./migrations"
         }
       ],
