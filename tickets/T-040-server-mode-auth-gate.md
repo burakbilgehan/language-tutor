@@ -1,13 +1,20 @@
 ---
 id: T-040
-title: Server modu auth/kimlik katmanı (public'e açılmadan önce blocker)
+title: Server modu env-token auth gate (public'e açılmadan önce blocker)
 status: backlog
 priority: p1
-effort: L
+effort: M
 confidence: high
 depends: []
 created: 2026-07-22
 ---
+**Kapsam daraltıldı (2026-07-26):** Bu ticket = env-token gate (proportionate
+kapanış). Gerçek multi-tenant izolasyon (per-user DB / profil sahipliği,
+job IDOR tenant'laşması) → **T-043**'e ayrıldı (monetization modeline gate'li,
+XL, ertelendi). Env-token gate her public-pivot şeklinde doğru; multi-tenant
+temeli bugün gereksiz over-build.
+
+
 T-026 dalga 5 bulgusu. **Tehdit çerçevesi B (public/monetize eşiği)** —
 bugün exploit DEĞİL (canlı deploy statik/Pages, `/api/*` route'ları
 `build-static.mjs:15` ile stash'leniyor; server modu localhost tek-kullanıcı).

@@ -11,9 +11,10 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | done | p2 | M | high |
 | [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | done | p1 | L | medium |
 | [T-039](T-039-bridge-csrf-rebinding.md) | Bridge CSRF quota-burn + DNS-rebinding exfil (frame A, CONFIRMED) | backlog | p1 | S | high |
-| [T-040](T-040-server-mode-auth-gate.md) | Server modu auth katmanı (frame B, public blocker) | backlog | p1 | L | high |
+| [T-040](T-040-server-mode-auth-gate.md) | Server modu env-token auth gate (frame B, public blocker) | backlog | p1 | M | high |
 | [T-041](T-041-save-import-hardening.md) | Save import sertleştirme (kötücül trigger + statik boyut cap) | backlog | p2 | M | high |
 | [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | backlog | p3 | S | high |
+| [T-043](T-043-multi-tenant-isolation.md) | Gerçek multi-tenant izolasyon (T-040 sonrası, monetize'e gate'li) | backlog | p3 | XL | low |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
 | [T-029](T-029-vocab-index-multiform.md) | Vocab index çok-form birleştirme (马 "horse") | done | p2 | S | high |
@@ -48,6 +49,46 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-010](T-010-llm-setup-wizard.md) | LLM bağlantı sihirbazı (kod bilmeyene kurulum akışı) | done | p1 | M | high |
 | [T-011](T-011-sidequest-backfill.md) | Mevcut nl/zh profillerine yan görev backfill | wontfix | p2 | S | high |
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu (ops'a taşındı — blast paneli) | wontfix | p3 | S | high |
+
+## Yol haritası (2026-07-26 sprint) — tüm açık backlog gruplaması
+
+Dalga 5 (security review) bitti. Burak kararı (2026-07-26): güvenliğin hepsi
+şimdi fix'lensin + tüm açık backlog dahil yeni gruplama. Kurallar aynı:
+adım = ayrı session, bitince main'e direkt push (T-008); paralel adımlar
+ayrı worktree + branch, küçük önce merge. Env notu: dev server + blast
+dashboard açık → ikinci `next build` YASAK (tsc/test/parity harness OK);
+kod değişikliği DB'ye yazmıyor ama blast'la kota penceresini çakıştırma.
+
+**Dalga 5.1 — Güvenlik (ŞİMDİ, bu session):** T-039–T-042 fix. Seri
+(save/bridge dosyaları kesişebilir). Her fix'te ATAK yolu + LEGİT yolu
+birlikte test (regresyon riski legit yolda). T-043 (multi-tenant) AÇILDI
+ama monetize'e gate'li — bu dalgada dokunulmaz.
+
+| Sıra | Ticket | Efor | Not |
+|---|---|---|---|
+| 5.1a | T-042 | S | raw_output export scrub — en ucuz, ısınma |
+| 5.1b | T-039 | S | Bridge Host allowlist + bearer token + Content-Type. Legit: browser→bridge preset hâlâ çalışmalı (token gönder) |
+| 5.1c | T-041 | M | Import: user-defined trigger/view reject-strip (şema-rewrite DEĞİL) + statik boyut cap + server magic-header. Legit: export→import round-trip + parity harness |
+| 5.1d | T-040 | M | Env-token gate (`APP_AUTH_TOKEN` + requireAuth wrapper) mutating/exfil route'larına. Localhost/tek-kullanıcı akışı token'sız çalışmaya devam etmeli (token setli değilse gate no-op) |
+
+**Dalga 6 — İçerik (p2), güvenlik sonrası:**
+| Sıra | Ticket | Efor | Not |
+|---|---|---|---|
+| 6a | T-005 | L | zh yazım + hanzi sözlüğü (CEDICT). Mevcut vocab/kanji seed altyapısına oturur; en yüksek değerli p2 |
+| 6b | T-001 | M | Inburgering deneme sınavları (nl'e özel) |
+
+**Dalga 7 — p3 / düşük öncelik:**
+| Sıra | Ticket | Efor | Not |
+|---|---|---|---|
+| 7a | T-004 | S | Overview LLM yorum katmanı — küçük, tek başına |
+| 7b | T-002 | XL | Skill tree (dallı ders grafiği) — en son, low confidence, tasarım ağır |
+
+**Karar bekleyen (sıralanmadı):**
+- T-023 (parked): Haiku içerik QA'sının vocab ayağı. Vocab content dolunca çekilir.
+- T-030 (reverted): ja sözlük yeniden deneme — Burak kararı + Jisho-tarzı prototip önkoşulu.
+- T-043 (deferred): multi-tenant — public/monetize kararına gate'li.
+
+---
 
 ## Yol haritası (2026-07-22 sprint, rev2)
 
