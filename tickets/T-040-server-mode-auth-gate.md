@@ -1,7 +1,7 @@
 ---
 id: T-040
 title: Server modu env-token auth gate (public'e açılmadan önce blocker)
-status: backlog
+status: done
 priority: p1
 effort: M
 confidence: high
@@ -57,3 +57,37 @@ Defense-in-depth rider'ları (bu ticket'la beraber ucuz): **S2** — server
 import'a magic-header ön-kontrolü ekle (`save-image.ts:63` browser'da var,
 server'da yok; near-noise ama ucuz). Job route IDOR'u (T-034, `core/jobs.ts:78`
 "NO profile scoping") bu ticket kapsamında tenant'laşmalı.
+
+---
+
+**Kapanış (2026-07-26):** Env-token gate shipped.
+
+- `src/lib/auth.ts` — `requireAuth(req)` guard (`requireLlm()` şekli/stilinde,
+  401 + stabil `unauthorized` kodu), `APP_AUTH_TOKEN` ile sürülüyor. Token
+  `Authorization: Bearer` VEYA `lt_auth` cookie ile sunulabilir.
+  Karşılaştırma SHA-256 digest üzerinden `timingSafeEqual` (constant-time; ham
+  buffer karşılaştırması uzunluk farkında throw eder, çıplak uzunluk kontrolü
+  de uzunluk sızdırır).
+- **APP_AUTH_TOKEN unset/boş → tam no-op.** localhost tek-kullanıcı akışı
+  birebir aynı; canlı doğrulandı (export 18MB döndü, PATCH profile, stats,
+  fixture LLM route hepsi 200; `/api/auth` gate kapalıyken 404 = inert).
+- `GET /api/auth?token=…` cookie bootstrap. Cookie opsiyonel değil zorunlu:
+  save export `window.location.href` navigasyonu (client-api.ts:562), header
+  taşıyamaz. HttpOnly + SameSite=**Strict** (Lax değil — cookie mutating
+  route'ları da yetkilendiriyor, cross-site POST /api/save/import cookie
+  taşımamalı; T-039'un savaştığı CSRF sınıfı) + Path=/ + Secure yalnız https
+  (aksi halde http://localhost kırılırdı).
+- `GET /api/health/llm` (üç boolean, client gating) ve
+  `GET /api/strokes/[char]` (vendored public stroke dataset) hariç TÜM route
+  method'ları gate'li. `requireAuth` her handler'da İLK ifade — `requireLlm()`
+  ve `req.json()/formData()` öncesi (yoksa auth'suz çağrı 100MB upload parse
+  ettirir ve LLM yapılandırılmış mı bilgisini sızdırır).
+- `src/lib/auth.test.ts` sweep'i **invariant'a çeviriyor**: her
+  `src/app/api/**/route.ts` yürünüyor, gate'siz method suite'i düşürüyor
+  (negatif kontrolle doğrulandı). Yeni route sessizce gate'siz shipleyemez.
+
+Şema değişikliği yok, SAVE_SCHEMA_VERSION bump yok, statik mod dokunulmadı.
+
+**Kasıtlı kapsam dışı:** S2 server import magic-header rider'ı → T-041
+(`src/lib/save/import.ts` sahipliği). Job route IDOR tenant'laşması /
+per-user DB / profil sahipliği → T-043.
