@@ -1,7 +1,7 @@
 ---
 id: T-046
 title: Auth — better-auth (Google + magic-link) Worker'da, güvenlik gate'li
-status: backlog
+status: done
 priority: p1
 effort: L
 confidence: medium
