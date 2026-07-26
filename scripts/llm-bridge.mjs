@@ -10,12 +10,20 @@
 //   node scripts/llm-bridge.mjs --backend opencode
 //   node scripts/llm-bridge.mjs --backend claude --port 9000
 //   node scripts/llm-bridge.mjs --origin https://kullanici.github.io
+//   node scripts/llm-bridge.mjs --token gizli   # ek: bearer token zorunlu
 //
-// Güvenlik:
+// Güvenlik (T-039 — derinlemesine savunma):
 //   - Sadece 127.0.0.1'e bağlanır: ağdaki başka makineler erişemez.
-//   - CORS varsayılanı localhost origin'leri; statik deploy'dan kullanmak
-//     için sayfanın origin'ini --origin ile ekleyin (drive-by websitelerin
-//     köprünüzü kullanmasını engeller).
+//   - Host allowlist: `Host` başlığı localhost/127.0.0.1[:port] değilse
+//     reddedilir → DNS rebinding (attacker.com → 127.0.0.1) ölür.
+//   - Origin allowlist EXECUTION'ı gate'ler (yalnız CORS yanıt başlığını
+//     değil): izinsiz origin CLI'yı hiç spawn etmez → drive-by CSRF kota
+//     yakması ölür. Statik deploy için sayfanın origin'ini --origin ile ekleyin.
+//   - Content-Type `application/json` zorunlu → CORS "simple request"
+//     (text/plain, preflight'sız) yolu kapanır.
+//   - PNA başlığı yalnız izinli origin'lere gönderilir; aksi halde
+//     Chromium'un rebinding savunmasını her site için devre dışı bırakırdı.
+//   - --token ile isteğe bağlı bearer token (Authorization: Bearer ...).
 //   - claude backend'i ANTHROPIC_API_KEY'i child env'den siler — abonelik
 //     yerine API faturalanmasın (uygulamadaki korumanın aynısı).
 
@@ -43,6 +51,9 @@ const BACKEND = argOf("backend", "claude");
 const PORT = Number(argOf("port", "8484"));
 const TIMEOUT_MS = Number(argOf("timeout", "180")) * 1000;
 const EXTRA_ORIGINS = argsOf("origin");
+// İsteğe bağlı bearer token. Varsayılan kapalı: açıldığında kullanıcının
+// token'ı uygulamanın "API anahtarı" alanına yapıştırması gerekir.
+const TOKEN = argOf("token", process.env.LLM_BRIDGE_TOKEN || "");
 
 // Boş bir çalışma dizini: CLI'lar bu projenin (veya kullanıcının) dosya
 // bağlamını asla görmesin.
@@ -204,22 +215,70 @@ function contentText(content) {
 }
 
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-function corsHeaders(req) {
+// Host başlığı: yalnız loopback isimleri. Sunucu 127.0.0.1'e bind olduğu için
+// başka bir Host ancak DNS rebinding'le (attacker.com → 127.0.0.1) gelebilir.
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1)(:\d+)?$/i;
+
+/**
+ * İsteği yetkilendir. `ok:false` → CLI ASLA çalışmaz, CORS başlığı verilmez.
+ * Katmanlar: Host allowlist → Origin allowlist → bearer token.
+ */
+function authorize(req) {
+  const host = req.headers.host ?? "";
+  if (!LOCAL_HOST.test(host)) {
+    return { ok: false, status: 403, reason: `host_not_allowed (${host || "-"})` };
+  }
   const origin = req.headers.origin;
-  const allowed =
+  // Origin yoksa istek tarayıcıdan gelmiyor (curl / node http-provider /
+  // llm:smoke). Tarayıcılar POST'ta Origin'i her zaman gönderir, bu yüzden
+  // bu dal drive-by saldırganın erişebileceği bir yol değil.
+  const originOk =
     !origin || LOCAL_ORIGIN.test(origin) || EXTRA_ORIGINS.includes(origin);
+  if (!originOk) return { ok: false, status: 403, reason: `origin_not_allowed (${origin})` };
+
+  if (TOKEN) {
+    const auth = req.headers.authorization ?? "";
+    const given = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (given !== TOKEN) return { ok: false, status: 401, reason: "bad_token" };
+  }
+  return { ok: true, origin };
+}
+
+/** CORS başlıkları YALNIZ yetkili isteklere (PNA dahil — bkz. T-039/3). */
+function corsHeaders(auth) {
+  if (!auth.ok) return {};
   return {
-    ...(allowed && origin ? { "access-control-allow-origin": origin } : {}),
+    ...(auth.origin ? { "access-control-allow-origin": auth.origin } : {}),
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type, authorization",
     // Chrome Private Network Access: public sayfa → localhost isteği için.
+    // Koşulsuz gönderilirse Chromium'un rebinding savunmasını her origin
+    // için kapatır; bu yüzden yalnız izinli origin'e.
     "access-control-allow-private-network": "true",
   };
 }
 
+/** İzin verilen tek gövde tipi: application/json (charset eki serbest). */
+function isJsonContentType(req) {
+  const raw = req.headers["content-type"];
+  if (!raw) return false;
+  return raw.split(";")[0].trim().toLowerCase() === "application/json";
+}
+
+function deny(res, { status, reason }) {
+  console.warn(`[bridge] REDDEDİLDİ (${status}): ${reason}`);
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: { message: `bridge: request rejected (${reason})` } }));
+}
+
 // -------------------------------------------------------------------- sunucu
 const server = http.createServer(async (req, res) => {
-  const cors = corsHeaders(req);
+  // Tek kapı: Host + Origin (+ token). Başarısızsa hiçbir yol çalışmaz —
+  // preflight bile ACAO/PNA almaz, POST ise runCli'ya asla ulaşmaz.
+  const auth = authorize(req);
+  if (!auth.ok) return deny(res, auth);
+  const cors = corsHeaders(auth);
+
   if (req.method === "OPTIONS") {
     res.writeHead(204, cors);
     return res.end();
@@ -231,6 +290,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/v1/chat/completions") {
+    // CORS "simple request" (text/plain) yolunu kapat: preflight'sız
+    // cross-origin POST artık gövde okunmadan reddedilir.
+    if (!isJsonContentType(req)) {
+      req.resume();
+      return deny(res, {
+        status: 415,
+        reason: `content_type (${req.headers["content-type"] ?? "-"})`,
+      });
+    }
     let body = "";
     req.on("data", (d) => (body += d));
     req.on("end", async () => {
@@ -284,6 +352,10 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`llm-bridge hazır → http://localhost:${PORT}/v1`);
   console.log(`  backend : ${BACKEND} (${Object.keys(ADAPTERS).join(" | ")})`);
   console.log(`  origins : localhost + ${EXTRA_ORIGINS.join(", ") || "(ek yok)"}`);
+  console.log(`  token   : ${TOKEN ? "gerekli (--token)" : "kapalı"}`);
+  if (TOKEN) {
+    console.log(`            Uygulamada "API anahtarı" alanına yapıştır: ${TOKEN}`);
+  }
   console.log(
     `Uygulamada: Ayarlar → LLM Sağlayıcı → "API / Yerel sunucu" → Base URL: http://localhost:${PORT}/v1`
   );
