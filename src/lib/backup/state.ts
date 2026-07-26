@@ -1,7 +1,7 @@
 // Backup bookkeeping — PURE logic + a thin localStorage wrapper.
 //
 // Scope fence (T-032): none of this may ride in the save image or the DB. If
-// it did, the "back up your progress" reminder and the Drive lastSyncedAt would
+// it did, the "back up your progress" reminder and the cloud lastSyncedAt would
 // travel between devices and reset incoherently. So all of it lives in
 // localStorage, keyed per browser. The pure functions here take state in and
 // out so they unit-test without a browser; `readBackupState`/`writeBackupState`
@@ -9,11 +9,11 @@
 
 /** Persisted backup bookkeeping (localStorage). All timestamps are epoch ms. */
 export interface BackupState {
-  /** When progress was last exported/backed up anywhere (download OR Drive). */
+  /** When progress was last exported/backed up anywhere (download OR cloud). */
   lastBackupAt: number | null;
   /** Completed-lesson count at the moment of the last backup. */
   lastBackupLessonCount: number;
-  /** Newest save timestamp we know is on Drive (for newer-on-startup compare). */
+  /** Newest save timestamp we know is in the cloud (set by cloud push/pull). */
   lastSyncedAt: number | null;
   /** User dismissed the reminder bar at this time — snooze the nudge. */
   reminderDismissedAt: number | null;
@@ -79,7 +79,7 @@ export function shouldRemind({ state, lessonCount, now }: RemindInput): boolean 
   return false;
 }
 
-/** Record that a backup just happened (download or Drive upload). Pure. */
+/** Record that a backup just happened (download or cloud push/pull). Pure. */
 export function markBackedUp(
   state: BackupState,
   lessonCount: number,

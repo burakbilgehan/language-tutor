@@ -7,7 +7,6 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
-import { BackupSection } from "@/components/settings/BackupSection";
 import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
@@ -41,7 +40,7 @@ const S = {
     serverUnreachable: "❌ Sunucuya ulaşılamadı",
     saveTitle: "Kayıt ve Yedekleme",
     saveDesc:
-      "Tüm ilerlemeni tek dosyaya indir, başka bir bilgisayarda yükleyip kaldığın yerden devam et. Dosyayı Drive veya USB ile taşıyabilirsin.",
+      "Tüm ilerlemeni tek dosyaya indir, başka bir bilgisayarda yükleyip kaldığın yerden devam et. Dosyayı bulut deposu ya da USB ile taşıyabilirsin.",
     download: "⬇️ Kaydı indir",
     upload: "⬆️ Kaydı yükle",
     uploading: "Yükleniyor...",
@@ -80,7 +79,7 @@ const S = {
     serverUnreachable: "❌ Could not reach the server",
     saveTitle: "Save & Backup",
     saveDesc:
-      "Download all your progress as a single file, load it on another computer, and pick up where you left off. You can move the file via Drive or USB.",
+      "Download all your progress as a single file, load it on another computer, and pick up where you left off. You can move the file via cloud storage or USB.",
     download: "⬇️ Download save",
     upload: "⬆️ Load save",
     uploading: "Loading...",
@@ -242,12 +241,9 @@ export default function SettingsPage() {
         </section>
 
         {/* Cloud account + manual push/pull (T-046/T-047, surfaced by T-048).
-            Sits beside the Drive section, not instead of it: Drive stays the
-            anonymous default, this is the signed-in alternative. Static only. */}
+            The only remote backup since T-050 removed the Google Drive leg;
+            the file export/import above stays the anonymous path. Static only. */}
         <CloudAccountSection />
-
-        {/* Drive sync + local snapshots (T-032) — static mode only. */}
-        <BackupSection />
 
         <Link href="/about" className="text-sm text-ink-soft underline">
           {t.sourcesLink}

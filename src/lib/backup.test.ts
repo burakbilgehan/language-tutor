@@ -10,8 +10,7 @@ import {
   REMIND_SNOOZE_DAYS,
   type BackupState,
 } from "./backup/state";
-import { pruneToK, isRemoteNewer } from "./backup/rotate";
-import { syncReducer, EMPTY_SYNC_QUEUE } from "./backup/queue";
+import { pruneToK } from "./backup/rotate";
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = 1_700_000_000_000;
@@ -149,55 +148,16 @@ test("pruneToK with K=0 deletes everything", () => {
   );
 });
 
-test("pruneToK keeps the newest by the `at` it's given — the newest real upload survives when `at` is Drive modifiedTime, not a skewed uploader clock", () => {
-  // Scenario: a lagging device uploaded most recently. If ordering used the
-  // uploader's wall clock, `lagging` (small stamp) would sort oldest and be
-  // pruned. list() now feeds Drive-authoritative modifiedTime as `at`, so the
-  // genuinely-newest upload has the largest `at` and is kept.
-  const byModifiedTime = [
+test("pruneToK orders by the `at` it's given, not by insertion order", () => {
+  // The local snapshot store (src/db/browser.ts) feeds snapshot timestamps in
+  // whatever order IndexedDB hands them back, so ordering must come from `at`
+  // alone — the newest snapshot survives regardless of its position.
+  const unordered = [
     { id: "old", at: 1000 },
+    { id: "newest", at: 3000 },
     { id: "mid", at: 2000 },
-    { id: "lagging-but-newest", at: 3000 }, // Drive modifiedTime, not skewed
   ];
-  const doomed = pruneToK(byModifiedTime, 2);
+  const doomed = pruneToK(unordered, 2);
   assert.deepEqual(doomed, ["old"], "only the truly-oldest is pruned");
-  assert.ok(
-    !doomed.includes("lagging-but-newest"),
-    "the newest real upload is never pruned"
-  );
-});
-
-test("isRemoteNewer semantics", () => {
-  assert.equal(isRemoteNewer(null, 100), true, "never synced, remote exists");
-  assert.equal(isRemoteNewer(100, null), false, "remote empty");
-  assert.equal(isRemoteNewer(100, 200), true, "remote strictly newer");
-  assert.equal(isRemoteNewer(200, 100), false, "local ahead");
-  assert.equal(isRemoteNewer(100, 100), false, "equal is not newer");
-});
-
-// ---------------------------------------------------------------- sync queue
-
-test("queued coalesces to the newest pending, flags reauth", () => {
-  let s = syncReducer(EMPTY_SYNC_QUEUE, { type: "queued", at: 100 });
-  assert.equal(s.pending, true);
-  assert.equal(s.needsReauth, true);
-  assert.equal(s.pendingAt, 100);
-  s = syncReducer(s, { type: "queued", at: 50 });
-  assert.equal(s.pendingAt, 100, "older queued does not overwrite newer");
-  s = syncReducer(s, { type: "queued", at: 250 });
-  assert.equal(s.pendingAt, 250, "newer wins");
-});
-
-test("reauthed drops the banner but keeps pending for a flush", () => {
-  let s = syncReducer(EMPTY_SYNC_QUEUE, { type: "queued", at: 100 });
-  s = syncReducer(s, { type: "reauthed" });
-  assert.equal(s.needsReauth, false);
-  assert.equal(s.pending, true);
-  assert.equal(s.pendingAt, 100);
-});
-
-test("uploaded clears the queue", () => {
-  let s = syncReducer(EMPTY_SYNC_QUEUE, { type: "queued", at: 100 });
-  s = syncReducer(s, { type: "uploaded" });
-  assert.deepEqual(s, EMPTY_SYNC_QUEUE);
+  assert.ok(!doomed.includes("newest"), "the newest snapshot is never pruned");
 });
