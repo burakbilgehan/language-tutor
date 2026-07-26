@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SELF } from "cloudflare:test";
+import { migrate } from "./helpers/session";
 
 /**
  * Origin allowlist + CORS (T-046 acceptance criterion 1).
@@ -86,6 +87,36 @@ describe("OPTIONS preflight", () => {
     expect(res.headers.get("access-control-allow-headers")).toContain("content-type");
     expect(res.headers.get("access-control-max-age")).toBe("600");
   });
+
+  // REGRESSION GUARD. /api/auth/* is exempt from our origin allowlist for real
+  // methods (the Google callback is a cross-site redirect), and the first cut
+  // exempted OPTIONS too — which fell through to better-auth's router and
+  // returned 404. A non-2xx preflight makes the browser block the real request,
+  // silently killing dev sign-in: a credentialed application/json POST from
+  // localhost:3000 is not CORS-safelisted, so it DOES preflight.
+  it("answers the preflight for /api/auth/* too (not just our own routes)", async () => {
+    const res = await SELF.fetch(
+      new Request(`${ALLOWED}/api/auth/sign-in/social`, {
+        method: "OPTIONS",
+        headers: {
+          origin: ALLOWED_DEV,
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "content-type",
+        },
+      })
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ALLOWED_DEV);
+    expect(res.headers.get("access-control-allow-credentials")).toBe("true");
+  });
+
+  // The follow-through (the actual credentialed cross-origin sign-in POST
+  // succeeding, with CORS headers on the response) is covered by
+  // session.test.ts's "sign-in/social google still starts the OAuth redirect"
+  // plus the CORS assertions above. It is deliberately NOT duplicated here:
+  // that endpoint hits Google's discovery path, and running it after the other
+  // cases in this file makes it hang on a real network call. Verified by curl
+  // against `wrangler dev` instead — see README.
 
   it("refuses a preflight from an untrusted origin with no CORS headers", async () => {
     const res = await SELF.fetch(

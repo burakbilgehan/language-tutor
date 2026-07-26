@@ -28,11 +28,24 @@ export async function dispatch(request: Request, env: Env): Promise<Response> {
     return withCors(json({ error: "not_found" }, 404), origin, allowed);
   }
 
-  // better-auth's endpoints handle their own OPTIONS/origin logic; our
-  // allowlist would reject the legitimate cross-site Google callback redirect.
-  const skipOriginGate = route !== "method_not_allowed" && route.path === "/api/auth/";
+  // /api/auth/* is exempt from OUR origin allowlist for real (non-OPTIONS)
+  // methods: the Google callback is a legitimate cross-site top-level redirect
+  // from accounts.google.com, and an allowlist check would break sign-in.
+  // better-auth guards those endpoints itself, using the same parsed list.
+  //
+  // OPTIONS is NOT exempt, and that distinction is load-bearing. better-auth's
+  // router 404s on OPTIONS, and a non-2xx preflight makes the browser block the
+  // real request — which would break the dev flow (a credentialed
+  // application/json POST from localhost:3000 to localhost:8787 is not
+  // CORS-safelisted, so it preflights). Answering the preflight from the
+  // allowlist is safe: a preflight carries no cookies and no body, and the
+  // Google callback is a GET, so it is unaffected.
+  const exemptFromOriginGate =
+    request.method !== "OPTIONS" &&
+    route !== "method_not_allowed" &&
+    route.path === "/api/auth/";
 
-  if (!skipOriginGate) {
+  if (!exemptFromOriginGate) {
     const denied = guardOrigin(request, allowed);
     if (denied) return denied;
   }
