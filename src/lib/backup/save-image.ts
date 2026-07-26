@@ -44,6 +44,17 @@ export function stampAndSerialize(sqlite: SqlJsDatabase): Uint8Array {
   } catch {
     /* table may not exist on a very old image — nothing to scrub */
   }
+  // T-042: error rows' raw_output can carry a misconfigured custom/bridge
+  // provider's raw HTTP error body (possible Authorization/Bearer echo).
+  // NULL it so the shared save snapshot can't leak it; keep the rest of
+  // the error row (status, error message) intact.
+  try {
+    sqlite.run(
+      "UPDATE generation_jobs SET raw_output = NULL WHERE status = 'error'"
+    );
+  } catch {
+    /* table may not exist on a very old image — nothing to scrub */
+  }
   return sqlite.export();
 }
 

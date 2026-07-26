@@ -13,7 +13,12 @@ import { SAVE_SCHEMA_VERSION } from "./version";
  * export is taken mid-batch, those rows would otherwise get baked into the
  * snapshot and any session importing it would have recoverStaleJobs
  * (src/lib/jobs.ts) adopt them as orphans and start burning LLM tokens on its
- * own. done/error rows (job history) are left alone.
+ * own. done/error rows (job history) are left alone — except `raw_output`
+ * on `error` rows (T-042): that column can carry a misconfigured custom/
+ * bridge provider's raw HTTP error body, which may echo back an
+ * Authorization/Bearer header. NULLing it keeps the rest of the error row
+ * (status, error message, timestamps) useful while keeping keys out of the
+ * shared save snapshot, per config.ts's design intent.
  *
  * Deliberately NOT `new Database(db.$client.serialize())`: SQLite cannot
  * deserialize a WAL-mode image in memory (SQLITE_CANTOPEN). The VACUUM INTO
@@ -30,6 +35,11 @@ function snapshotWithoutJobQueue(): Buffer {
       copy
         .prepare(
           `DELETE FROM generation_jobs WHERE status IN ('queued', 'running')`
+        )
+        .run();
+      copy
+        .prepare(
+          `UPDATE generation_jobs SET raw_output = NULL WHERE status = 'error'`
         )
         .run();
       return copy.serialize();
