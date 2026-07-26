@@ -7,12 +7,13 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
-import { BackupSection } from "@/components/settings/BackupSection";
 import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { AppError } from "@/lib/errors";
-import { stats, saveExportApi, saveImportApi } from "@/lib/client-api";
+import { stats, saveExportApi, saveImportApi, cloudPush } from "@/lib/client-api";
+import { fetchAuthStatus } from "@/lib/auth-status";
+import { describeCloudError } from "@/lib/cloud-error";
 import { withBase } from "@/lib/base-path";
 
 const S = {
@@ -41,7 +42,7 @@ const S = {
     serverUnreachable: "❌ Sunucuya ulaşılamadı",
     saveTitle: "Kayıt ve Yedekleme",
     saveDesc:
-      "Tüm ilerlemeni tek dosyaya indir, başka bir bilgisayarda yükleyip kaldığın yerden devam et. Dosyayı Drive veya USB ile taşıyabilirsin.",
+      "Tüm ilerlemeni tek dosyaya indir, başka bir bilgisayarda yükleyip kaldığın yerden devam et. Dosyayı bulut deposu ya da USB ile taşıyabilirsin.",
     download: "⬇️ Kaydı indir",
     upload: "⬆️ Kaydı yükle",
     uploading: "Yükleniyor...",
@@ -53,6 +54,20 @@ const S = {
     importWarnStrong: "siler",
     importWarnAfter:
       "ve yüklenen kayıtla değiştirir. İki makinede de uygulamanın aynı sürümü kurulu olmalı.",
+    // T-049 fix 2: the import→push bridge. A signed-in user who loads a save
+    // file here has fresh local data the cloud does not have; without this the
+    // only way to reconcile is to notice the cloud section further down.
+    pushOfferTitle: "Kayıt yüklendi ✅",
+    pushOfferDesc:
+      "Giriş yapmış durumdasın — bu kaydı buluta da gönderebilirsin.",
+    pushOfferButton: "⬆️ Buluta gönder",
+    pushOfferPushing: "Gönderiliyor…",
+    pushOfferSkip: "Şimdilik geç",
+    pushOfferContinue: "Devam et",
+    pushOfferDone: "✅ Buluta gönderildi.",
+    pushOfferConfirm:
+      "Buluttaki kaydın bu cihazdaki (yeni yüklenen) kayıtla değiştirilecek. Devam edilsin mi?",
+    pushOfferFailed: "❌ Buluta gönderilemedi.",
     sourcesLink: "Kaynaklar & Lisanslar",
   },
   en: {
@@ -80,7 +95,7 @@ const S = {
     serverUnreachable: "❌ Could not reach the server",
     saveTitle: "Save & Backup",
     saveDesc:
-      "Download all your progress as a single file, load it on another computer, and pick up where you left off. You can move the file via Drive or USB.",
+      "Download all your progress as a single file, load it on another computer, and pick up where you left off. You can move the file via cloud storage or USB.",
     download: "⬇️ Download save",
     upload: "⬆️ Load save",
     uploading: "Loading...",
@@ -92,6 +107,17 @@ const S = {
     importWarnStrong: "erases",
     importWarnAfter:
       "the current progress on this machine and replaces it with the loaded save. Both machines must have the same version of the app installed.",
+    pushOfferTitle: "Save loaded ✅",
+    pushOfferDesc:
+      "You're signed in — you can send this save to the cloud as well.",
+    pushOfferButton: "⬆️ Send to cloud",
+    pushOfferPushing: "Sending…",
+    pushOfferSkip: "Not now",
+    pushOfferContinue: "Continue",
+    pushOfferDone: "✅ Sent to the cloud.",
+    pushOfferConfirm:
+      "Your cloud save will be replaced with the (just-loaded) save on this device. Continue?",
+    pushOfferFailed: "❌ Could not send to the cloud.",
     sourcesLink: "Sources & Licenses",
   },
 };
@@ -126,6 +152,10 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  // T-049 fix 2: non-null once an import succeeded while signed in.
+  const [pushOffer, setPushOffer] = useState<
+    null | "idle" | "pushing" | "done"
+  >(null);
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,14 +166,45 @@ export default function SettingsPage() {
 
     setImporting(true);
     setSaveMsg(null);
+    // Clear any offer from a PREVIOUS import: without this a second import
+    // while the offer is on screen changes nothing visually, and the user
+    // would push file B believing they pushed file A.
+    setPushOffer(null);
     try {
       await saveImportApi(file);
+      // Signed in → offer to push the freshly-imported save before leaving the
+      // page; the cloud still holds the OLD save and nothing else would tell
+      // the user that. Signed-out / no backend behaves exactly as before.
+      // Awaited, not the hook snapshot — see fetchAuthStatus's doc comment.
+      const auth = await fetchAuthStatus();
+      if (auth.backendAvailable && auth.user) {
+        setImporting(false);
+        setPushOffer("idle");
+        return;
+      }
       window.location.href = withBase("/map"); // full reload → fresh reads
     } catch (err) {
       setSaveMsg(
         `❌ ${err instanceof AppError ? localize(err) : t.saveImportFailed}`
       );
       setImporting(false);
+    }
+  };
+
+  // Unlike the onboarding bridge, this one KEEPS a confirm: here the cloud may
+  // already hold a real save (possibly from another device) that this push
+  // would overwrite, and the user did not necessarily arrive via a sign-in.
+  const onPushAfterImport = async () => {
+    if (!window.confirm(t.pushOfferConfirm)) return;
+    setPushOffer("pushing");
+    setSaveMsg(null);
+    try {
+      await cloudPush();
+      setPushOffer("done");
+    } catch (err) {
+      const { kind } = describeCloudError(err);
+      setSaveMsg(`${t.pushOfferFailed} (${kind})`);
+      setPushOffer("idle");
     }
   };
 
@@ -222,7 +283,7 @@ export default function SettingsPage() {
             <CozyButton
               variant="soft"
               onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
+              disabled={importing || pushOffer === "pushing"}
             >
               {importing ? t.uploading : t.upload}
             </CozyButton>
@@ -238,16 +299,62 @@ export default function SettingsPage() {
             {t.importWarnBefore} <strong>{t.importWarnStrong}</strong>{" "}
             {t.importWarnAfter}
           </p>
+
+          {/* T-049 fix 2: import→push bridge. Inline and dismissible; the
+              destructive part (overwriting the cloud save) is still behind a
+              confirm inside onPushAfterImport. */}
+          {pushOffer !== null && (
+            <div className="mt-4 rounded-xl border-2 border-accent/40 bg-accent-soft/20 px-4 py-3">
+              <div className="font-semibold">{t.pushOfferTitle}</div>
+              {pushOffer === "done" ? (
+                <>
+                  <p className="mt-1 mb-3 text-sm text-ink-soft">
+                    {t.pushOfferDone}
+                  </p>
+                  <CozyButton
+                    onClick={() => {
+                      window.location.href = withBase("/map");
+                    }}
+                  >
+                    {t.pushOfferContinue}
+                  </CozyButton>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 mb-3 text-sm text-ink-soft">
+                    {t.pushOfferDesc}
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <CozyButton
+                      onClick={() => void onPushAfterImport()}
+                      disabled={pushOffer === "pushing"}
+                    >
+                      {pushOffer === "pushing"
+                        ? t.pushOfferPushing
+                        : t.pushOfferButton}
+                    </CozyButton>
+                    <CozyButton
+                      variant="ghost"
+                      disabled={pushOffer === "pushing"}
+                      onClick={() => {
+                        window.location.href = withBase("/map");
+                      }}
+                    >
+                      {t.pushOfferSkip}
+                    </CozyButton>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {saveMsg && <p className="mt-3 text-sm">{saveMsg}</p>}
         </section>
 
         {/* Cloud account + manual push/pull (T-046/T-047, surfaced by T-048).
-            Sits beside the Drive section, not instead of it: Drive stays the
-            anonymous default, this is the signed-in alternative. Static only. */}
+            The only remote backup since T-050 removed the Google Drive leg;
+            the file export/import above stays the anonymous path. Static only. */}
         <CloudAccountSection />
-
-        {/* Drive sync + local snapshots (T-032) — static mode only. */}
-        <BackupSection />
 
         <Link href="/about" className="text-sm text-ink-soft underline">
           {t.sourcesLink}

@@ -19,8 +19,8 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-046](T-046-auth-better-auth.md) | Auth — better-auth Worker'da (Google-only, same-origin, test-gate'li) | done | p1 | L | medium |
 | [T-047](T-047-cloud-save-sync.md) | Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull) | done | p1 | L | medium |
 | [T-048](T-048-login-entry-ui.md) | Giriş UI (anonim/load + login + buluttan getir) | done | p2 | M | high |
-| [T-049](T-049-login-cloud-ux.md) | Login/cloud UX düzeltmeleri (return-leg + import→push + signed-in intro) | in-progress | p1 | M | high |
-| [T-050](T-050-remove-drive-backup.md) | Google Drive yedeklemeyi kaldır (cloud-sync yerini aldı) | in-progress | p1 | M | high |
+| [T-049](T-049-login-cloud-ux.md) | Login/cloud UX düzeltmeleri (return-leg + import→push + signed-in intro) | done | p1 | M | high |
+| [T-050](T-050-remove-drive-backup.md) | Google Drive yedeklemeyi kaldır (cloud-sync yerini aldı) | done | p1 | M | high |
 | [T-044](T-044-mcq-bracket-grading.md) | mcq'da doğru şık "yanlış" sayılıyor (bracket strip asimetrisi) | done | p1 | S | high |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |

@@ -98,6 +98,21 @@ async function probeSession(): Promise<AuthUser | null> {
   }
 }
 
+/**
+ * Resolve the auth status, awaiting the probes if they are still in flight.
+ *
+ * T-049: exported because the hook's snapshot is NOT usable for a decision
+ * taken inside an async handler. The status defaults pessimistic and needs two
+ * sequential cross-origin probes, whereas a local save import completes with no
+ * network at all — so a signed-in user importing a file quickly would read as
+ * signed out, and the "send it to the cloud?" offer would be skipped
+ * intermittently and invisibly. Cached after the first settle, so awaiting this
+ * costs nothing on the common path. Render paths keep using useAuthStatus().
+ */
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  return fetchStatus();
+}
+
 async function fetchStatus(): Promise<AuthStatus> {
   if (cached) return cached;
   // Server mode has no cloud backend by design (the save is already on disk,

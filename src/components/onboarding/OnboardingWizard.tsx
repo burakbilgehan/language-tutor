@@ -15,9 +15,14 @@ import {
   saveImportApi,
   cloudInfo,
   cloudPull,
+  cloudPush,
   IS_STATIC,
 } from "@/lib/client-api";
-import { startGoogleSignIn, useAuthStatus } from "@/lib/auth-status";
+import {
+  fetchAuthStatus,
+  startGoogleSignIn,
+  useAuthStatus,
+} from "@/lib/auth-status";
 import { describeCloudError } from "@/lib/cloud-error";
 import { CloudWarnings } from "@/components/shared/CloudWarnings";
 import type { UnreconstitutedRow } from "@/lib/save/seed-strip";
@@ -86,6 +91,31 @@ const S = {
     returnContinue: "Devam et",
     returnPullConfirm:
       "Bu, bu cihazdaki mevcut ilerlemeyi silip buluttaki kayıtla değiştirir. Emin misin?",
+    // T-049 fix 1: the return leg's third action — a signed-in user with no
+    // cloud save but a save FILE in hand had no way forward but "start over".
+    checkingAccount: "Hesap durumu kontrol ediliyor…",
+    returnLoadFile: "📂 Kayıt dosyası yükle",
+    returnLoadHint:
+      "Elinde indirilmiş bir kayıt dosyası varsa buradan yükleyebilirsin.",
+    // T-049 fix 2: the import→push bridge, shown after any successful import
+    // while signed in. Inline and dismissible — never a window.confirm.
+    pushOfferTitle: "Kayıt yüklendi ✅",
+    pushOfferDesc:
+      "Giriş yapmış durumdasın — bu kaydı buluta gönderip başka cihazlarda da kullanabilirsin.",
+    pushOfferButton: "⬆️ Buluta gönder",
+    pushOfferPushing: "Gönderiliyor…",
+    pushOfferSkip: "Şimdilik geç",
+    pushOfferDone: "✅ Buluta gönderildi.",
+    pushErrLocalEmpty:
+      "Bu cihazdaki kayıt boş görünüyor — üzerine yazmamak için gönderim durduruldu.",
+    pushErrTooLarge:
+      "Kayıt bulut senkronu için fazla büyük (üst sınır 30 MB). Kaydın sağlam — yalnız yüklenemiyor.",
+    continueToApp: "Devam et",
+    // T-049 fix 3: the intro's sign-in door, for an ALREADY signed-in user.
+    signedInTitle: "Giriş yapıldı",
+    signedInAs: (who: string) => `Hesabın: ${who}`,
+    signedInDesc:
+      "Buluttaki kaydını bu cihaza getirebilir ya da aşağıdan anonim olarak devam edebilirsin.",
     errNotSignedIn: "Oturum açılamadı. Tekrar giriş yapmayı dene.",
     errUnavailable:
       "Bulut servisine ulaşılamadı ya da buluta gönderilmiş bir kayıt yok.",
@@ -156,6 +186,26 @@ const S = {
     returnContinue: "Continue",
     returnPullConfirm:
       "This will erase the current progress on this device and replace it with the cloud save. Are you sure?",
+    checkingAccount: "Checking your account…",
+    returnLoadFile: "📂 Load a save file",
+    returnLoadHint:
+      "If you have a downloaded save file, you can load it right here.",
+    pushOfferTitle: "Save loaded ✅",
+    pushOfferDesc:
+      "You're signed in — you can send this save to the cloud and use it on your other devices.",
+    pushOfferButton: "⬆️ Send to cloud",
+    pushOfferPushing: "Sending…",
+    pushOfferSkip: "Not now",
+    pushOfferDone: "✅ Sent to the cloud.",
+    pushErrLocalEmpty:
+      "The save on this device looks empty — the upload was stopped so it would not overwrite your cloud save.",
+    pushErrTooLarge:
+      "The save is too large for cloud sync (30 MB cap). Your save is fine — it just cannot be uploaded.",
+    continueToApp: "Continue",
+    signedInTitle: "Signed in",
+    signedInAs: (who: string) => `Your account: ${who}`,
+    signedInDesc:
+      "You can bring your cloud save to this device, or continue anonymously below.",
     errNotSignedIn: "Could not establish a session. Try signing in again.",
     errUnavailable:
       "The cloud service could not be reached, or there is no save stored in the cloud.",
@@ -256,6 +306,11 @@ export function OnboardingWizard() {
   // "unknown" and "read failed" both behave as "there may be data here".
   const [profilesKnownEmpty, setProfilesKnownEmpty] = useState(false);
   const [infoAttempt, setInfoAttempt] = useState(0);
+  // T-049 fix 2: non-null once a file import succeeded while signed in — the
+  // inline "send it to the cloud?" bridge. null = no import happened here.
+  const [pushOffer, setPushOffer] = useState<
+    null | "idle" | "pushing" | "done"
+  >(null);
 
   useEffect(() => {
     if (!IS_STATIC) return;
@@ -276,8 +331,30 @@ export function OnboardingWizard() {
     // erase, so the "this replaces your progress" warning doesn't apply.
     setImporting(true);
     setImportError(null);
+    setPushOffer(null); // drop any offer left by a previous import
     try {
       await saveImportApi(file);
+      // T-049 fix 1+2 (import→push bridge). A signed-in user's device now
+      // holds real data that the cloud does not — offer to push it BEFORE
+      // navigating away, because /map has no such affordance and Settings is
+      // where the owner failed to find it in the first place. Signed-out (or
+      // no backend) users keep the original behaviour exactly: straight to
+      // /map, no extra screen.
+      //
+      // AWAIT the settled status rather than reading the `auth` snapshot: the
+      // import is entirely local (no network) while useAuthStatus needs two
+      // sequential cross-origin probes, and it defaults pessimistic. Reading
+      // the snapshot would hard-navigate a signed-in user straight past the
+      // offer whenever the probes hadn't landed yet — the very dead end this
+      // ticket closes, failing intermittently and looking like correct
+      // signed-out behaviour. fetchStatus() is cached, so this is free once
+      // resolved.
+      const settled = await fetchAuthStatus();
+      if (settled.backendAvailable && settled.user) {
+        setImporting(false);
+        setPushOffer("idle");
+        return;
+      }
       window.location.href = withBase("/map"); // full reload → fresh reads, skip wizard entirely
     } catch (err) {
       setImportError(localizeError(err, resolveUiLang(draft.uiLanguage)));
@@ -289,16 +366,32 @@ export function OnboardingWizard() {
     (err: unknown): string => {
       const tt = pick(S, draft.uiLanguage);
       const { kind, params } = describeCloudError(err);
-      // `local_empty` and `too_large` belong to PUSH, which onboarding never
-      // does — only a pull happens here.
       if (kind === "not_signed_in") return tt.errNotSignedIn;
       if (kind === "unavailable") return tt.errUnavailable;
+      if (kind === "local_empty") return tt.pushErrLocalEmpty;
+      if (kind === "too_large") return tt.pushErrTooLarge;
       if (kind === "version_mismatch")
         return tt.errVersion(String(params?.file ?? "?"), String(params?.app ?? "?"));
       return tt.errUnknown;
     },
     [draft.uiLanguage]
   );
+
+  // T-049: push the just-imported save. No window.confirm — the inline offer IS
+  // the confirmation, and the user picked the file seconds ago, so intent is
+  // unambiguous. (Settings keeps its confirm: there a push can overwrite a real
+  // cloud save the user did not just create.)
+  const onPushAfterImport = async () => {
+    setPushOffer("pushing");
+    setCloudError(null);
+    try {
+      await cloudPush();
+      setPushOffer("done");
+    } catch (err) {
+      setCloudError(cloudErrorText(err));
+      setPushOffer("idle");
+    }
+  };
 
   const onSignIn = async () => {
     setSigningIn(true);
@@ -469,6 +562,64 @@ export function OnboardingWizard() {
     );
   }
 
+  // The hidden file input is rendered by EVERY branch below (see `fileInput`),
+  // because T-049 fix 1 puts a "load a save file" action on the return leg too
+  // — and the input used to live inside the showIntro JSX, which is not mounted
+  // there, so clicking the ref would have silently done nothing.
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept=".db"
+      className="hidden"
+      onChange={onImportFile}
+    />
+  );
+
+  // T-049 fix 2: the import→push bridge. Rendered by both the intro and the
+  // return leg after a successful import while signed in. Inline + dismissible
+  // (skip navigates on to the app), never a window.confirm.
+  const pushOfferBlock = pushOffer !== null && (
+    <div className="mt-4 rounded-xl border-2 border-accent/40 bg-accent-soft/20 px-4 py-3">
+      <div className="font-semibold">{t.pushOfferTitle}</div>
+      {pushOffer === "done" ? (
+        <>
+          <p className="mt-1 mb-3 text-sm text-ink-soft">{t.pushOfferDone}</p>
+          <CozyButton
+            onClick={() => {
+              window.location.href = withBase("/map");
+            }}
+          >
+            {t.continueToApp}
+          </CozyButton>
+        </>
+      ) : (
+        <>
+          <p className="mt-1 mb-3 text-sm text-ink-soft">{t.pushOfferDesc}</p>
+          <div className="flex flex-wrap gap-3">
+            <CozyButton
+              onClick={() => void onPushAfterImport()}
+              disabled={pushOffer === "pushing"}
+            >
+              {pushOffer === "pushing"
+                ? t.pushOfferPushing
+                : t.pushOfferButton}
+            </CozyButton>
+            <CozyButton
+              variant="ghost"
+              disabled={pushOffer === "pushing"}
+              onClick={() => {
+                window.location.href = withBase("/map");
+              }}
+            >
+              {t.pushOfferSkip}
+            </CozyButton>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   // T-048 OAuth return leg. Deliberately ABOVE the checkingProfiles/showIntro
   // branches: showIntro only turns true for a truly empty session, but someone
   // can sign in from a device that already has a profile, and they still need
@@ -507,6 +658,10 @@ export function OnboardingWizard() {
                 </CozyButton>
               </div>
             </>
+          ) : pushOffer !== null ? (
+            // A file was just imported here (T-049 fix 1) — the push offer is
+            // the whole screen now; the cloud-save question is answered.
+            pushOfferBlock
           ) : info === null ? (
             <p className="text-ink-soft">{t.returnChecking}</p>
           ) : info !== "error" && info.exists ? (
@@ -536,10 +691,19 @@ export function OnboardingWizard() {
               <p className="mt-1 mb-4 text-sm text-ink-soft">
                 {t.returnNoneDesc}
               </p>
+              {/* T-049 fix 1: THE dead end this ticket exists for. Signed in,
+                  nothing in the cloud, and the only ways out were "try again"
+                  and "start from scratch" — while the user was holding a save
+                  file. Loading it here also unlocks the push offer, which is
+                  how the file gets into the cloud for the next device. */}
               <div className="flex flex-wrap gap-3">
-                {/* `exists: false` from getCloudInfo is AMBIGUOUS, not
-                    absent — a 403 (origin gate) or 500 lands here too, so the
-                    copy above never asserts absence and a retry is offered. */}
+                <CozyButton
+                  variant="soft"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                >
+                  {importing ? t.loadingLabel : t.returnLoadFile}
+                </CozyButton>
                 <CozyButton
                   variant="soft"
                   onClick={() => {
@@ -547,14 +711,28 @@ export function OnboardingWizard() {
                     setCloudError(null);
                     setInfoAttempt((n) => n + 1);
                   }}
+                  disabled={importing}
                 >
                   {t.returnRetry}
                 </CozyButton>
-                <CozyButton onClick={() => setCloudReturn(false)}>
+                <CozyButton
+                  variant="ghost"
+                  onClick={() => setCloudReturn(false)}
+                  disabled={importing}
+                >
                   {t.returnContinue}
                 </CozyButton>
               </div>
+              <p className="mt-3 text-xs text-ink-soft">{t.returnLoadHint}</p>
             </>
+          )}
+
+          {fileInput}
+
+          {importError && (
+            <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
+              {importError}
+            </p>
           )}
 
           {cloudError && (
@@ -582,7 +760,12 @@ export function OnboardingWizard() {
           <h1 className="text-2xl font-semibold">{t.introTitle}</h1>
           <p className="mt-2 mb-6 text-ink-soft">{t.introSubtitle}</p>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Once a file has been imported here, the doors are stale: "Yeni
+              başla" would drop the user into the wizard ON TOP of the data
+              they just loaded. The push offer replaces them. */}
+          <div
+            className={`grid gap-4 sm:grid-cols-2 ${pushOffer !== null ? "hidden" : ""}`}
+          >
             <div className="rounded-xl border-2 border-surface-2 bg-background p-5">
               <div className="font-semibold">{t.loadTitle}</div>
               <p className="mt-1 mb-4 text-sm text-ink-soft">{t.loadDesc}</p>
@@ -593,13 +776,6 @@ export function OnboardingWizard() {
               >
                 {importing ? t.loadingLabel : t.loadButton}
               </CozyButton>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".db"
-                className="hidden"
-                onChange={onImportFile}
-              />
             </div>
 
             <div className="rounded-xl border-2 border-surface-2 bg-background p-5">
@@ -613,21 +789,75 @@ export function OnboardingWizard() {
             {/* T-048 third door. Rendered only where a cloud backend actually
                 exists — the GitHub Pages mirror is anonymous-only and shows
                 exactly the two original doors, unchanged. Signing in is never
-                a gate: the anonymous path above is untouched. */}
+                a gate: the anonymous path above is untouched.
+                T-049 fix 3: an ALREADY signed-in user must not be shown a
+                sign-in button (T-048's known polish debt). While `auth.loading`
+                the card renders its "checking" line rather than flashing the
+                signed-out shape first — useAuthStatus defaults pessimistic. */}
             {auth.backendAvailable && (
               <div className="rounded-xl border-2 border-surface-2 bg-background p-5 sm:col-span-2">
-                <div className="font-semibold">{t.signInTitle}</div>
-                <p className="mt-1 mb-4 text-sm text-ink-soft">{t.signInDesc}</p>
-                <CozyButton
-                  variant="soft"
-                  onClick={() => void onSignIn()}
-                  disabled={signingIn}
-                >
-                  {signingIn ? t.signInStarting : t.signInButton}
-                </CozyButton>
+                {auth.loading ? (
+                  <p className="text-sm text-ink-soft">{t.checkingAccount}</p>
+                ) : auth.user ? (
+                  <>
+                    <div className="font-semibold">{t.signedInTitle}</div>
+                    <p className="mt-1 text-sm text-ink-soft">
+                      {t.signedInAs(
+                        auth.user.email ?? auth.user.name ?? auth.user.id
+                      )}
+                    </p>
+                    <p className="mt-1 mb-4 text-sm text-ink-soft">
+                      {t.signedInDesc}
+                    </p>
+                    <CozyButton
+                      variant="soft"
+                      onClick={() => void onCloudPull()}
+                      disabled={pulling}
+                    >
+                      {pulling ? t.returnPulling : t.returnPull}
+                    </CozyButton>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-semibold">{t.signInTitle}</div>
+                    <p className="mt-1 mb-4 text-sm text-ink-soft">
+                      {t.signInDesc}
+                    </p>
+                    <CozyButton
+                      variant="soft"
+                      onClick={() => void onSignIn()}
+                      disabled={signingIn}
+                    >
+                      {signingIn ? t.signInStarting : t.signInButton}
+                    </CozyButton>
+                  </>
+                )}
               </div>
             )}
           </div>
+
+          {fileInput}
+
+          {pushOfferBlock}
+
+          {/* A pull can be started from the signed-in card above, so its
+              seed-drift warnings must be renderable HERE too — otherwise the
+              state would be set with nothing to display it and the content
+              loss would go unreported. */}
+          {pullWarnings && (
+            <div className="mt-4">
+              <CloudWarnings rows={pullWarnings} uiLanguage={draft.uiLanguage} />
+              <div className="mt-4">
+                <CozyButton
+                  onClick={() => {
+                    window.location.href = withBase("/map");
+                  }}
+                >
+                  {t.returnContinue}
+                </CozyButton>
+              </div>
+            </div>
+          )}
 
           {cloudError && (
             <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">

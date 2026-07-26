@@ -583,7 +583,7 @@ export async function saveExportApi(): Promise<void> {
 // ------------------------------------------------------------------ Bulut save-sync (T-047)
 //
 // Üçüncü yol: statik mod + oturum açılmış → kendi Worker API'mize senkron.
-// Drive (src/lib/backup/controller.ts) ile aynı mimarinin R2 ikizi; mantık
+// Kaldırılan Drive yedeklemesinin (T-032/T-050) R2 ardılı; mantık
 // src/lib/backup/cloud.ts'te, burası yalnız seam. Manuel: otomatik yükleme
 // YOK (multi-MB blob her yazımda R2 Class A + kullanıcı uplink'i yakar).
 //
@@ -1057,7 +1057,7 @@ export async function completeNodeApi(nodeId: string): Promise<{
       );
     }
   }
-  // Backup nudge + local snapshot + Drive auto-upload (T-032). Static only, and
+  // Backup nudge + local snapshot (T-032). Static only, and
   // only for a first-time completion (re-completing an already-done node isn't
   // new progress). Best-effort — never blocks or throws into the flow.
   if (!wasCompleted && node?.nodeType === "main") {

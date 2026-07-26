@@ -1,14 +1,14 @@
 "use client";
 
 // T-048 Settings surface for the cloud account (T-046 identity + T-047 sync).
-// STATIC MODE ONLY, mirroring BackupSection: server mode's save already lives
-// on disk with its own .bak, and there is no Worker session there.
+// STATIC MODE ONLY: server mode's save already lives on disk with its own .bak,
+// and there is no Worker session there.
 //
-// Sits next to the Drive section deliberately, not instead of it — Drive is the
-// anonymous local-first backup and stays the default; this is the signed-in
-// alternative. Same UX idioms as Drive: an override field for non-default
-// deployments, confirm dialogs before anything destructive, inline result
-// messages rather than a toast system the app does not have.
+// Since T-050 removed the Google Drive backup this is the ONLY remote backup;
+// the anonymous file export/import above it stays the default, gate-free path.
+// UX idioms: an override field for non-default deployments, confirm dialogs
+// before anything destructive, inline result messages rather than a toast
+// system the app does not have.
 
 import { useCallback, useEffect, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
