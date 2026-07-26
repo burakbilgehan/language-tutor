@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, tables } from "@/db";
@@ -30,9 +31,12 @@ function findEntry(rawChar: string) {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ char: string }> }
 ) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const { char } = await params;
   const found = findEntry(char);
   if (!found) {
@@ -54,9 +58,12 @@ export async function GET(
 
 /** Trigger generation for a pending/errored kanji entry. */
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ char: string }> }
 ) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   recoverStaleJobs();
   const { char } = await params;
   const found = findEntry(char);

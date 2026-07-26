@@ -1,12 +1,16 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getJob, recoverStaleJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   recoverStaleJobs();
   const { id } = await params;
   const job = getJob(id);

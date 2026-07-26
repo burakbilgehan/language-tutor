@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,6 +8,9 @@ import type { Rating } from "@/lib/srs";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const parsed = z
     .object({ cardId: z.string(), rating: z.number().int().min(0).max(3) })
     .safeParse(await req.json());

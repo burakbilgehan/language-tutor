@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, tables } from "@/db";
@@ -12,6 +13,9 @@ export const runtime = "nodejs";
 /** Enqueue generation for every entry not yet ready IN THE CURRENT NATIVE
  * LANGUAGE (pending/errored, or ready only in another language — T-031). */
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const gate = requireLlm();
   if (gate) return gate;
   recoverStaleJobs();

@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { cancelJob } from "@/lib/jobs";
 
@@ -5,9 +6,12 @@ export const runtime = "nodejs";
 
 /** Cancel one job: queued/pending → deleted, running → marked cancelled. */
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const { id } = await params;
   const result = cancelJob(id);
   if (result === null) {

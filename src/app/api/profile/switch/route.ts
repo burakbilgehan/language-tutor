@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { setActiveProfile } from "@/lib/profile";
@@ -7,6 +8,9 @@ export const runtime = "nodejs";
 const SwitchInput = z.object({ profileId: z.string().min(1) });
 
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const parsed = SwitchInput.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });

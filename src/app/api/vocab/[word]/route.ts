@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, tables } from "@/db";
@@ -29,9 +30,12 @@ function findEntry(word: string) {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ word: string }> }
 ) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const { word } = await params;
   const found = findEntry(word);
   if (!found) {
@@ -52,9 +56,12 @@ export async function GET(
 
 /** Trigger generation for a pending/errored entry. */
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ word: string }> }
 ) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   recoverStaleJobs();
   const { word } = await params;
   const found = findEntry(word);

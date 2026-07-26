@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { listJobs, recoverStaleJobs } from "@/lib/jobs";
 
@@ -11,6 +12,9 @@ export const runtime = "nodejs";
  * it's idempotent (staleCheckDone) so repeated polls are cheap.
  */
 export async function GET(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   recoverStaleJobs();
   const url = new URL(req.url);
   const raw = Number(url.searchParams.get("history"));

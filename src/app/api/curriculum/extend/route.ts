@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -21,6 +22,9 @@ export const runtime = "nodejs";
  * so we never fire several 2-5 min opus jobs at once.
  */
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const gate = requireLlm();
   if (gate) return gate;
   recoverStaleJobs();

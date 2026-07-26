@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -30,7 +31,10 @@ function maskKey(key?: string): string | undefined {
   return key.length <= 4 ? "••••" : `••••${key.slice(-4)}`;
 }
 
-export function GET() {
+export function GET(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const config = readLlmConfig();
   return NextResponse.json({
     // Historical default when no file exists: cli.
@@ -46,6 +50,9 @@ export function GET() {
 }
 
 export async function PUT(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json(

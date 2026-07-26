@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -26,6 +27,9 @@ const BodySchema = z.object({
  * selection, ever.
  */
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const profile = getActiveProfile();
   if (!profile) {
     return NextResponse.json({ error: "profile_missing" }, { status: 404 });

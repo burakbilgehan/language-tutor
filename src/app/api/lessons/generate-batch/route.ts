@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { queueMissingLessons, recoverStaleJobs } from "@/lib/jobs";
@@ -13,6 +14,9 @@ export const runtime = "nodejs";
  * active profile, so any language's lessons can be prepared without switching.
  */
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const gate = requireLlm();
   if (gate) return gate;
   recoverStaleJobs();

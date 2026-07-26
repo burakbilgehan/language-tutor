@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { cancelAllJobs } from "@/lib/jobs";
 
@@ -9,6 +10,9 @@ export const runtime = "nodejs";
  * { includeSystem: true } to cancel everything.
  */
 export async function POST(req: Request) {
+  const denied = requireAuth(req);
+  if (denied) return denied;
+
   const body = await req.json().catch(() => ({}));
   const userOnly = body?.includeSystem === true ? false : true;
   const result = cancelAllJobs({ userOnly });
