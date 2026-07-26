@@ -10,7 +10,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-024](T-024-save-job-queue-leak.md) | Save'e job kuyruğu sızması (import token yakıyor) — geçici fix; kalıcı çözüm T-034 | done | p1 | S | high |
 | [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | done | p2 | M | high |
 | [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | done | p1 | L | medium |
-| [T-039](T-039-bridge-csrf-rebinding.md) | Bridge CSRF quota-burn + DNS-rebinding exfil (frame A, CONFIRMED) | backlog | p1 | S | high |
+| [T-039](T-039-bridge-csrf-rebinding.md) | Bridge CSRF quota-burn + DNS-rebinding exfil (frame A, CONFIRMED) | done | p1 | S | high |
 | [T-040](T-040-server-mode-auth-gate.md) | Server modu env-token auth gate (frame B, public blocker) | backlog | p1 | M | high |
 | [T-041](T-041-save-import-hardening.md) | Save import sertleştirme (kötücül trigger + statik boyut cap) | backlog | p2 | M | high |
 | [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | done | p3 | S | high |

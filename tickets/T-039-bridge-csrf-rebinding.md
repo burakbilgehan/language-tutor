@@ -1,7 +1,7 @@
 ---
 id: T-039
 title: Bridge CSRF quota-burn + DNS-rebinding çıktı exfil (llm-bridge.mjs)
-status: backlog
+status: done
 priority: p1
 effort: S
 confidence: high
