@@ -59,34 +59,53 @@ ayrı worktree + branch, küçük önce merge. Env notu: dev server + blast
 dashboard açık → ikinci `next build` YASAK (tsc/test/parity harness OK);
 kod değişikliği DB'ye yazmıyor ama blast'la kota penceresini çakıştırma.
 
-**Dalga 5.1 — Güvenlik (ŞİMDİ, bu session):** T-039–T-042 fix. Seri
-(save/bridge dosyaları kesişebilir). Her fix'te ATAK yolu + LEGİT yolu
-birlikte test (regresyon riski legit yolda). T-043 (multi-tenant) AÇILDI
-ama monetize'e gate'li — bu dalgada dokunulmaz.
+hive-wave formatı: her dalga 2 paralel izole-worktree agent. Model routing:
+**opus** = güvenlik/mimari/tasarım-ağır (ince semantik, regresyon riski);
+**sonnet** = mekanik/kalıp-takip/küçük ekleme. Merge sırası: az-çakışan önce,
+cross-cutting/shared-global EN SON. Her güvenlik fix'inde ATAK + LEGİT yolu
+birlikte test (regresyon legit yolda).
 
-| Sıra | Ticket | Efor | Not |
-|---|---|---|---|
-| 5.1a | T-042 | S | raw_output export scrub — en ucuz, ısınma |
-| 5.1b | T-039 | S | Bridge Host allowlist + bearer token + Content-Type. Legit: browser→bridge preset hâlâ çalışmalı (token gönder) |
-| 5.1c | T-041 | M | Import: user-defined trigger/view reject-strip (şema-rewrite DEĞİL) + statik boyut cap + server magic-header. Legit: export→import round-trip + parity harness |
-| 5.1d | T-040 | M | Env-token gate (`APP_AUTH_TOKEN` + requireAuth wrapper) mutating/exfil route'larına. Localhost/tek-kullanıcı akışı token'sız çalışmaya devam etmeli (token setli değilse gate no-op) |
+**Dalga 5.1 — Güvenlik çekirdek (2 paralel, fence-ayrık):**
+| İş | Ticket | Model | Efor | Fence (dokunduğu) | Not |
+|---|---|---|---|---|---|
+| 5.1a | T-042 | sonnet | S | `save/export.ts`, `backup/save-image.ts` | raw_output scrub. Mekanik. **Küçük → önce merge.** |
+| 5.1b | T-039 | opus | S | `scripts/llm-bridge.mjs` (+`presets.ts`/`browser-provider.ts` token için) | Bridge: Host allowlist + Content-Type + opsiyonel token. **Bugün exploit olan tek bulgu.** Legit: browser→bridge preset çalışmaya devam etmeli. |
 
-**Dalga 6 — İçerik (p2), güvenlik sonrası:**
-| Sıra | Ticket | Efor | Not |
-|---|---|---|---|
-| 6a | T-005 | L | zh yazım + hanzi sözlüğü (CEDICT). Mevcut vocab/kanji seed altyapısına oturur; en yüksek değerli p2 |
-| 6b | T-001 | M | Inburgering deneme sınavları (nl'e özel) |
+Fence ayrık (save vs bridge, kesişim yok) → paralel güvenli.
 
-**Dalga 7 — p3 / düşük öncelik:**
-| Sıra | Ticket | Efor | Not |
-|---|---|---|---|
-| 7a | T-004 | S | Overview LLM yorum katmanı — küçük, tek başına |
-| 7b | T-002 | XL | Skill tree (dallı ders grafiği) — en son, low confidence, tasarım ağır |
+**Dalga 5.2 — Güvenlik import+auth (2 paralel, 5.1'e BAĞIMLI):**
+| İş | Ticket | Model | Efor | Fence | Not |
+|---|---|---|---|---|---|
+| 5.2a | T-041 | opus | M | `save/import.ts`, `backup/save-image.ts`, `db/browser.ts`, `client-api.ts` — **route dosyalarına DOKUNMA** (server 100MB guard zaten var) | User-defined trigger/view reject-strip (şema-rewrite DEĞİL) + statik boyut cap + server magic-header. Legit: export→import round-trip + parity harness. |
+| 5.2b | T-040 | opus | M | yeni `requireAuth` lib + tüm mutating/exfil `route.ts` wrapper — **`lib/save`'e DOKUNMA** | Env-token gate (`APP_AUTH_TOKEN`). Token setli değilse **no-op** (localhost tek-kullanıcı akışı bozulmamalı). **Cross-cutting → EN SON merge.** |
+
+⚠️ **Bağımlılık:** 5.2a `save-image.ts`'e dokunuyor, 5.1a da öyle → **5.1
+merge edilmeden 5.2 başlamaz** (rebase eder). Fence'ler tutulursa (5.2a
+route'a girmez, 5.2b lib/save'e girmez) 5.2a∥5.2b paralel güvenli.
+
+**Dalga 6 — İçerik (p2), güvenlik sonrası (2 paralel):**
+| İş | Ticket | Model | Efor | Not |
+|---|---|---|---|---|
+| 6a | T-005 | opus | L | zh yazım + hanzi sözlüğü (CEDICT). Yeni veri kaynağı + lisans/atıf (JMdict/EDRDG emsali, T-036). Kalıp vocab/kanji seed'e benziyor ama L → opus. (Saf kalıp-klon sayılırsa sonnet de olur.) |
+| 6b | T-001 | sonnet | M | Inburgering deneme sınavları (nl'e özel). Lesson/exercise kalıbını takip eder. |
+
+⚠️ **Shared-global:** ikisi de nav + `profile-options` + i18n string tablosuna
+dokunabilir → o dosyalar "merge last" özeniyle; başlamadan fence doğrula.
+
+**Dalga 7 — p3 (T-004 solo/paralel):**
+| İş | Ticket | Model | Efor | Not |
+|---|---|---|---|---|
+| 7a | T-004 | sonnet | S | Overview LLM yorum katmanı. Küçük, tek başına, dosya kümesi dar. |
+
+**Dalga 8 — Skill tree (kendi başına, İKİ-AŞAMALI):**
+| İş | Ticket | Model | Efor | Not |
+|---|---|---|---|---|
+| 8 | T-002 | opus | XL | Dallı ders grafiği. **Decision-gate:** dallanma UX'i + veri modeli Burak onayı ister → agent Aşama 1'de keşfeder+önerir, turunu bitirir; Burak karar verince Aşama 2 implement. Paylaşılmaz, tek başına. |
 
 **Karar bekleyen (sıralanmadı):**
-- T-023 (parked): Haiku içerik QA'sının vocab ayağı. Vocab content dolunca çekilir.
+- T-043 (deferred): multi-tenant — public/monetize kararına gate'li (T-040 sonrası).
 - T-030 (reverted): ja sözlük yeniden deneme — Burak kararı + Jisho-tarzı prototip önkoşulu.
-- T-043 (deferred): multi-tenant — public/monetize kararına gate'li.
+- T-023 (parked): Haiku içerik QA'sının vocab ayağı. Vocab content dolunca çekilir.
 
 ---
 
