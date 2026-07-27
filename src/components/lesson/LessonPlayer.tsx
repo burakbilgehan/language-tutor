@@ -385,7 +385,7 @@ export function LessonPlayer({
                       {ex.translation_tr}
                     </div>
                     {ex.note_tr && (
-                      <div className="mt-1 text-xs text-moss">💡 {ex.note_tr}</div>
+                      <div className="mt-1 text-xs text-indigo">💡 {ex.note_tr}</div>
                     )}
                   </div>
                 ))}
@@ -488,7 +488,7 @@ function ExerciseCard({
             <span
               key={i}
               className={`h-1.5 w-4 rounded-full ${
-                i < index ? "bg-moss" : i === index ? "bg-accent" : "bg-surface-2"
+                i < index ? "bg-indigo" : i === index ? "bg-accent" : "bg-surface-2"
               }`}
             />
           ))}
@@ -516,7 +516,7 @@ function ExerciseCard({
                 className={`rounded-xl border-2 px-4 py-3 text-left transition-all cursor-pointer disabled:cursor-default ${
                   result && opt === response
                     ? result.isCorrect
-                      ? "border-moss bg-moss-soft"
+                      ? "border-indigo bg-indigo-soft"
                       : "border-danger bg-danger/10"
                     : "border-surface-2 bg-background hover:border-accent-soft"
                 }`}
@@ -633,13 +633,13 @@ function ExerciseCard({
       {result && (
         <div
           className={`mt-4 rounded-xl px-4 py-3 ${
-            result.isCorrect ? "bg-moss-soft" : "bg-danger/10"
+            result.isCorrect ? "bg-indigo-soft" : "bg-danger/10"
           }`}
         >
           <div className="font-semibold">
             {result.isCorrect ? t.correct : t.wrong}
             {result.xpAwarded > 0 && (
-              <span className="ml-2 text-sm text-gold">+{result.xpAwarded} XP</span>
+              <span className="ml-2 text-sm text-amber-text">+{result.xpAwarded} XP</span>
             )}
           </div>
           <p className="text-sm">

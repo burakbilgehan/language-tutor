@@ -50,8 +50,8 @@ interface CardDto {
 
 const RATINGS: { value: 0 | 1 | 2 | 3; cls: string }[] = [
   { value: 0, cls: "bg-danger/15 hover:bg-danger/25" },
-  { value: 1, cls: "bg-gold/15 hover:bg-gold/25" },
-  { value: 2, cls: "bg-moss-soft hover:brightness-105" },
+  { value: 1, cls: "bg-amber/15 hover:bg-amber/25" },
+  { value: 2, cls: "bg-indigo-soft hover:brightness-105" },
   { value: 3, cls: "bg-accent-soft/50 hover:bg-accent-soft" },
 ];
 
@@ -174,7 +174,7 @@ export function SrsSession() {
             <span
               key={i}
               className={`h-1.5 w-3 rounded-full ${
-                i < idx ? "bg-moss" : i === idx ? "bg-accent" : "bg-surface-2"
+                i < idx ? "bg-indigo" : i === idx ? "bg-accent" : "bg-surface-2"
               }`}
             />
           ))}

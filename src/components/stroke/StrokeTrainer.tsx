@@ -164,8 +164,8 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
       showOutline: true,
       strokeColor: cssVar("--ink", "#2e2a24"),
       outlineColor: cssVar("--surface-2", "#f1e9db"),
-      drawingColor: cssVar("--accent", "#c4643b"),
-      highlightColor: cssVar("--accent", "#c4643b"),
+      drawingColor: cssVar("--accent", "#c14a1d"),
+      highlightColor: cssVar("--accent", "#c14a1d"),
       drawingWidth: 18,
       showHintAfterMisses: 2,
       charDataLoader: (char: string) =>
@@ -439,7 +439,7 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
                         selected === k.char
                           ? "bg-accent-soft font-semibold"
                           : k.status === "ready"
-                            ? "bg-moss-soft shadow-cozy hover:bg-surface-2"
+                            ? "bg-indigo-soft shadow-cozy hover:bg-surface-2"
                             : "bg-surface shadow-cozy hover:bg-surface-2"
                       }`}
                     >
@@ -480,7 +480,7 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
           <div className="min-h-6 text-sm text-ink-soft">
             {mode === "quiz" && <span>{t.quizStatus(remaining, mistakes)}</span>}
             {mode === "done" && (
-              <span className="font-semibold text-moss">
+              <span className="font-semibold text-indigo">
                 {t.doneStatus(mistakes)}
               </span>
             )}

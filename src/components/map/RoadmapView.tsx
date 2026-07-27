@@ -639,7 +639,7 @@ function RailBubble({
     >
       <span
         className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl shadow-cozy transition-all group-hover:scale-110 active:scale-95 ${
-          accent ? "bg-moss-soft" : "bg-surface"
+          accent ? "bg-indigo-soft" : "bg-surface"
         }`}
       >
         {icon}
@@ -683,7 +683,7 @@ function NodeBubble({
       <div
         className={`flex h-16 w-16 items-center justify-center rounded-full text-2xl transition-all ${
           completed
-            ? "bg-moss text-surface shadow-cozy"
+            ? "bg-indigo text-surface shadow-cozy"
             : available
               ? "bg-accent text-surface shadow-cozy animate-pulse-glow group-hover:scale-110"
               : "bg-locked text-surface"
@@ -699,7 +699,7 @@ function NodeBubble({
         {node.titleTr}
       </div>
       {!locked && !completed && (
-        <div className="text-[10px] font-semibold text-gold">
+        <div className="text-[10px] font-semibold text-amber-text">
           +{node.xpReward} XP
         </div>
       )}

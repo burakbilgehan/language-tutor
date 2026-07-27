@@ -101,11 +101,11 @@ function statusTone(status: string): string {
     case "error":
       return "text-danger";
     case "done":
-      return "text-moss";
+      return "text-indigo";
     case "cancelled":
       return "text-ink-soft";
     case "pending_approval":
-      return "text-gold";
+      return "text-amber-text";
     default:
       return "text-ink-soft";
   }
@@ -186,7 +186,7 @@ export function JobQueuePanel() {
           type="button"
           disabled={busy}
           onClick={() => void run(resumePendingJobsApi)}
-          className="mb-3 rounded-full bg-gold/20 px-4 py-1.5 text-sm font-semibold text-gold transition-colors hover:bg-gold/30 disabled:opacity-60"
+          className="mb-3 rounded-full bg-amber/20 px-4 py-1.5 text-sm font-semibold text-amber-text transition-colors hover:bg-amber/30 disabled:opacity-60"
         >
           {busy ? t.resumed : t.resume(snap.counts.pendingApproval)}
         </button>

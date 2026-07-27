@@ -83,7 +83,7 @@ function CostBadge() {
   if (!stats || stats.totalUsd <= 0) return null;
   return (
     <span
-      className="hidden sm:flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-moss shadow-cozy"
+      className="hidden sm:flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-indigo shadow-cozy"
       title={t.costTitle(
         stats.todayUsd.toFixed(2),
         stats.todayCalls,
@@ -120,7 +120,7 @@ function SaveButton({
       {backup.remind && (
         <span
           aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-background"
+          className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber ring-2 ring-background"
         />
       )}
     </button>
@@ -233,9 +233,21 @@ export function StatsHeader({
     <header className="sticky top-0 z-20 border-b border-surface-2 bg-background/80 backdrop-blur">
       <div className="mx-auto max-w-6xl px-4">
         <div className="flex h-14 items-center justify-between gap-4">
-          <h1 className="min-w-0 truncate font-display text-lg font-semibold">
-            {title}
-          </h1>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <svg viewBox="0 0 128 86" height="28" aria-hidden="true">
+              <g fill="var(--accent)">
+                <circle cx="40" cy="44" r="22" />
+                <circle cx="68" cy="34" r="27" />
+                <circle cx="94" cy="47" r="18" />
+                <rect x="18" y="44" width="94" height="22" rx="11" />
+              </g>
+              <rect x="30" y="74" width="26" height="7" rx="3.5" fill="var(--indigo)" />
+              <rect x="64" y="74" width="42" height="7" rx="3.5" fill="var(--indigo)" />
+            </svg>
+            <h1 className="min-w-0 truncate font-display text-lg font-semibold">
+              {title}
+            </h1>
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             {streak && (
               <span
@@ -246,7 +258,7 @@ export function StatsHeader({
               </span>
             )}
             {xpTotal !== undefined && (
-              <span className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-gold shadow-cozy">
+              <span className="flex items-center gap-1 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-amber-text shadow-cozy">
                 ✦ {xpTotal} XP
               </span>
             )}
