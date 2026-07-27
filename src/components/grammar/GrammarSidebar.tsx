@@ -250,7 +250,7 @@ export function GrammarSidebar() {
       <div className="p-6 text-center text-sm">
         <p className="text-danger">{localize(loadError)}</p>
         <button
-          className="mt-2 cursor-pointer underline text-ink-soft"
+          className="mt-2 cursor-pointer underline text-indigo"
           onClick={() => {
             setLoadError(null);
             void load();
@@ -302,7 +302,7 @@ export function GrammarSidebar() {
           onClick={() => setLevelFilter(null)}
           className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
             levelFilter === null
-              ? "bg-accent text-white"
+              ? "bg-accent text-surface"
               : "bg-surface text-ink-soft shadow-cozy hover:bg-surface-2"
           }`}
         >
@@ -314,7 +314,7 @@ export function GrammarSidebar() {
             onClick={() => setLevelFilter(l)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
               levelFilter === l
-                ? "bg-accent text-white"
+                ? "bg-accent text-surface"
                 : "bg-surface text-ink-soft shadow-cozy hover:bg-surface-2"
             }`}
           >
@@ -353,7 +353,7 @@ export function GrammarSidebar() {
             </summary>
             {orderedCats(cats).map(([cat, list]) => (
               <section key={cat} className="mb-3">
-                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
+                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-indigo">
                   {s.categories[cat] ?? cat}
                 </h3>
                 <div className="flex flex-col gap-1">
@@ -363,10 +363,10 @@ export function GrammarSidebar() {
                       id={`grammar-topic-${t.slug}`}
                       href={`/grammar?topic=${encodeURIComponent(t.slug)}`}
                       className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
-                        flashSlug === t.slug ? "ring-2 ring-accent " : ""
+                        flashSlug === t.slug ? "ring-2 ring-indigo " : ""
                       }${
                         activeSlug === t.slug
-                          ? "bg-accent-soft font-semibold text-ink"
+                          ? "bg-indigo-soft font-semibold text-ink"
                           : "bg-surface text-ink hover:bg-surface-2"
                       }`}
                     >

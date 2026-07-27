@@ -240,7 +240,7 @@ function OsTabs({ os, setOs, t }: { os: Os; setOs: (o: Os) => void; t: (typeof S
           type="button"
           onClick={() => setOs(o)}
           className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
-            os === o ? "bg-accent-soft" : "bg-surface-2 text-ink-soft hover:bg-accent-soft/40"
+            os === o ? "bg-indigo-soft text-indigo-deep" : "bg-surface-2 text-ink-soft hover:bg-indigo-soft/40"
           }`}
         >
           {labels[o]}
@@ -323,7 +323,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
       <span className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">{label}</span>
         {badge && (
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold">
+          <span className="rounded-full bg-indigo-soft px-2 py-0.5 text-[11px] font-semibold text-indigo-deep">
             {badge}
           </span>
         )}
@@ -369,8 +369,8 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                 onClick={() => setKeyProvider(p)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
                   keyProvider === p
-                    ? "bg-accent-soft"
-                    : "bg-surface-2 text-ink-soft hover:bg-accent-soft/40"
+                    ? "bg-indigo-soft text-indigo-deep"
+                    : "bg-surface-2 text-ink-soft hover:bg-indigo-soft/40"
                 }`}
               >
                 {KEY_PROVIDERS[p].label}
@@ -384,7 +384,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
               href={KEY_PROVIDERS[keyProvider].keyUrl}
               target="_blank"
               rel="noreferrer"
-              className="font-semibold underline"
+              className="font-semibold text-indigo underline"
             >
               {KEY_PROVIDERS[keyProvider].keyUrl.replace("https://", "")}
             </a>
@@ -394,7 +394,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={t.keyPaste}
-            className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-accent"
+            className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
           />
           <WizardTestRow
             t={t}
@@ -436,7 +436,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
               href="https://ollama.com/download"
               target="_blank"
               rel="noreferrer"
-              className="font-semibold underline"
+              className="font-semibold text-indigo underline"
             >
               {t.ollamaStep1Link}
             </a>
@@ -487,8 +487,8 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                 onClick={() => setSubBackend(b)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
                   subBackend === b
-                    ? "bg-accent-soft"
-                    : "bg-surface-2 text-ink-soft hover:bg-accent-soft/40"
+                    ? "bg-indigo-soft text-indigo-deep"
+                    : "bg-surface-2 text-ink-soft hover:bg-indigo-soft/40"
                 }`}
               >
                 {SUB_BACKENDS[b].label}
@@ -496,7 +496,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
             ))}
           </div>
           {subBackend === "claude" && (
-            <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs">{t.subClaudeWebWarn}</p>
+            <p className="rounded-xl bg-indigo-soft px-3 py-2 text-xs">{t.subClaudeWebWarn}</p>
           )}
           <OsTabs os={os} setOs={setOs} t={t} />
           <p>{t.subStep1(SUB_BACKENDS[subBackend].cli)}</p>
@@ -510,7 +510,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
           <CmdBlock cmd={bridgeCmd} copyLabel={t.copy} copiedLabel={t.copied} />
           <p className="text-xs text-ink-soft">
             {t.subNodeNote}{" "}
-            <a href="https://nodejs.org" target="_blank" rel="noreferrer" className="underline">
+            <a href="https://nodejs.org" target="_blank" rel="noreferrer" className="text-indigo underline">
               nodejs.org
             </a>
             {" — "}

@@ -348,7 +348,7 @@ export default function SettingsPage() {
             the file export/import above stays the anonymous path. Static only. */}
         <CloudAccountSection />
 
-        <Link href="/about" className="text-sm text-ink-soft underline">
+        <Link href="/about" className="text-sm text-indigo underline">
           {t.sourcesLink}
         </Link>
       </main>

@@ -116,7 +116,7 @@ export function GeneratingScreen({
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="h-2.5 w-2.5 animate-bounce rounded-full bg-accent"
+            className="h-2.5 w-2.5 animate-bounce rounded-full bg-indigo"
             style={{ animationDelay: `${i * 0.18}s` }}
           />
         ))}

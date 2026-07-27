@@ -19,8 +19,8 @@ export function ChipGrid({
             onClick={() => onToggle(o)}
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 cursor-pointer ${
               on
-                ? "bg-accent text-surface shadow-cozy"
-                : "bg-surface-2 text-ink hover:bg-accent-soft"
+                ? "bg-indigo text-surface shadow-cozy"
+                : "bg-surface-2 text-ink hover:bg-indigo-soft"
             }`}
           >
             {o}
@@ -50,8 +50,8 @@ export function ChoiceCard({
       disabled={disabled}
       className={`rounded-xl border-2 px-4 py-3 text-left transition-all active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
         selected
-          ? "border-accent bg-accent-soft/40"
-          : "border-surface-2 bg-background hover:border-accent-soft"
+          ? "border-indigo bg-indigo-soft/40"
+          : "border-surface-2 bg-background hover:border-indigo-soft"
       }`}
     >
       <div className="font-semibold">{title}</div>

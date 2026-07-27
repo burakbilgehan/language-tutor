@@ -445,7 +445,7 @@ export function RoadmapView() {
                   <button
                     key={c.href}
                     onClick={() => router.push(c.href)}
-                    className="cursor-pointer rounded-xl border-2 border-surface-2 bg-surface p-4 text-left transition-colors hover:border-accent"
+                    className="cursor-pointer rounded-xl border-2 border-surface-2 bg-surface p-4 text-left transition-colors hover:border-indigo"
                   >
                     <div className="text-2xl">{card.icon}</div>
                     <div className="mt-1 font-semibold">{card.title}</div>
@@ -503,7 +503,7 @@ export function RoadmapView() {
             <button
               onClick={startRetranslate}
               disabled={retranslating}
-              className="mt-3 rounded-cozy bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="mt-3 rounded-cozy bg-accent px-4 py-2 text-sm font-semibold text-surface disabled:opacity-60"
             >
               {retranslating ? t.retranslating : t.retranslate}
             </button>
@@ -546,7 +546,7 @@ export function RoadmapView() {
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}
-                    className="h-2 w-2 animate-bounce rounded-full bg-accent"
+                    className="h-2 w-2 animate-bounce rounded-full bg-indigo"
                     style={{ animationDelay: `${i * 0.18}s` }}
                   />
                 ))}
@@ -571,7 +571,7 @@ export function RoadmapView() {
                 {t.prepareNext(data.nextLevel)}
               </button>
               {extendError && (
-                <p className="text-xs text-red-500">{extendError}</p>
+                <p className="text-xs text-danger">{extendError}</p>
               )}
             </>
           ) : (

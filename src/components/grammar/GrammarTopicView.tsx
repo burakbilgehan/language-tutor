@@ -142,12 +142,12 @@ export function GrammarTopicView({ slug }: { slug: string }) {
         // job's write lands; blanking the page mid-read is not silent).
         <>
           {topic.status === "generating" || regenerating ? (
-            <div className="flex items-center gap-3 rounded-cozy bg-accent-soft p-4 text-sm shadow-cozy">
+            <div className="flex items-center gap-3 rounded-cozy bg-indigo-soft p-4 text-sm shadow-cozy">
               <span className="animate-float-slow text-xl">📜</span>
               <span className="text-ink-soft">{s.generating}</span>
             </div>
           ) : isMachineTranslated(topic.content) ? (
-            <div className="flex flex-col gap-2 rounded-cozy bg-accent-soft p-4 text-sm shadow-cozy sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 rounded-cozy bg-indigo-soft p-4 text-sm shadow-cozy sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <span className="mr-2 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-ink-soft">
                   {s.mtBadge}

@@ -292,7 +292,9 @@ export function LessonPlayer({
         <div className="text-6xl">🎉</div>
         <h1 className="text-2xl font-semibold">{t.lessonDone}</h1>
         <div className="flex gap-3">
-          <Badge>✦ +{completion.xpAwarded} XP</Badge>
+          <Badge>
+            <span className="text-amber-text">✦ +{completion.xpAwarded} XP</span>
+          </Badge>
           {completion.newCards > 0 && (
             <Badge>{t.newCards(completion.newCards)}</Badge>
           )}
@@ -344,7 +346,7 @@ export function LessonPlayer({
               onChange={(e) => setRegenFeedback(e.target.value)}
               placeholder={t.regenPlaceholder}
               rows={2}
-              className="w-full rounded-xl border border-surface-2 bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+              className="w-full rounded-xl border border-surface-2 bg-background px-3 py-2 text-sm outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
             />
             <div className="flex gap-2">
               <CozyButton onClick={() => regenerate(regenFeedback)}>
@@ -397,7 +399,7 @@ export function LessonPlayer({
                 <h2 className="mb-3 text-lg font-semibold">{t.grammarNotes}</h2>
                 {lesson.grammarNotes.map((n, i) => (
                   <div key={i} className="mb-3 last:mb-0">
-                    <div className="font-semibold text-accent">
+                    <div className="font-semibold text-indigo">
                       {n.heading_tr}
                     </div>
                     <p className="text-sm text-ink-soft">{n.body_tr}</p>
@@ -540,7 +542,7 @@ function ExerciseCard({
                 disabled={!!result}
                 rows={3}
                 placeholder={t.answerPlaceholder}
-                className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
+                className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
               />
             ) : (
               <input
@@ -554,7 +556,7 @@ function ExerciseCard({
                       ? t.answerPlaceholderZh
                       : t.answerPlaceholder
                 }
-                className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
+                className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
               />
             )}
             {!result && (
@@ -687,7 +689,7 @@ function Dots() {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="h-2.5 w-2.5 animate-bounce rounded-full bg-accent"
+          className="h-2.5 w-2.5 animate-bounce rounded-full bg-indigo"
           style={{ animationDelay: `${i * 0.18}s` }}
         />
       ))}

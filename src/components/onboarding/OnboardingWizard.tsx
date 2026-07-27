@@ -836,8 +836,8 @@ export function OnboardingWizard() {
                 }
                 className={`cursor-pointer rounded-full border-2 px-3 py-1 text-sm transition-colors ${
                   draft.uiLanguage === code
-                    ? "border-accent font-semibold"
-                    : "border-surface-2 text-ink-soft hover:border-accent/50"
+                    ? "border-indigo font-semibold"
+                    : "border-surface-2 text-ink-soft hover:border-indigo/50"
                 }`}
               >
                 {code === "en" ? "English" : "Türkçe"}
@@ -1027,7 +1027,7 @@ export function OnboardingWizard() {
           <div
             key={i}
             className={`h-1.5 flex-1 rounded-full transition-colors ${
-              i <= step ? "bg-accent" : "bg-surface-2"
+              i < step ? "bg-indigo" : i === step ? "bg-accent" : "bg-surface-2"
             }`}
           />
         ))}
@@ -1043,7 +1043,7 @@ export function OnboardingWizard() {
                 setDraft((d) => ({ ...d, displayName: e.target.value }))
               }
               placeholder={t.namePlaceholder}
-              className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
+              className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
             />
             <div className="mt-4 grid grid-cols-2 gap-3">
               {LANGUAGES.map((l) => {
@@ -1139,11 +1139,11 @@ export function OnboardingWizard() {
               }
               rows={4}
               placeholder={t.motivationPlaceholder}
-              className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
+              className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
             />
             {!llm.configured && !llmDone && (
               <div className="mt-6">
-                <p className="mb-3 rounded-xl bg-accent-soft/40 px-4 py-3 text-sm">
+                <p className="mb-3 rounded-xl bg-indigo-soft px-4 py-3 text-sm">
                   {t.llmNeeded}
                 </p>
                 <LlmSetupWizard onDone={() => setLlmDone(true)} />
