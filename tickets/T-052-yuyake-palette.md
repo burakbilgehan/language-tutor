@@ -1,7 +1,7 @@
 ---
 id: T-052
 title: Yūyake palet göçü — globals drop-in + moss/gold→indigo/amber taraması + info variant + Kumo mark (handoff task 1-4)
-status: in-progress
+status: done
 priority: p2
 effort: S
 confidence: high
@@ -45,3 +45,10 @@ dark/light kontrolü manuel kalır.
 - v1 "sky" uygulaması 2026-07-27 merge + aynı gün revert (`1907e54`) — Burak
   dizaynı beğenmedi. v2 Yūyake handoff'uyla aynı gün yeniden kapsamlandı ve
   açıldı; v1 handoff klasörü silindi (git geçmişinde: `5ad0c88`).
+- **Done 2026-07-27**: `13e2ed5` + `938eb26` (Kumo shrink-0), ff-merge main'e.
+  Kanıt: globals handoff'la bayt-aynı (cmp), src'de moss/gold/sky sıfır
+  (nl.ts fiili hariç), tsc temiz, 111/111 test, build:static worktree'de
+  yeşil (19 sayfa, derlenmiş CSS'te indigo/amber kuralları doğrulandı).
+  Görsel dark/light kontrolü manuel kaldı. Bilinçli kalıntı: StrokeTrainer
+  `--ink`/`--surface-2` cssVar fallback hex'leri eski değerde (yalnız cssVar
+  çözülemezse görünür, kozmetik).

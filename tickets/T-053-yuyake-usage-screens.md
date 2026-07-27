@@ -1,7 +1,7 @@
 ---
 id: T-053
 title: Yūyake kullanım kuralları — 5 ekrana uygula (vermilyon=aksiyon, indigo=bilgi/başarı/durum, amber=ödül)
-status: backlog
+status: in-progress
 priority: p2
 effort: M
 confidence: medium

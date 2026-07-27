@@ -52,7 +52,7 @@ Next.js 15 (App Router, `src/`) + TS + Tailwind 4 + SQLite (Drizzle + better-sql
 - New target language: add to `LANGUAGES` (profile-options), the zod enum in `/api/profile`, `ProfileMeta` union, a grammar index file + `grammarIndexFor` case, and (if not CEFR) a scheme in `levels.ts`; language-specific prompt rules live behind `targetLanguage === "xx"` branches in the prompt files.
 
 ## Style
-Cozy warm palette (cream/terracotta/moss, tokens in `globals.css` `@theme`), Fraunces + Nunito Sans. UI copy via the i18n string tables (tr canonical). No purple gradients, no dashboard aesthetic.
+Cozy warm palette, **Yūyake v2**: cream/vermilion/aizome-indigo/amber (tokens in `globals.css` `@theme`). Design source of truth: `design/okumo-yuyake/` (README + DS v2 html) — all future visuals base on it. Color roles: vermilion = action only (max ONE dominant focus per page), indigo = info+success+state (links, hints, progress, focus ring, Kumo mark), amber = reward (XP/streak/badges; `--amber-text` on light bg). No green, no pale pastel blue, no purple gradients, no dashboard aesthetic. Fraunces + Nunito Sans. UI copy via the i18n string tables (tr canonical).
 
 ## Backlog
 İş takibi `tickets/` dizininde: dosya başına bir ticket (frontmatter:
