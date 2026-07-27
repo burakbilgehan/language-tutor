@@ -323,7 +323,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
       <span className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">{label}</span>
         {badge && (
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold">
+          <span className="rounded-full bg-sky-soft px-2 py-0.5 text-[11px] font-semibold">
             {badge}
           </span>
         )}
@@ -394,7 +394,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={t.keyPaste}
-            className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-accent"
+            className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
           />
           <WizardTestRow
             t={t}

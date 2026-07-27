@@ -274,8 +274,9 @@ export default function SettingsPage() {
           <h2 className="mb-1 font-semibold">{t.saveTitle}</h2>
           <p className="mb-3 text-sm text-ink-soft">{t.saveDesc}</p>
           <div className="flex flex-wrap gap-3">
+            {/* Backup download = calm info action (sky), per the okumo-sky mock. */}
             <CozyButton
-              variant="soft"
+              variant="info"
               onClick={() => void saveExportApi()}
             >
               {t.download}
@@ -304,7 +305,7 @@ export default function SettingsPage() {
               destructive part (overwriting the cloud save) is still behind a
               confirm inside onPushAfterImport. */}
           {pushOffer !== null && (
-            <div className="mt-4 rounded-xl border-2 border-accent/40 bg-accent-soft/20 px-4 py-3">
+            <div className="mt-4 rounded-xl border-2 border-sky/40 bg-sky-50 px-4 py-3">
               <div className="font-semibold">{t.pushOfferTitle}</div>
               {pushOffer === "done" ? (
                 <>

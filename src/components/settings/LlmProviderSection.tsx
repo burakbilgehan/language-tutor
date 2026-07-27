@@ -303,7 +303,7 @@ export function LlmProviderSection() {
             <select
               value={preset}
               onChange={(e) => applyPreset(e.target.value as PresetId)}
-              className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 outline-none focus:border-accent"
+              className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
             >
               {PRESET_LIST.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -318,7 +318,7 @@ export function LlmProviderSection() {
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://api.deepseek.com/v1"
-              className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-accent"
+              className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
             />
           </label>
         </div>
@@ -334,7 +334,7 @@ export function LlmProviderSection() {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={config.hasKey ? config.apiKeyMasked : "sk-..."}
-                className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-accent"
+                className="w-full rounded-xl border-2 border-surface-2 bg-background px-3 py-2 font-mono text-xs outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
               />
               {config.hasKey && (
                 <span className="mt-1 block text-xs text-ink-soft">
@@ -360,7 +360,7 @@ export function LlmProviderSection() {
                         ? t.modelBalanced
                         : t.modelDeep
                   }
-                  className="w-full rounded-xl border-2 border-surface-2 bg-background px-2 py-2 font-mono text-xs outline-none focus:border-accent"
+                  className="w-full rounded-xl border-2 border-surface-2 bg-background px-2 py-2 font-mono text-xs outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
                 />
               ))}
             </div>

@@ -267,13 +267,13 @@ export function RoadmapView() {
       >
       <main className="mx-auto max-w-xl px-4">
         {data.contentLangMismatch && (
-          <div className="my-6 rounded-cozy border border-accent/30 bg-surface px-5 py-4 shadow-cozy">
+          <div className="my-6 rounded-cozy border border-sky/30 bg-surface px-5 py-4 shadow-cozy">
             <div className="font-semibold">{t.langMismatchTitle}</div>
             <p className="mt-1 text-sm text-ink-soft">{t.langMismatchBody}</p>
             <button
               onClick={startRetranslate}
               disabled={retranslating}
-              className="mt-3 rounded-cozy bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="mt-3 rounded-cozy bg-sky px-4 py-2 text-sm font-semibold text-surface disabled:opacity-60"
             >
               {retranslating ? t.retranslating : t.retranslate}
             </button>
@@ -282,8 +282,35 @@ export function RoadmapView() {
         {data.units.map((unit, ui) => (
           <section key={unit.id} className="relative">
             <div className="sticky top-[calc(var(--header-h)+8px)] z-10 my-6 rounded-cozy bg-surface px-5 py-4 shadow-cozy">
-              <div className="text-xs font-semibold uppercase tracking-wider text-accent">
-                {t.unit(ui + 1)}
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold uppercase tracking-wider text-accent">
+                  {t.unit(ui + 1)}
+                </div>
+                {/* Sky = state: per-unit completion, mirrored from node statuses. */}
+                {unit.nodes.length > 0 && (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="h-1.5 w-14 overflow-hidden rounded-full bg-sky-soft">
+                      <span
+                        className="block h-full rounded-full bg-sky"
+                        style={{
+                          width: `${Math.round(
+                            (unit.nodes.filter((n) => n.status === "completed")
+                              .length /
+                              unit.nodes.length) *
+                              100
+                          )}%`,
+                        }}
+                      />
+                    </span>
+                    <span className="text-[10px] font-bold text-sky-deep">
+                      {
+                        unit.nodes.filter((n) => n.status === "completed")
+                          .length
+                      }
+                      /{unit.nodes.length}
+                    </span>
+                  </div>
+                )}
               </div>
               <h2 className="text-lg font-semibold">
                 {unit.titleTr ?? t.hiddenTitle}
@@ -292,8 +319,8 @@ export function RoadmapView() {
             </div>
 
             <div className="relative flex flex-col items-center gap-2 py-2">
-              {/* winding dotted spine */}
-              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 border-l-2 border-dashed border-surface-2" />
+              {/* winding dotted spine — sky thread */}
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 border-l-2 border-dashed border-sky-soft" />
               {unit.nodes.map((node, ni) => (
                 <NodeBubble
                   key={node.id}
@@ -316,7 +343,7 @@ export function RoadmapView() {
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}
-                    className="h-2 w-2 animate-bounce rounded-full bg-accent"
+                    className="h-2 w-2 animate-bounce rounded-full bg-sky"
                     style={{ animationDelay: `${i * 0.18}s` }}
                   />
                 ))}
@@ -409,7 +436,7 @@ function RailBubble({
     >
       <span
         className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl shadow-cozy transition-all group-hover:scale-110 active:scale-95 ${
-          accent ? "bg-moss-soft" : "bg-surface"
+          accent ? "bg-sky-soft" : "bg-surface"
         }`}
       >
         {icon}
