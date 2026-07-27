@@ -5,7 +5,7 @@ import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
-import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
+import { LlmSetupWizard } from "@/components/settings/LlmSetupWizard";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
 import { useStrings } from "@/lib/i18n/use-strings";
@@ -134,6 +134,8 @@ export default function SettingsPage() {
     totalCalls: number;
     byPurpose?: { purpose: string; calls: number; usd: number }[];
   } | null>(null);
+  // Remount key for the LLM wizard — see its render site below.
+  const [llmWizardKey, setLlmWizardKey] = useState(0);
 
   useEffect(() => {
     stats()
@@ -258,7 +260,13 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-ink-soft">{t.billingNote}</p>
         </section>
 
-        <LlmProviderSection />
+        {/* T-060: the wizard IS the LLM surface now (the old LlmProviderSection
+            melted into its "Gelişmiş" accordion). In Settings there is no next
+            step to hand off to, so "done" just remounts it back to the doors. */}
+        <LlmSetupWizard
+          key={llmWizardKey}
+          onDone={() => setLlmWizardKey((k) => k + 1)}
+        />
 
         <JobQueuePanel />
 
