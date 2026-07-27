@@ -35,6 +35,12 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
+      # data/app.db is gitignored; db-reset.test.ts (and anything touching the
+      # dev DB) needs the schema to exist. --force skips the interactive
+      # confirmation — the DB is always fresh here, nothing to lose.
+      - name: Create app DB schema
+        run: npm run db:push -- --force
+
       - name: App tests
         run: npm test
 
