@@ -1,7 +1,7 @@
 ---
 id: T-056
 title: LLM'siz akış bozuk + ilk açılışta anında statik içerik (augmentation modeli)
-status: backlog
+status: done
 priority: p1
 effort: M
 confidence: high
@@ -9,6 +9,26 @@ depends: []
 created: 2026-07-27
 ---
 ★ ACİL. İki fazlı — Faz 1 canlı bug (hemen), Faz 2 mimari düzeltme.
+
+**Durum güncellemesi (2026-07-27):** Faz 1 MERGE EDİLDİ (`d791e63` +
+`53c65da` — onboarding `llm_unconfigured`'ı yakalayıp /map'e düşüyor,
+RoadmapView boş-harita durumunu gösteriyor). Kalan kapsam = yalnız Faz 2.
+İlişki: T-060 (sihirbaz redesign) "Bağlamadan devam"ı birinci sınıf kapı
+yapıyor; o kapının arka yüzü bu ticket'ın Faz 2'si.
+
+**Kapanış (2026-07-27, solo wave):** Faz 2 de merge edildi (`b330e6c` /
+merge `2cf0ae6`). Ruling'ler (Burak): **B — cheatsheet hub'ı** (iskele
+curriculum reddedildi; flip: ders içeriği için paketlenmiş seed shiplenirse
+A yeniden masaya gelir). `/map` müfredatsız durumu artık dil-farkındalıklı
+kütüphane hub'ı (kartlar `visibleNavItems`'tan; lessons/review/chat hariç) +
+LLM varsa "Müfredatı oluştur", yoksa "LLM bağla". Kapı ekranı dörtlü ve
+yeniden sıralandı: rehberli kurulum (birincil) / kayıt yükle / bulut girişi /
+**anonim başlangıç** (tek soru: hedef dil — immutable olduğu için
+default'lanamaz; kalan her şey default, Ayarlar'dan özelleştirilir; anonim
+yol curriculum'u LLM bağlıyken bile otomatik üretmez — tetik hub'da).
+Ek düzeltme `40250c0`: grammar/vocab sidebar'ları yükleme hatasını boş
+listeye maskeliyordu ("müfredat oluşunca..." yanıltıcı kopyasıyla) — hata
+artık retry'lı görünür durum. en-native seed boşluğu → **T-064**.
 
 **Temel ilke (Burak):** LLM bağlama + kişiselleştirme bir **augmentation**'dır,
 ön-koşul DEĞİL. Statik content her an hazır (grammar/kanji/vocab seed CDN'de +

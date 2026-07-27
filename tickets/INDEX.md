@@ -7,7 +7,15 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
-| [T-056](T-056-llmless-first-content.md) | ★ ACİL — LLM'siz akış bozuk + ilk açılışta anında statik içerik | backlog | p1 | M | high |
+| [T-056](T-056-llmless-first-content.md) | LLM'siz akış — Faz 1 bug + Faz 2 kütüphane hub'ı + anonim kapı (B ruling'i) | done | p1 | M | high |
+| [T-064](T-064-en-native-seed-gap.md) | en-native seed boşluğu — LLM'siz "anında içerik" yalnız tr'de tam (T-056 bulgusu) | backlog | p3 | M | medium |
+| [T-057](T-057-model-catalog.md) | Model kataloğu tek kaynak — Eko/Denge/En iyi + bayat id temizliği | backlog | p2 | M | high |
+| [T-058](T-058-catalog-freshness.md) | Katalog tazelik mekanizması (Worker doğrulama + staleWarnings) | backlog | p3 | M | medium |
+| [T-059](T-059-bridge-npx-health.md) | Bridge blackbox — npx paketi + /health + opencode kararı | backlog | p2 | M | high |
+| [T-060](T-060-wizard-ia-redesign.md) | Sihirbaz IA redesign — 3 kapı, canlı algılama, kalite profili, dürüst copy | backlog | p2 | L | medium |
+| [T-061](T-061-live-model-lists.md) | Canlı model listeleri (Ollama tags / OpenRouter / bridge) | backlog | p3 | S | high |
+| [T-062](T-062-openrouter-pkce.md) | OpenRouter PKCE tek-tık — KARAR-GATE (Burak onayı bekler) | backlog | p3 | M | medium |
+| [T-063](T-063-connection-status-card.md) | Bağlantı durumu kartı + köprü-kapalı hata yönlendirmesi | backlog | p3 | S | high |
 | [T-024](T-024-save-job-queue-leak.md) | Save'e job kuyruğu sızması (import token yakıyor) — geçici fix; kalıcı çözüm T-034 | done | p1 | S | high |
 | [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | done | p2 | M | high |
 | [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | done | p1 | L | medium |
@@ -62,6 +70,41 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-010](T-010-llm-setup-wizard.md) | LLM bağlantı sihirbazı (kod bilmeyene kurulum akışı) | done | p1 | M | high |
 | [T-011](T-011-sidequest-backfill.md) | Mevcut nl/zh profillerine yan görev backfill | wontfix | p2 | S | high |
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 kuyruğu (ops'a taşındı — blast paneli) | wontfix | p3 | S | high |
+
+## Yol haritası (2026-07-27) — LLM bağlantı UX dalgaları
+
+Bağlam: saha araştırması (2026-07-27) abonelik-hosting yolunu kapattı
+(Anthropic/Google ToS — özet T-062'de). Burak kararları: 3 kapı
+(No-LLM / lokal / API key), Ollama+bridge tek lokal kapıda, kalite profili
+Eko/Denge/En iyi + bütçe ipucu, nokta atışı modeller gelişmişte, katalog
+tazeliği Worker mekanizmasıyla, bridge npx + dürüst-friction copy.
+
+**Dalga L1 (3 paralel, fence-ayrık — başlamadan doğrula, 2026-07-18 dersi):**
+| İş | Ticket | Model | Efor | Fence |
+|---|---|---|---|---|
+| L1a | T-056 (Faz 2) | opus | M | **done** (2026-07-27 solo wave, öne alındı) — `OnboardingWizard.tsx` sonu + `RoadmapView` + client-api curriculum yolu |
+| L1b | T-057 | opus | M | `src/lib/llm/*` + settings komponentlerinde yalnız sabit satırları (tier-çözümleme tekilleştirmesi provider seam'e dokunur → regresyon riski, opus) |
+| L1c | T-059 | sonnet | M | `scripts/llm-bridge.mjs` + yeni paket dizini; app koduna dokunmaz |
+
+⚠️ L1a ve L1b'nin olası kesişimi: `client-api.ts` — L1b oraya girmemeli
+(katalog `src/lib/llm/` içinde kalır).
+
+**Dalga L2 (solo):**
+| İş | Ticket | Model | Efor | Not |
+|---|---|---|---|---|
+| L2 | T-060 | opus | L | Dalganın kalbi; wizard+settings+i18n geniş yüzey, tek başına koşar. L1'in üçü de merge edilmiş olmalı |
+
+**Dalga L3 (3 paralel):**
+| İş | Ticket | Model | Efor | Fence |
+|---|---|---|---|---|
+| L3a | T-061 | sonnet | S | T-060 gelişmiş paneli + fetch helper'ları |
+| L3b | T-063 | sonnet | S | settings kartı + LessonPlayer/ChatPanel hata yolları |
+| L3c | T-058 | sonnet | M | `worker/` + `catalog.ts` yükleme katmanı — ⚠️ L3a ile catalog.ts kesişimini başlamadan doğrula |
+
+**Karar-gate (sıralanmadı):** T-062 (OpenRouter PKCE) — Burak onayıyla L4
+olur; T-060'tan bağımsız başlamaz.
+
+---
 
 ## Yol haritası (2026-07-26 sprint) — tüm açık backlog gruplaması
 
