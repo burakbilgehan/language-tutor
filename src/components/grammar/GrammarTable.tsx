@@ -10,7 +10,7 @@ export function GrammarTable({
 }) {
   return (
     <figure className="rounded-cozy bg-surface p-5 shadow-cozy">
-      <figcaption className="mb-3 font-semibold text-accent">
+      <figcaption className="mb-3 font-semibold text-sky-deep">
         {table.caption_tr}
       </figcaption>
       <div className="overflow-x-auto">
@@ -20,7 +20,7 @@ export function GrammarTable({
               {table.column_headers.map((h, i) => (
                 <th
                   key={i}
-                  className="sticky top-0 border-b-2 border-accent-soft bg-surface-2 px-3 py-2 text-left font-semibold"
+                  className="sticky top-0 border-b-2 border-sky-soft bg-surface-2 px-3 py-2 text-left font-semibold"
                 >
                   <Furigana text={h} lang={lang} />
                 </th>

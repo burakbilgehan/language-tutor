@@ -16,11 +16,20 @@ interface TopicDto {
   status: "pending" | "generating" | "ready" | "error";
 }
 
+// Status glyphs carry meaning (okumo-sky): ✓ ready (moss), ↓ prepare (sky),
+// ⏳ generating (sky row tint), ⚠️ error. Colors ride the semantic tokens.
 const STATUS_ICONS: Record<TopicDto["status"], string> = {
-  ready: "📖",
+  ready: "✓",
   generating: "⏳",
   error: "⚠️",
-  pending: "✨",
+  pending: "↓",
+};
+
+const STATUS_TONE: Record<TopicDto["status"], string> = {
+  ready: "text-moss",
+  generating: "",
+  error: "",
+  pending: "text-sky",
 };
 
 // Level labels are flat across schemes (JLPT/HSK/CEFR — level strings are
@@ -295,7 +304,16 @@ export function GrammarSidebar() {
           <details key={lvl} open data-grammar-level={lvl}>
             <summary className="mb-2 flex cursor-pointer flex-wrap items-center gap-2 font-bold text-ink">
               <span>{s.levels[lvl] ?? lvl}</span>
-              <span className="text-xs font-normal text-ink-soft">
+              {/* Sky = state: per-level readiness bar. */}
+              <span className="h-1 min-w-8 flex-1 overflow-hidden rounded-full bg-sky-soft">
+                <span
+                  className="block h-full rounded-full bg-sky"
+                  style={{
+                    width: `${Math.round((readyCount / all.length) * 100)}%`,
+                  }}
+                />
+              </span>
+              <span className="text-xs font-semibold text-sky-deep">
                 {readyCount}/{all.length}
               </span>
               {pendingCount > 0 && llm.configured && (
@@ -306,7 +324,7 @@ export function GrammarSidebar() {
                     generateAll(lvl);
                   }}
                   title={s.prepareCount(pendingCount)}
-                  className="ml-auto rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-ink-soft transition-colors hover:bg-accent-soft disabled:opacity-40"
+                  className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-ink-soft transition-colors hover:bg-accent-soft disabled:opacity-40"
                 >
                   {batchBusy ? "..." : `↓ ${pendingCount}`}
                 </button>
@@ -324,11 +342,13 @@ export function GrammarSidebar() {
                       id={`grammar-topic-${t.slug}`}
                       href={`/grammar?topic=${encodeURIComponent(t.slug)}`}
                       className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
-                        flashSlug === t.slug ? "ring-2 ring-accent " : ""
+                        flashSlug === t.slug ? "ring-2 ring-sky " : ""
                       }${
                         activeSlug === t.slug
                           ? "bg-accent-soft font-semibold text-ink"
-                          : "bg-surface text-ink hover:bg-surface-2"
+                          : t.status === "generating"
+                            ? "bg-sky-50 text-sky-deep"
+                            : "bg-surface text-ink hover:bg-surface-2"
                       }`}
                     >
                       <span className="min-w-0 truncate">{t.titleTr}</span>
@@ -339,9 +359,9 @@ export function GrammarSidebar() {
                             : s.statuses[t.status]
                         }
                         onClick={(e) => generateOne(e, t)}
-                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs transition-colors ${
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-bold transition-colors ${STATUS_TONE[t.status]} ${
                           t.status === "pending" || t.status === "error"
-                            ? "cursor-pointer hover:bg-accent-soft"
+                            ? "cursor-pointer hover:bg-sky-soft"
                             : "cursor-default"
                         }`}
                       >

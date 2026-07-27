@@ -310,26 +310,34 @@ export function LessonPlayer({
   return (
     <div className={embedded ? "" : "min-h-dvh pb-16"}>
       {embedded ? (
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-surface-2 bg-surface/95 px-5 py-3 backdrop-blur">
-          <h2 className="truncate font-display text-lg font-semibold">
-            {lesson.titleTr}
-          </h2>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              onClick={() => setShowRegenForm((v) => !v)}
-              title={t.regenTitle}
-              className="rounded-full bg-surface-2 px-3 py-1.5 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
-            >
-              ↻
-            </button>
-            <button
-              onClick={exit}
-              title={t.close}
-              className="rounded-full bg-surface-2 px-3 py-1.5 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
-            >
-              ✕
-            </button>
+        <div className="sticky top-0 z-10 border-b border-surface-2 bg-surface/95 px-5 py-3 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="truncate font-display text-lg font-semibold">
+              {lesson.titleTr}
+            </h2>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                onClick={() => setShowRegenForm((v) => !v)}
+                title={t.regenTitle}
+                className="rounded-full bg-surface-2 px-3 py-1.5 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+              >
+                ↻
+              </button>
+              <button
+                onClick={exit}
+                title={t.close}
+                className="rounded-full bg-surface-2 px-3 py-1.5 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
           </div>
+          {/* Exercise progress lives in the header (sky = state), not the card. */}
+          {phase === "exercises" && exercises.length > 0 && (
+            <div className="pt-2.5">
+              <ProgressStrip current={exIdx} total={exercises.length} />
+            </div>
+          )}
         </div>
       ) : (
         <StatsHeader title={lesson.titleTr} />
@@ -344,7 +352,7 @@ export function LessonPlayer({
               onChange={(e) => setRegenFeedback(e.target.value)}
               placeholder={t.regenPlaceholder}
               rows={2}
-              className="w-full rounded-xl border border-surface-2 bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+              className="w-full rounded-xl border border-surface-2 bg-background px-3 py-2 text-sm outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
             />
             <div className="flex gap-2">
               <CozyButton onClick={() => regenerate(regenFeedback)}>
@@ -364,6 +372,11 @@ export function LessonPlayer({
         </div>
       )}
       <main className="mx-auto max-w-3xl px-4 py-8">
+        {!embedded && phase === "exercises" && exercises.length > 0 && (
+          <div className="mb-6">
+            <ProgressStrip current={exIdx} total={exercises.length} />
+          </div>
+        )}
         {phase === "explanation" && (
           <div className="flex flex-col gap-6">
             <section className="rounded-cozy bg-surface p-6 shadow-cozy prose-cozy">
@@ -397,7 +410,7 @@ export function LessonPlayer({
                 <h2 className="mb-3 text-lg font-semibold">{t.grammarNotes}</h2>
                 {lesson.grammarNotes.map((n, i) => (
                   <div key={i} className="mb-3 last:mb-0">
-                    <div className="font-semibold text-accent">
+                    <div className="font-semibold text-sky-deep">
                       {n.heading_tr}
                     </div>
                     <p className="text-sm text-ink-soft">{n.body_tr}</p>
@@ -481,23 +494,15 @@ function ExerciseCard({
 
   return (
     <div className="rounded-cozy bg-surface p-6 shadow-cozy">
-      <div className="mb-4 flex items-center justify-between text-xs font-semibold text-ink-soft">
-        <span>{t.exerciseProgress(index + 1, total)}</span>
-        <div className="flex gap-1">
-          {Array.from({ length: total }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 w-4 rounded-full ${
-                i < index ? "bg-moss" : i === index ? "bg-accent" : "bg-surface-2"
-              }`}
-            />
-          ))}
-        </div>
+      {/* The dot strip moved to the player header — the card keeps only the
+          label, in the sky info voice. */}
+      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-sky-deep">
+        {t.exerciseProgress(index + 1, total)}
       </div>
 
       <h2 className="text-lg font-semibold">{exercise.promptTr}</h2>
       {exercise.targetText && (
-        <div className="mt-3 rounded-xl bg-background p-4 text-xl">
+        <div className="mt-3 rounded-xl bg-sky-50 p-4 text-xl">
           <Furigana text={exercise.targetText} lang={cjkLang} />
         </div>
       )}
@@ -513,12 +518,12 @@ function ExerciseCard({
                   setResponse(opt);
                   submit(opt);
                 }}
-                className={`rounded-xl border-2 px-4 py-3 text-left transition-all cursor-pointer disabled:cursor-default ${
+                className={`rounded-xl border-2 px-4 py-3 text-left transition-all cursor-pointer outline-none disabled:cursor-default ${
                   result && opt === response
                     ? result.isCorrect
                       ? "border-moss bg-moss-soft"
                       : "border-danger bg-danger/10"
-                    : "border-surface-2 bg-background hover:border-accent-soft"
+                    : "border-surface-2 bg-background hover:border-sky-soft focus-visible:border-sky focus-visible:ring-4 focus-visible:ring-sky/15"
                 }`}
               >
                 <Furigana text={opt} lang={cjkLang} />
@@ -540,7 +545,7 @@ function ExerciseCard({
                 disabled={!!result}
                 rows={3}
                 placeholder={t.answerPlaceholder}
-                className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
+                className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
               />
             ) : (
               <input
@@ -554,7 +559,7 @@ function ExerciseCard({
                       ? t.answerPlaceholderZh
                       : t.answerPlaceholder
                 }
-                className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
+                className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
               />
             )}
             {!result && (
@@ -571,8 +576,8 @@ function ExerciseCard({
       </div>
 
       {selfCheck && !result && (
-        <div className="mt-4 rounded-xl bg-surface-2 px-4 py-3">
-          <div className="font-semibold">{t.selfCheckTitle}</div>
+        <div className="mt-4 rounded-xl bg-sky-50 px-4 py-3">
+          <div className="font-semibold text-sky-deep">{t.selfCheckTitle}</div>
           <p className="mt-1 text-xs text-ink-soft">{t.selfCheckHint}</p>
           <div className="mt-3 rounded-lg bg-background p-3">
             <div className="text-xs font-semibold text-ink-soft">
@@ -687,8 +692,24 @@ function Dots() {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="h-2.5 w-2.5 animate-bounce rounded-full bg-accent"
+          className="h-2.5 w-2.5 animate-bounce rounded-full bg-sky"
           style={{ animationDelay: `${i * 0.18}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Segment progress: moss = done, sky = current, sky tint = ahead. */
+function ProgressStrip({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex gap-1">
+      {Array.from({ length: total }).map((_, i) => (
+        <span
+          key={i}
+          className={`h-1.5 flex-1 rounded-full ${
+            i < current ? "bg-moss" : i === current ? "bg-sky" : "bg-sky-soft"
+          }`}
         />
       ))}
     </div>
