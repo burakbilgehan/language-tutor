@@ -11,6 +11,7 @@ import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
 import { IS_STATIC, llmConfigPut, llmTest } from "@/lib/client-api";
 import { PRESETS } from "@/lib/llm/presets";
+import { CATALOG } from "@/lib/llm/catalog";
 import { BASE_PATH } from "@/lib/base-path";
 
 const S = {
@@ -173,8 +174,16 @@ const SUB_BACKENDS: Record<
       linux: "curl -fsSL https://claude.ai/install.sh | bash",
       win: "irm https://claude.ai/install.ps1 | iex",
     },
-    models: { fast: "haiku", balanced: "sonnet", deep: "opus" },
+    models: CATALOG.cli.defaultModels,
   },
+  // codex/copilot/gemini: no per-tier model aliases (unlike claude's
+  // haiku/sonnet/opus). The tier name itself is the sentinel llm-bridge.mjs
+  // reads as "no model selected" (bknz. scripts/llm-bridge.mjs: bilinmeyen
+  // model backend'e geçirilmez) — an EMPTY string here would be falsy and
+  // fall through to the catalog's `bridge` provider default (a real claude
+  // alias), which the codex/gemini CLIs don't understand and reject. Storing
+  // the tier name itself as an explicit config value keeps it truthy so
+  // resolveModelId() returns it unchanged instead of falling through.
   codex: {
     label: "ChatGPT (Plus/Pro)",
     cli: "codex",
@@ -183,7 +192,7 @@ const SUB_BACKENDS: Record<
       linux: "npm install -g @openai/codex",
       win: "npm install -g @openai/codex",
     },
-    models: { fast: "", balanced: "", deep: "" },
+    models: { fast: "fast", balanced: "balanced", deep: "deep" },
   },
   copilot: {
     label: "GitHub Copilot",
@@ -193,7 +202,7 @@ const SUB_BACKENDS: Record<
       linux: "npm install -g @github/copilot",
       win: "npm install -g @github/copilot",
     },
-    models: { fast: "", balanced: "", deep: "" },
+    models: { fast: "fast", balanced: "balanced", deep: "deep" },
   },
   gemini: {
     label: "Google Gemini",
@@ -203,7 +212,7 @@ const SUB_BACKENDS: Record<
       linux: "npm install -g @google/gemini-cli",
       win: "npm install -g @google/gemini-cli",
     },
-    models: { fast: "", balanced: "", deep: "" },
+    models: { fast: "fast", balanced: "balanced", deep: "deep" },
   },
 };
 
@@ -284,6 +293,14 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
     win: `setx OLLAMA_ORIGINS "${origin}"`,
     linux: `OLLAMA_ORIGINS="${origin}" ollama serve`,
   };
+
+  // Catalog's ollama profile (fast/balanced tags cover the pair this wizard
+  // step suggests pulling; deep reuses the balanced tag in the "balanced"
+  // profile so pulling just these two tags is enough for all three tiers).
+  const ollamaPullTags = Array.from(
+    new Set([CATALOG.ollama.defaultModels.fast, CATALOG.ollama.defaultModels.balanced])
+  );
+  const ollamaPullCmd = ollamaPullTags.map((tag) => `ollama pull ${tag}`).join(" && ");
 
   const testAndSave = async (config: Parameters<typeof llmConfigPut>[0]) => {
     setTesting(true);
@@ -409,11 +426,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                   ? {
                       mode: "anthropic",
                       apiKey,
-                      models: {
-                        fast: "claude-haiku-4-5",
-                        balanced: "claude-sonnet-4-6",
-                        deep: "claude-opus-4-6",
-                      },
+                      models: CATALOG.anthropic.defaultModels,
                     }
                   : {
                       mode: "openai",
@@ -443,7 +456,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
           </p>
           <p>{t.ollamaStep2}</p>
           <CmdBlock
-            cmd="ollama pull llama3.2 && ollama pull llama3.1"
+            cmd={ollamaPullCmd}
             copyLabel={t.copy}
             copiedLabel={t.copied}
           />
@@ -468,7 +481,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
               testAndSave({
                 mode: "openai",
                 baseUrl: PRESETS.ollama.baseUrl,
-                models: { fast: "llama3.2", balanced: "llama3.1", deep: "llama3.1" },
+                models: PRESETS.ollama.models,
                 jsonMode: true,
               })
             }

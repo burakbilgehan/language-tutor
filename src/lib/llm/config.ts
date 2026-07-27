@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import type { ModelTier } from "./provider";
+import { resolveModelId, providerForBaseUrl, type ProviderId } from "./catalog";
 
 // Runtime LLM provider config, stored as a plain JSON file — NOT in the DB.
 // Deliberate: the save export serializes the SQLite image, and a replace-all
@@ -89,17 +90,31 @@ export function llmConfigured(): boolean {
   return Boolean(config?.baseUrl);
 }
 
-/** tier → model id, resolved from config first, then env, then defaults.
- * Used by the HTTP providers (the CLI provider keeps modelForTier for its
- * short aliases). */
+/** tier → model id, resolved from config first, then env, then the catalog
+ * default for the matched provider. Used by the HTTP providers (the CLI
+ * provider keeps modelForTier in provider.ts for its short aliases — same
+ * resolveModelId() underneath, different provider id/no env needed there).
+ * Throws when nothing resolves — a literal tier string ("fast") must never
+ * reach a real API as a model id (T-057: that was the bug). */
 export function modelForTierConfigured(tier: ModelTier): string {
   const config = readLlmConfig();
-  const fromConfig = config?.models?.[tier];
-  if (fromConfig) return fromConfig;
-  const env: Record<ModelTier, string | undefined> = {
-    fast: process.env.LLM_MODEL_FAST,
-    balanced: process.env.LLM_MODEL_BALANCED,
-    deep: process.env.LLM_MODEL_DEEP,
-  };
-  return env[tier] || tier;
+  const providerId: ProviderId =
+    config?.mode === "anthropic" ? "anthropic" : providerIdForConfig(config);
+  return resolveModelId({
+    tier,
+    configModels: config?.models,
+    envModels: {
+      fast: process.env.LLM_MODEL_FAST,
+      balanced: process.env.LLM_MODEL_BALANCED,
+      deep: process.env.LLM_MODEL_DEEP,
+    },
+    provider: providerId,
+  });
+}
+
+/** Best-effort provider match for an "openai" mode config, by baseUrl — falls
+ * back to "custom" (no catalog default; config/env must supply a model). */
+function providerIdForConfig(config: LlmConfig | null): ProviderId {
+  if (!config?.baseUrl) return "custom";
+  return providerForBaseUrl(config.baseUrl) ?? "custom";
 }

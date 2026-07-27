@@ -16,19 +16,22 @@ export {
 
 import type { ModelTier, LlmProvider } from "./provider-types";
 import { LlmError } from "./provider-types";
+import { resolveModelId } from "./catalog";
 
+/** tier → model id for the CLI provider. Same resolveModelId() as the HTTP
+ * path (config.ts modelForTierConfigured), but the CLI has no config.models
+ * of its own — env, then the catalog's "cli" defaults (haiku/sonnet/opus
+ * short aliases, unchanged behaviour). */
 export function modelForTier(tier: ModelTier): string {
-  const defaults: Record<ModelTier, string> = {
-    fast: "haiku",
-    balanced: "sonnet",
-    deep: "opus",
-  };
-  const env: Record<ModelTier, string | undefined> = {
-    fast: process.env.LLM_MODEL_FAST,
-    balanced: process.env.LLM_MODEL_BALANCED,
-    deep: process.env.LLM_MODEL_DEEP,
-  };
-  return env[tier] || defaults[tier];
+  return resolveModelId({
+    tier,
+    envModels: {
+      fast: process.env.LLM_MODEL_FAST,
+      balanced: process.env.LLM_MODEL_BALANCED,
+      deep: process.env.LLM_MODEL_DEEP,
+    },
+    provider: "cli",
+  });
 }
 
 let provider: LlmProvider | undefined;

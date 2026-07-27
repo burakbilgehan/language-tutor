@@ -19,6 +19,7 @@ import {
   runJsonWithRetry,
   schemaToJsonSchema,
 } from "./shared-pure";
+import { resolveModelId, providerForBaseUrl, type ProviderId } from "./catalog";
 import type { Gen } from "@/core/llm-gen";
 
 const LS_KEY = "llm-browser-config";
@@ -52,8 +53,14 @@ export function browserLlmConfigured(): boolean {
   return Boolean(c.apiKey); // anthropic
 }
 
+/** No process.env in the browser bundle — config only, then the catalog
+ * default for the matched provider (mode:"anthropic" or a baseUrl-matched
+ * HTTP preset). Throws when unresolved (T-057: a literal tier string like
+ * "fast" must never reach a real API as a model id). */
 function modelFor(c: BrowserLlmConfig, tier: ModelTier): string {
-  return c.models?.[tier] || tier;
+  const providerId: ProviderId =
+    c.mode === "anthropic" ? "anthropic" : (providerForBaseUrl(c.baseUrl) ?? "custom");
+  return resolveModelId({ tier, configModels: c.models, provider: providerId });
 }
 
 // Aynı anda tek LLM çağrısı (köprü/abonelik limitleri; urgent öne geçer).
