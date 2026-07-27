@@ -4,16 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
+import { CozyButton } from "@/components/shared/CozyButton";
+import { GeneratingScreen } from "@/components/onboarding/GeneratingScreen";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useProfileMeta } from "@/lib/use-profile-meta";
+import { useLlmStatus } from "@/lib/llm-status";
 import { languageLabel } from "@/lib/profile-options";
 import { levelDisplay } from "@/lib/curriculum/levels";
+import { AppError } from "@/lib/errors";
 import {
   roadmap,
   profileData,
   curriculumExtend,
+  curriculumGenerate,
   curriculumRetranslate,
 } from "@/lib/client-api";
 import { withBase } from "@/lib/base-path";
@@ -39,6 +44,15 @@ const S = {
     retranslate: "Bu dile çevir",
     retranslating: "Çevriliyor...",
     hiddenTitle: "(bu dilde henüz yok)",
+    noCurriculumTitle: "Müfredatın henüz hazır değil",
+    noCurriculumNoLlm:
+      "Kişisel ders haritan için bir yapay zekâ bağlantısı gerekiyor — Ayarlar'dan bağlayabilirsin. Bu arada gramer ve sözlük kütüphanesi tamamen hazır, hemen çalışmaya başlayabilirsin.",
+    noCurriculumLlm:
+      "Yapay zekâ bağlantın hazır — kişisel müfredatını şimdi oluşturabilirsin. (Birkaç dakika sürebilir.)",
+    generateNow: "Müfredatı oluştur",
+    generating: "Hazırlanıyor...",
+    goGrammar: "📖 Gramer kütüphanesi",
+    goSettings: "⚙️ LLM bağla",
   },
   en: {
     loadFailed: "Failed to load",
@@ -60,6 +74,15 @@ const S = {
     retranslate: "Translate to this language",
     retranslating: "Translating...",
     hiddenTitle: "(not in this language yet)",
+    noCurriculumTitle: "Your curriculum isn't ready yet",
+    noCurriculumNoLlm:
+      "Your personal lesson map needs an AI connection — you can set one up in Settings. Meanwhile the grammar and dictionary library is fully ready; start studying right away.",
+    noCurriculumLlm:
+      "Your AI connection is ready — you can generate your personal curriculum now. (This can take a few minutes.)",
+    generateNow: "Generate curriculum",
+    generating: "Preparing...",
+    goGrammar: "📖 Grammar library",
+    goSettings: "⚙️ Connect an LLM",
   },
 };
 
@@ -113,6 +136,14 @@ export function RoadmapView() {
   const [extendJobId, setExtendJobId] = useState<string | null>(null);
   const [extendError, setExtendError] = useState<string | null>(null);
   const [openLessonId, setOpenLessonId] = useState<string | null>(null);
+  // T-056: profil var ama müfredat yok (LLM'siz onboarding). Kör boş harita
+  // yerine açık bir durum: LLM yoksa statik kütüphaneye yönlendir, varsa
+  // (sonradan bağlandıysa) üretimi buradan başlat.
+  const llm = useLlmStatus();
+  const [notReady, setNotReady] = useState(false);
+  const [genJobId, setGenJobId] = useState<string | null>(null);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
 
   // Lessons open in a drawer over the map (scroll position survives). The
   // drawer state is mirrored into ?lesson=<id> so the browser back button
@@ -169,8 +200,18 @@ export function RoadmapView() {
 
   const loadRoadmap = () =>
     roadmap()
-      .then(setData)
-      .catch((e) => setError(localize(e)));
+      .then((d) => {
+        setData(d);
+        setNotReady(false);
+        setError(null);
+      })
+      .catch((e) => {
+        if (e instanceof AppError && e.code === "curriculum_not_ready") {
+          setNotReady(true);
+        } else {
+          setError(localize(e));
+        }
+      });
 
   useEffect(() => {
     loadRoadmap();
@@ -195,6 +236,41 @@ export function RoadmapView() {
   useEffect(() => {
     if (extendJobId && data && data.isGenerating == null) setExtendJobId(null);
   }, [data, extendJobId]);
+
+  // T-056: while there is no curriculum, keep polling. Covers the "refreshed
+  // mid-generation" case (a background chapter job finishes → the map appears
+  // by itself) at the cost of one cheap not-ready read per 4s.
+  useEffect(() => {
+    if (!notReady) return;
+    const t = setInterval(() => {
+      void loadRoadmap();
+    }, 4000);
+    return () => clearInterval(t);
+    // loadRoadmap is stable enough (recreated per render but side-effect-idempotent)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notReady]);
+
+  // T-056: generate the first chapter from the map — the recovery path for a
+  // profile that finished onboarding without an LLM and connected one later.
+  // Server mode returns a jobId (GeneratingScreen polls it); static mode runs
+  // inline and resolves when the chapter is ready.
+  const startGenerate = async () => {
+    if (!profileId) return;
+    setGenBusy(true);
+    setGenError(null);
+    try {
+      const r = await curriculumGenerate(profileId);
+      if (r.jobId) {
+        setGenJobId(r.jobId);
+        return; // GeneratingScreen takes over; busy state no longer renders
+      }
+      await loadRoadmap(); // static inline: chapter is ready (or notReady stays)
+    } catch (e) {
+      setGenError(localize(e));
+    } finally {
+      setGenBusy(false);
+    }
+  };
 
   const startExtend = async () => {
     if (!profileId) return;
@@ -226,6 +302,52 @@ export function RoadmapView() {
       <CenteredPage>
         <div className="text-4xl">🍂</div>
         <p className="text-ink-soft">{error}</p>
+      </CenteredPage>
+    );
+  }
+  // T-056: a map-started server generation — reuse the onboarding screen
+  // (status lines + job polling + error/retry) instead of a bare spinner.
+  if (genJobId) {
+    return (
+      <GeneratingScreen
+        jobId={genJobId}
+        uiLanguage={meta?.uiLanguage}
+        onDone={() => {
+          setGenJobId(null);
+          void loadRoadmap();
+        }}
+        onRetry={() => setGenJobId(null)}
+      />
+    );
+  }
+  // T-056: no curriculum yet. Never a blind empty map — say what's missing,
+  // open the static library, and offer generation once an LLM exists.
+  if (notReady) {
+    return (
+      <CenteredPage>
+        <div className="text-4xl">🗺️</div>
+        <h2 className="text-xl font-semibold">{t.noCurriculumTitle}</h2>
+        <p className="text-sm text-ink-soft">
+          {llm.configured ? t.noCurriculumLlm : t.noCurriculumNoLlm}
+        </p>
+        {llm.configured ? (
+          <CozyButton
+            onClick={() => void startGenerate()}
+            disabled={genBusy || !profileId}
+          >
+            {genBusy ? t.generating : t.generateNow}
+          </CozyButton>
+        ) : (
+          <div className="flex flex-wrap justify-center gap-3">
+            <CozyButton onClick={() => router.push("/grammar")}>
+              {t.goGrammar}
+            </CozyButton>
+            <CozyButton variant="soft" onClick={() => router.push("/settings")}>
+              {t.goSettings}
+            </CozyButton>
+          </div>
+        )}
+        {genError && <p className="text-sm text-danger">{genError}</p>}
       </CenteredPage>
     );
   }
