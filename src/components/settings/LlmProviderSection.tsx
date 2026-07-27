@@ -6,6 +6,7 @@ import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
 import { IS_STATIC, llmConfigGet, llmConfigPut, llmTest } from "@/lib/client-api";
 import { PRESET_LIST, PRESETS, type PresetId } from "@/lib/llm/presets";
+import { CATALOG } from "@/lib/llm/catalog";
 import { LlmSetupWizard } from "./LlmSetupWizard";
 
 const S = {
@@ -88,11 +89,7 @@ interface ConfigDto {
   cliAllowed: boolean;
 }
 
-const ANTHROPIC_DEFAULT_MODELS = {
-  fast: "claude-haiku-4-5",
-  balanced: "claude-sonnet-4-6",
-  deep: "claude-opus-4-6",
-};
+const ANTHROPIC_DEFAULT_MODELS = CATALOG.anthropic.defaultModels;
 
 export function LlmProviderSection() {
   const t = useStrings(S);
