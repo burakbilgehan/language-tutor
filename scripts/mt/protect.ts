@@ -87,3 +87,22 @@ export function restoreText(
   });
   return { restored, missing: placeholders.length - seen };
 }
+
+/**
+ * Every bracket-notation/bare-CJK run found in the ORIGINAL text must still
+ * be present, verbatim, in the translated text. This is the invariant that
+ * actually matters — checked directly against the real output rather than
+ * inferred from whether a sentinel token round-tripped, so it works
+ * regardless of whether the engine used placeholders at all (an LLM that
+ * preserves 漢字[かんじ] because it was asked to, with no protection layer in
+ * the way, passes this exactly like an NMT engine restoring a placeholder
+ * does). Shared by the topic-content pipeline and the titles pass — any
+ * output with a non-zero count must be rejected, never shipped.
+ */
+export function countUnpreservedRuns(original: string, translated: string): number {
+  const runs = [
+    ...(original.match(BRACKET_RE) ?? []),
+    ...(original.match(CJK_RE) ?? []),
+  ];
+  return runs.filter((run) => !translated.includes(run)).length;
+}

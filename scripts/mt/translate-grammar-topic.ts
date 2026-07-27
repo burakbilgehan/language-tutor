@@ -13,7 +13,7 @@
 //   related_slugs         — opaque keys, not prose
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
 import type { TranslateEngine } from "./engine";
-import { protectText, restoreText } from "./protect";
+import { countUnpreservedRuns, protectText, restoreText } from "./protect";
 
 /** One string queued for MT, with a setter closure to write the result back
  * into the cloned content tree at exactly the field it came from. */
@@ -28,24 +28,6 @@ export interface TranslateTopicResult {
    * survive translation intact — the caller MUST treat this topic as failed,
    * never ship a partially-corrupted page. */
   placeholderFailures: number;
-}
-
-/**
- * Every bracket-notation/bare-CJK run found in the ORIGINAL text must still
- * be present, verbatim, in the translated text. This is the invariant that
- * actually matters — checked directly against the real output rather than
- * inferred from whether a sentinel token round-tripped, so it works
- * regardless of whether the engine used placeholders at all (an LLM that
- * preserves 漢字[かんじ] because it was asked to, with no protection layer in
- * the way, passes this exactly like an NMT engine restoring a placeholder
- * does).
- */
-function countUnpreservedRuns(original: string, translated: string): number {
-  const runs = [
-    ...(original.match(/[^\s[\]]+\[[^\]]+\]/g) ?? []),
-    ...(original.match(/[぀-ヿ㐀-鿿豈-﫿　-〿]+/g) ?? []),
-  ];
-  return runs.filter((run) => !translated.includes(run)).length;
 }
 
 /** Translate the whitelisted fields of one topic with `engine`. Bracket-

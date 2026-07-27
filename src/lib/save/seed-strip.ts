@@ -53,11 +53,16 @@
 // ---------------------------------------------------------------------------
 // THE NATIVE-LANGUAGE GATE (criterion 4 — the one that is easy to miss)
 //
-// All three apply*Seed functions open with `if (nativeLanguage !== "tr") return 0;`
-// — the packaged content is Turkish, and handing it to an English-native user
-// would be the T-031 bug. That refusal is part of the inverse we must respect:
-// stripping a row that apply*Seed will then REFUSE to refill destroys it
-// permanently, silently, with no error anywhere.
+// The apply*Seed functions refuse a seed whose language doesn't match the
+// profile's nativeLanguage (kanji/vocab: a hardcoded `nativeLanguage !== "tr"`
+// gate; grammar since T-064: a generalized seedLang-equality check — the tr
+// packaged file only applies to tr-native profiles either way). Handing
+// Turkish content to an English-native user would be the T-031 bug. That
+// refusal is part of the inverse we must respect: stripping a row that
+// apply*Seed will then REFUSE to refill destroys it permanently, silently,
+// with no error anywhere. (T-064's MT seed layer is deliberately NOT part of
+// this strip: only tr halves are stripped, an en MT half rides along in the
+// blob — wasted bytes, never loss.)
 //
 // So strippability is scoped by the profile that would do the refilling. One
 // profile per target language, so we read `profiles.native_language` per

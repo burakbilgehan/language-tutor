@@ -17,6 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { grammarIndexFor } from "@/lib/grammar-index";
+import { countUnpreservedRuns } from "./mt/protect";
 
 const OUT_DIR = "src/lib/grammar-index";
 const LANGS = ["ja", "zh", "nl"];
@@ -111,12 +112,20 @@ async function main() {
         const byId = await translateBatch(targetLanguage, nativeLanguage, batch);
         for (const it of batch) {
           const t = byId.get(it.id);
-          if (t && t.trim()) {
-            existing[it.id] = t.trim();
-            ok++;
-          } else {
-            console.warn(`ATLA ${it.id}: LLM çeviri döndürmedi`);
+          if (!t || !t.trim()) {
+            console.warn(`ATLA ${it.id}: LLM boş/eksik çeviri döndürdü`);
+            continue;
           }
+          // Same tripwire as the topic-content pipeline: a title whose CJK/
+          // bracket runs didn't survive verbatim is corrupted, not translated.
+          if (countUnpreservedRuns(it.text, t) > 0) {
+            console.warn(
+              `ATLA ${it.id}: başlıktaki hedef-dil metni çeviride korunmadı ("${t.trim()}")`
+            );
+            continue;
+          }
+          existing[it.id] = t.trim();
+          ok++;
         }
       } catch (err) {
         console.warn(

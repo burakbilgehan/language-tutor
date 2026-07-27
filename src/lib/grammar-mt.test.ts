@@ -23,8 +23,14 @@ import {
   isMachineTranslated,
   type GrammarTopicContent,
 } from "@/lib/llm/schemas";
-import { applyGrammarSeed, ensureSeeded, listGrammarTopics } from "@/core/grammar";
-import { readLangContent } from "@/lib/llm/lang-content";
+import {
+  applyGrammarSeed,
+  ensureSeeded,
+  grammarNeedsGeneration,
+  listGrammarTopics,
+} from "@/core/grammar";
+import { generateGrammarContent, type Gen } from "@/core/llm-gen";
+import { mergeLangContent, readLangContent } from "@/lib/llm/lang-content";
 import { titleFor } from "@/lib/grammar-index";
 
 function openDb() {
@@ -184,6 +190,163 @@ test("titleFor resolves a real committed title translation, falls back for an un
     titleFor("ja", "definitely-not-a-real-slug", "tr başlık", "en"),
     "tr başlık"
   );
+});
+
+test("applyGrammarSeed never overwrites a FILLED slot, whatever its provenance", () => {
+  const db = openDb();
+  const mtContent = sampleContent({ intro_tr: "MT içerik", source: "mt" });
+  const realContent = sampleContent({ intro_tr: "Kullanıcının gerçek içeriği" });
+  db.insert(schema.grammarTopics)
+    .values([
+      {
+        id: "t-mt",
+        targetLanguage: "ja",
+        slug: "slug-mt",
+        titleTr: "T",
+        category: "particles",
+        position: 0,
+        status: "ready",
+        content: mergeLangContent(null, "en", mtContent),
+      },
+      {
+        id: "t-real",
+        targetLanguage: "ja",
+        slug: "slug-real",
+        titleTr: "T",
+        category: "particles",
+        position: 1,
+        status: "ready",
+        content: mergeLangContent(null, "tr", realContent),
+      },
+    ])
+    .run();
+
+  // A NEWER en seed over an already-MT-filled en slot → untouched.
+  const overMt = applyGrammarSeed(
+    db as never,
+    "ja",
+    { "slug-mt": sampleContent({ intro_tr: "yeni seed", source: "mt" }) },
+    "en",
+    "en"
+  );
+  assert.equal(overMt, 0);
+  // A tr seed over a user's real tr content → untouched, byte for byte.
+  const overReal = applyGrammarSeed(
+    db as never,
+    "ja",
+    { "slug-real": sampleContent({ intro_tr: "seed'in farklı içeriği" }) },
+    "tr",
+    "tr"
+  );
+  assert.equal(overReal, 0);
+
+  const rows = db.select().from(schema.grammarTopics).all();
+  assert.deepEqual(
+    readLangContent(rows.find((r) => r.id === "t-mt")!.content, "en"),
+    mtContent
+  );
+  assert.deepEqual(
+    readLangContent(rows.find((r) => r.id === "t-real")!.content, "tr"),
+    realContent
+  );
+});
+
+test("MT seed fills the EMPTY en slot of a tr-seeded ready row (nativeLanguage switch, T-064)", () => {
+  const db = openDb();
+  const trContent = sampleContent({ intro_tr: "tr seed içeriği" });
+  db.insert(schema.grammarTopics)
+    .values({
+      id: "t-switch",
+      targetLanguage: "ja",
+      slug: "test-slug",
+      titleTr: "T",
+      category: "particles",
+      position: 0,
+      status: "ready", // filled by the tr seed, owner then switched native to en
+      content: mergeLangContent(null, "tr", trContent),
+    })
+    .run();
+
+  const filled = applyGrammarSeed(
+    db as never,
+    "ja",
+    { "test-slug": sampleContent({ intro_tr: "en MT", source: "mt" }) },
+    "en",
+    "en"
+  );
+  assert.equal(filled, 1);
+  const row = db.select().from(schema.grammarTopics).all()[0];
+  assert.equal(row.status, "ready");
+  // Both halves coexist: tr byte-identical, en slot now MT.
+  assert.deepEqual(readLangContent(row.content, "tr"), trContent);
+  const en = readLangContent<GrammarTopicContent>(row.content, "en");
+  assert.ok(en && isMachineTranslated(en));
+});
+
+test("grammarNeedsGeneration: MT and missing-language rows need a pass; real content and running jobs don't", () => {
+  const mt = mergeLangContent(null, "en", sampleContent({ source: "mt" }));
+  const real = mergeLangContent(null, "en", sampleContent());
+  const trOnly = mergeLangContent(null, "tr", sampleContent());
+
+  assert.equal(grammarNeedsGeneration({ status: "pending", content: null }, "en"), true);
+  assert.equal(grammarNeedsGeneration({ status: "error", content: null }, "en"), true);
+  assert.equal(grammarNeedsGeneration({ status: "generating", content: null }, "en"), false);
+  assert.equal(grammarNeedsGeneration({ status: "ready", content: mt }, "en"), true);
+  assert.equal(grammarNeedsGeneration({ status: "ready", content: real }, "en"), false);
+  assert.equal(grammarNeedsGeneration({ status: "ready", content: trOnly }, "en"), true);
+  assert.equal(grammarNeedsGeneration({ status: "ready", content: trOnly }, "tr"), false);
+});
+
+test("a real LLM generation overrides MT content and strips a model-emitted source field", async () => {
+  const db = openDb();
+  db.insert(schema.profiles)
+    .values({
+      id: "p-en",
+      targetLanguage: "ja",
+      nativeLanguage: "en",
+      displayName: "Test",
+      goals: [],
+      selfLevel: "zero",
+      minutesPerWeek: 60,
+      interests: [],
+      isActive: true,
+    })
+    .run();
+  db.insert(schema.grammarTopics)
+    .values({
+      id: "t-gen",
+      targetLanguage: "ja",
+      slug: "test-slug",
+      titleTr: "T",
+      category: "particles",
+      position: 0,
+      status: "ready",
+      content: mergeLangContent(null, "en", sampleContent({ source: "mt" })),
+    })
+    .run();
+
+  // Stub Gen that (maliciously/accidentally) echoes source:"mt" back — the
+  // write path must strip it so a real generation is never mislabeled.
+  const stubGen: Gen = {
+    async generateJson() {
+      return sampleContent({
+        intro_tr: "Fresh LLM content",
+        source: "mt",
+      }) as never;
+    },
+    async generateText() {
+      return "";
+    },
+  };
+  await generateGrammarContent(db as never, stubGen, "t-gen");
+
+  const row = db.select().from(schema.grammarTopics).all()[0];
+  assert.equal(row.status, "ready");
+  const en = readLangContent<GrammarTopicContent>(row.content, "en");
+  assert.ok(en);
+  assert.equal(en!.intro_tr, "Fresh LLM content"); // MT overridden
+  assert.equal(en!.source, undefined); // model-emitted source stripped
+  assert.equal(isMachineTranslated(en), false);
 });
 
 function db_insertPendingTopic() {

@@ -1,8 +1,8 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { grammarIndexFor, titleFor } from "@/lib/grammar-index";
-import type { GrammarTopicContent } from "@/lib/llm/schemas";
+import { isMachineTranslated, type GrammarTopicContent } from "@/lib/llm/schemas";
 import {
   mergeLangContent,
   readLangContent,
@@ -83,38 +83,74 @@ export function applyGrammarSeed(
   seedLang: NativeLang = "tr"
 ): number {
   if (seedLang !== nativeLanguage) return 0;
-  const empty = db
+  // "Empty" means THE SEED'S LANGUAGE SLOT is empty — not merely status
+  // pending/error. A profile whose rows were filled by the tr seed and whose
+  // owner then switches nativeLanguage to en has `status:"ready"` rows with
+  // `{tr: …}` content: their en slot is exactly the gap the en MT seed
+  // exists to fill. Only `generating` rows are excluded (a job is mid-write).
+  const candidates = db
     .select({
       id: tables.grammarTopics.id,
       slug: tables.grammarTopics.slug,
       content: tables.grammarTopics.content,
+      status: tables.grammarTopics.status,
     })
     .from(tables.grammarTopics)
     .where(
       and(
         eq(tables.grammarTopics.targetLanguage, targetLanguage),
-        inArray(tables.grammarTopics.status, ["pending", "error"])
+        ne(tables.grammarTopics.status, "generating")
       )
     )
     .all();
   let filled = 0;
-  for (const row of empty) {
+  for (const row of candidates) {
     const content = seed[row.slug];
     if (!content) continue;
-    // Merge, don't replace: an error/pending row may already hold the OTHER
-    // language's content (interrupted generation). Wholesale {lang: content}
+    // A FILLED slot is never overwritten, whatever its provenance — real LLM
+    // content obviously, but also prior MT content (re-applying a newer seed
+    // file over it is a deliberate non-goal for now: content only flows into
+    // gaps, never over anything a user may have already read).
+    if (readLangContent(row.content, seedLang)) continue;
+    // Merge, don't replace: the row may hold the OTHER language's content
+    // (tr seed fill, or an interrupted generation). Wholesale {lang: content}
     // would wipe it permanently (T-031).
     db.update(tables.grammarTopics)
       .set({
         content: mergeLangContent(row.content, seedLang, content),
-        status: "ready",
-        generatedAt: new Date(),
+        // A ready row (filled in another language) only gains the new slot —
+        // its status/generatedAt record belongs to the original generation.
+        ...(row.status === "ready"
+          ? {}
+          : { status: "ready" as const, generatedAt: new Date() }),
       })
       .where(eq(tables.grammarTopics.id, row.id))
       .run();
     filled++;
   }
   return filled;
+}
+
+/**
+ * Does this topic still need a (re)generation pass for `nativeLanguage`?
+ * True for: pending/error rows, ready rows with no content in this language
+ * (T-031), and ready rows whose content in this language is machine-
+ * translated (T-064 — the user's own LLM must be able to upgrade MT).
+ * False while a job is running. The ONE definition both batch enqueue paths
+ * (server generate-batch route, static client-api) and the sidebar's batch
+ * buttons derive from — keep them on this predicate, not on local copies.
+ */
+export function grammarNeedsGeneration(
+  row: { status: string; content: unknown },
+  nativeLanguage: NativeLang
+): boolean {
+  if (row.status === "generating") return false;
+  if (row.status !== "ready") return true;
+  const localized = readLangContent<GrammarTopicContent>(
+    row.content,
+    nativeLanguage
+  );
+  return !localized || isMachineTranslated(localized);
 }
 
 export function listGrammarTopics(
@@ -129,24 +165,32 @@ export function listGrammarTopics(
     .where(eq(tables.grammarTopics.targetLanguage, targetLanguage))
     .orderBy(asc(tables.grammarTopics.position))
     .all()
-    .map((t) => ({
-      slug: t.slug,
-      // T-064: display title in the profile's native language when a
-      // committed translation exists (src/lib/grammar-index titles.*.json);
-      // falls back to the tr titleTr column otherwise. Field name kept as
-      // `titleTr` (no shape change) — see the _tr naming convention note in
-      // CLAUDE.md, it means "learner-facing title", not literally Turkish.
-      titleTr: titleFor(targetLanguage, t.slug, t.titleTr, nativeLanguage),
-      category: t.category,
-      level: t.level,
-      // Effective status: a row whose content isn't in the current native
-      // language reads as pending so the UI offers "Hazırla" (T-031).
-      status:
-        t.status === "ready" &&
-        !readLangContent<GrammarTopicContent>(t.content, nativeLanguage)
-          ? ("pending" as const)
-          : t.status,
-    }));
+    .map((t) => {
+      const localized = readLangContent<GrammarTopicContent>(
+        t.content,
+        nativeLanguage
+      );
+      return {
+        slug: t.slug,
+        // T-064: display title in the profile's native language when a
+        // committed translation exists (src/lib/grammar-index titles.*.json);
+        // falls back to the tr titleTr column otherwise. Field name kept as
+        // `titleTr` (no shape change) — see the _tr naming convention note in
+        // CLAUDE.md, it means "learner-facing title", not literally Turkish.
+        titleTr: titleFor(targetLanguage, t.slug, t.titleTr, nativeLanguage),
+        category: t.category,
+        level: t.level,
+        // Effective status: a row whose content isn't in the current native
+        // language reads as pending so the UI offers "Hazırla" (T-031).
+        status:
+          t.status === "ready" && !localized ? ("pending" as const) : t.status,
+        // T-064: machine-translated content reads as ready (usable now) but
+        // the sidebar's batch-upgrade buttons must still count it — without
+        // this flag a fully MT-seeded library has no bulk entry point to a
+        // real LLM pass in ANY mode.
+        mt: t.status === "ready" && isMachineTranslated(localized),
+      };
+    });
 }
 
 export function findGrammarTopic(

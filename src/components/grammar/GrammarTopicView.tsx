@@ -136,9 +136,17 @@ export function GrammarTopicView({ slug }: { slug: string }) {
         <h1 className="font-display text-xl font-bold">{topic.titleTr}</h1>
       </div>
 
-      {topic.status === "ready" && topic.content && !regenerating ? (
+      {topic.content ? (
+        // Content exists (real, seed, or MT) — it stays on screen even while
+        // a regeneration runs (the ruling: MT is *silently* replaced when the
+        // job's write lands; blanking the page mid-read is not silent).
         <>
-          {isMachineTranslated(topic.content) && (
+          {topic.status === "generating" || regenerating ? (
+            <div className="flex items-center gap-3 rounded-cozy bg-accent-soft p-4 text-sm shadow-cozy">
+              <span className="animate-float-slow text-xl">📜</span>
+              <span className="text-ink-soft">{s.generating}</span>
+            </div>
+          ) : isMachineTranslated(topic.content) ? (
             <div className="flex flex-col gap-2 rounded-cozy bg-accent-soft p-4 text-sm shadow-cozy sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <span className="mr-2 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-ink-soft">
@@ -162,7 +170,7 @@ export function GrammarTopicView({ slug }: { slug: string }) {
                 </Link>
               )}
             </div>
-          )}
+          ) : null}
           <p className="rounded-cozy bg-surface p-5 text-ink-soft shadow-cozy">
             <Furigana text={topic.content.intro_tr} lang={cjkLang} />
           </p>

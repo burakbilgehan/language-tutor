@@ -733,9 +733,9 @@ export async function grammarGenerateBatch(level?: string): Promise<void> {
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/llm-gen");
-  const { eq, and } = await import("drizzle-orm");
+  const { eq } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
-  const { readLangContent } = await import("@/lib/llm/lang-content");
+  const { grammarNeedsGeneration } = await import("@/core/grammar");
   const profile = coreP.getActiveProfile(handle.db);
   if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
@@ -744,11 +744,12 @@ export async function grammarGenerateBatch(level?: string): Promise<void> {
     .from(tables.grammarTopics)
     .where(eq(tables.grammarTopics.targetLanguage, profile.targetLanguage))
     .all()
-    // Not ready IN THE CURRENT native language (mirrors the server route, T-031).
+    // The ONE shared needs-generation definition (core) — pending/error,
+    // ready-in-another-language (T-031) AND ready-but-machine-translated
+    // (T-064) all count; mirrors the server route exactly.
     .filter(
       (t) =>
-        (!level || t.level === level) &&
-        (t.status !== "ready" || !readLangContent(t.content, nativeLang))
+        (!level || t.level === level) && grammarNeedsGeneration(t, nativeLang)
     );
   const { startJob, newBatchId } = await import("@/lib/jobs-store");
   const batchId = newBatchId();
@@ -914,6 +915,9 @@ export interface GrammarTopicSummary {
   category: string;
   level: string | null;
   status: "pending" | "generating" | "ready" | "error";
+  /** T-064: ready but machine-translated — usable now, still upgradeable by
+   * a real LLM pass; the sidebar's batch buttons count these. */
+  mt: boolean;
 }
 
 export async function grammarTopics(): Promise<{ topics: GrammarTopicSummary[] }> {
@@ -957,8 +961,15 @@ export async function grammarTopic(slug: string): Promise<{
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug);
   if (!topic) throw new AppError("not_found");
-  // Deep link (?topic=) liste yüklenmeden gelebilir — boşsa seed'den doldur.
-  if (topic.status === "pending" || topic.status === "error") {
+  const { readLangContent } = await import("@/lib/llm/lang-content");
+  // Deep link (?topic=) liste yüklenmeden gelebilir — bu dildeki slot boşsa
+  // seed'den doldur. Slot-boşluğu kontrolü (salt pending/error değil): tr
+  // seed'iyle dolmuş `ready` satırın en slotu da MT seed'in dolduracağı
+  // boşluktur (T-064); applyGrammarSeed dolu slota zaten asla yazmaz.
+  if (
+    topic.status !== "generating" &&
+    !readLangContent(topic.content, nativeLang)
+  ) {
     const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
     const seed = await fetchGrammarSeed(profile.targetLanguage, nativeLang);
     if (
@@ -969,17 +980,22 @@ export async function grammarTopic(slug: string): Promise<{
       persistSoon();
     }
   }
-  const { readLangContent } = await import("@/lib/llm/lang-content");
   const { titleFor } = await import("@/lib/grammar-index");
-  const localized =
-    topic.status === "ready"
-      ? readLangContent(topic.content, nativeLang)
-      : null;
+  // Mevcut içerik satır statüsünden bağımsız okunur (sunucu route'uyla aynı):
+  // ne regen sırasında ("generating" — sessizce değişir) ne de başarısız
+  // regen sonrasında ("error" — eski içerik hâlâ kolonda) görünür içerik
+  // ekrandan silinmez (T-064).
+  const localized = readLangContent(topic.content, nativeLang);
   return {
     slug: topic.slug,
     titleTr: titleFor(profile.targetLanguage, topic.slug, topic.titleTr, nativeLang),
     category: topic.category,
-    status: localized ? "ready" : "pending",
+    status:
+      topic.status === "generating"
+        ? "generating"
+        : localized
+          ? "ready"
+          : "pending",
     content: localized,
   };
 }

@@ -5,15 +5,16 @@ import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
-import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
-import { isMachineTranslated, type GrammarTopicContent } from "@/lib/llm/schemas";
+import { type NativeLang } from "@/lib/llm/lang-content";
+import { grammarNeedsGeneration } from "@/core/grammar";
 
 export const runtime = "nodejs";
 
 /** Enqueue generation for every topic not yet ready IN THE CURRENT NATIVE
  * LANGUAGE (pending/errored, ready only in another language — T-031 — or
  * ready but machine-translated, which "Prepare All" should upgrade to a real
- * LLM generation — T-064). */
+ * LLM generation — T-064). The definition lives in grammarNeedsGeneration
+ * (core), shared with the static client-api path and the sidebar UI. */
 export async function POST(req: Request) {
   const denied = requireAuth(req);
   if (denied) return denied;
@@ -38,16 +39,7 @@ export async function POST(req: Request) {
       )
     )
     .all()
-    // Not ready in the current native language, or ready but MT-only →
-    // needs generation.
-    .filter((t) => {
-      if (t.status !== "ready") return true;
-      const localized = readLangContent<GrammarTopicContent>(
-        t.content,
-        nativeLang
-      );
-      return !localized || isMachineTranslated(localized);
-    });
+    .filter((t) => grammarNeedsGeneration(t, nativeLang));
 
   // Drive sequentially (like queueKanjiLevel): firing every job at once
   // marks them all 'running' while they wait behind the CLI queue, and any

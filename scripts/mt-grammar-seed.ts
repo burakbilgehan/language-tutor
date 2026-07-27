@@ -33,8 +33,15 @@ function parseArgs(argv: string[]) {
   const positional = argv.filter((a) => !a.startsWith("--"));
   const [targetLanguage, nativeLanguage] = positional;
   const limitFlag = argv.indexOf("--limit");
-  const limit =
-    limitFlag !== -1 ? Number(argv[limitFlag + 1]) : positional.length ? 10 : undefined;
+  let limit: number | undefined = positional.length ? 10 : undefined;
+  if (limitFlag !== -1) {
+    limit = Number(argv[limitFlag + 1]);
+    // A typo'd --limit must not silently become a FULL run (~300 LLM calls).
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`--limit değeri sayı değil: "${argv[limitFlag + 1]}"`);
+      process.exit(2);
+    }
+  }
   const useStub = argv.includes("--stub");
   const useArgos = argv.includes("--argos");
   const noLimit = argv.includes("--all");
@@ -81,7 +88,14 @@ async function main() {
     process.exit(1);
   }
 
-  const outPath = path.join(SEED_DIR, `${targetLanguage}.${nativeLanguage}.json`);
+  // Stub output goes to its OWN file: writing it to the real seed path would
+  // poison the incremental skip below ("already translated") with fake
+  // content that could then get committed and shipped. The app never loads
+  // *.stub.json (src/lib/grammar-seed.ts only fetches the real names).
+  const outPath = path.join(
+    SEED_DIR,
+    `${targetLanguage}.${nativeLanguage}${useStub ? ".stub" : ""}.json`
+  );
   const existing: { version: number; topics: Record<string, GrammarTopicContent> } =
     fs.existsSync(outPath)
       ? JSON.parse(fs.readFileSync(outPath, "utf8"))

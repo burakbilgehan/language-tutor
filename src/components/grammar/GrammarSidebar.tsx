@@ -15,7 +15,15 @@ interface TopicDto {
   category: string;
   level: string | null;
   status: "pending" | "generating" | "ready" | "error";
+  /** T-064: ready but machine-translated — readable now, still counted by
+   * the batch buttons so a real LLM pass can upgrade it. */
+  mt: boolean;
 }
+
+/** Client-side mirror of core's grammarNeedsGeneration over the list DTO:
+ * pending/error, or ready-but-MT. Drives batch button visibility/counts. */
+const needsGen = (t: TopicDto) =>
+  t.status === "pending" || t.status === "error" || t.mt;
 
 const STATUS_ICONS: Record<TopicDto["status"], string> = {
   ready: "📖",
@@ -319,9 +327,9 @@ export function GrammarSidebar() {
         const cats = byLevel.get(lvl)!;
         const all = [...cats.values()].flat();
         const readyCount = all.filter((t) => t.status === "ready").length;
-        const pendingCount = all.filter(
-          (t) => t.status === "pending" || t.status === "error"
-        ).length;
+        // needsGen, not just pending/error: a fully MT-seeded level reads
+        // 100% "ready" but must still offer the batch-upgrade button (T-064).
+        const pendingCount = all.filter(needsGen).length;
         return (
           <details key={lvl} open data-grammar-level={lvl}>
             <summary className="mb-2 flex cursor-pointer flex-wrap items-center gap-2 font-bold text-ink">
@@ -387,8 +395,7 @@ export function GrammarSidebar() {
         );
       })}
 
-      {topics.some((t) => t.status === "pending" || t.status === "error") &&
-        llm.configured && (
+      {topics.some(needsGen) && llm.configured && (
         <button
           disabled={batchBusy}
           onClick={() => generateAll(levelFilter ?? undefined)}

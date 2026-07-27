@@ -190,9 +190,10 @@ export class LlmEngine implements TranslateEngine {
  * blocked). Returns input unchanged with a fixed marker prefix so a dry run
  * of the pipeline (whitelist, placeholder protection, seed shaping, output
  * file layout) is still exercisable and reviewable end-to-end without a real
- * translation happening. NEVER stamps source:"mt" output as ship-ready —
- * scripts/mt-grammar-seed.ts refuses to write files when this engine is used
- * unless --allow-stub is passed explicitly.
+ * translation happening. Its output is NEVER ship-ready: scripts/
+ * mt-grammar-seed.ts writes stub runs to a separate `<target>.<native>.stub.json`
+ * file (gitignored) that the app never loads, so a stub run can neither
+ * poison the real seed file's incremental skip nor get committed.
  */
 export class StubEngine implements TranslateEngine {
   // Prepending a marker preserves the input verbatim (including any
