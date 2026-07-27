@@ -6,6 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
 import { GeneratingScreen } from "./GeneratingScreen";
 import { pick } from "@/lib/i18n";
+import { AppError } from "@/lib/errors";
 import { localizeError } from "@/lib/i18n/errors";
 import { resolveUiLang } from "@/lib/i18n/use-localize-error";
 import {
@@ -127,7 +128,7 @@ const S = {
     curriculumStartFailed: "Müfredat üretimi başlatılamadı",
     genericError: "Bir şeyler ters gitti",
     llmNeeded:
-      "Müfredatını üretmek için bir yapay zekâ bağlantısı gerekiyor — yolculuğa başlamadan önce bağlayalım:",
+      "Kişisel müfredatını üretmek için bir yapay zekâ bağlantısı gerekiyor. İstersen şimdi bağla — ya da atla: gramer ve sözlük kütüphanesi hemen hazır, müfredatı sonra ekleyebilirsin.",
     step0Title: "Merhaba! 🌸",
     step0Subtitle:
       "Ben Kumo. Sana özel bir dil yolculuğu hazırlayacağım. Önce tanışalım — adın ne, hangi dili öğreniyoruz?",
@@ -217,7 +218,7 @@ const S = {
     curriculumStartFailed: "Could not start curriculum generation",
     genericError: "Something went wrong",
     llmNeeded:
-      "Generating your curriculum needs an AI connection — let's set it up before starting the journey:",
+      "Generating your personal curriculum needs an AI connection. Set one up now if you like — or skip it: the grammar and dictionary library is ready right away, and you can add the curriculum later.",
     step0Title: "Hello! 🌸",
     step0Subtitle:
       "I'm Kumo. I'll craft a language journey just for you. First, let's meet — what's your name, and which language are we learning?",
@@ -528,7 +529,22 @@ export function OnboardingWizard() {
       );
       if (!profile) throw new Error(t.profileSaveFailed);
 
-      const gen = await curriculumGenerate(profile.id);
+      let gen: { jobId?: string };
+      try {
+        gen = await curriculumGenerate(profile.id);
+      } catch (err) {
+        // T-056: LLM yoksa müfredat üretimi ATLANIR — kişiselleştirme bir
+        // augmentation, ön-koşul değil. Profil oluştu; /map müfredatsız
+        // durumunu kendisi gösterir (statik kütüphane + "LLM bağla").
+        // Deneyip 503/AppError yakalamak, useLlmStatus'un iyimser-varsayılan
+        // (stale-true) anlık görüntüsüne güvenmekten daha sağlam: iki modda da
+        // aynı kod (llm_unconfigured) fırlar.
+        if (err instanceof AppError && err.code === "llm_unconfigured") {
+          window.location.href = withBase("/map");
+          return;
+        }
+        throw err;
+      }
       if (!gen.jobId) {
         // Statik mod: üretim inline tamamlandı — full reload, profil meta cache tazelensin (T-013).
         window.location.href = withBase("/map");
