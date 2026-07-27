@@ -154,7 +154,15 @@ export function useLocalLlmProbe(
     models: [],
   });
   const [nonce, setNonce] = useState(0);
-  const refresh = useCallback(() => setNonce((n) => n + 1), []);
+  // Elle yenilemede durumu "searching"e geri al: aksi hâlde "absent"ten
+  // "absent"e geçiş görsel olarak hiçbir şey değiştirmez ve kullanıcı
+  // düğmenin çalışıp çalışmadığını 1.5 saniye boyunca bilemez — canlı geri
+  // bildirim iddiasındaki bir widget'ta kabul edilemez.
+  const refresh = useCallback(() => {
+    setBridge((p) => (p.state === "idle" ? p : { ...p, state: "searching" }));
+    setOllama((p) => (p.state === "idle" ? p : { ...p, state: "searching" }));
+    setNonce((n) => n + 1);
+  }, []);
 
   // Uçuştaki isteği unmount/kapanışta iptal etmek için: cleanup abort eder,
   // sonuç geldiğinde de `abortRef.current.signal.aborted` ile state yazımı

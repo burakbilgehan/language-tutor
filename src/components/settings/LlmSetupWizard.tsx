@@ -24,7 +24,7 @@
 // kilitli. Canlı algılama useLocalLlmProbe.ts'te. Gelişmiş form
 // LlmAdvancedPanel.tsx'te.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
@@ -36,10 +36,12 @@ import {
   budgetHintFor,
   formatUsdPerMonth,
   modelLineFor,
-  modelsForQuality,
   ollamaPullCommand,
   qualityForModels,
+  resolveModels,
+  resolveQuality,
   type QualityProfileId,
+  type StoredQuality,
   type SubBackend,
   type TierTriple,
 } from "./llm-setup-logic";
@@ -145,6 +147,7 @@ const S = {
     testOk: "✅ Bağlantı kuruldu ve kaydedildi!",
     testFail: "❌ Bağlanamadı:",
     done: "Bitti",
+    npxFallback: "npx çalışmıyorsa",
     advanced: "Gelişmiş ayarlar",
     advancedHint:
       "Nokta atışı model id'si, özel adres, JSON modu, CLI modu, diğer backend'ler.",
@@ -239,6 +242,7 @@ const S = {
     testOk: "✅ Connected and saved!",
     testFail: "❌ Could not connect:",
     done: "Done",
+    npxFallback: "If npx doesn't work",
     advanced: "Advanced settings",
     advancedHint:
       "Exact model ids, custom address, JSON mode, CLI mode, other backends.",
@@ -383,6 +387,7 @@ function OsTabs({ os, setOs, t }: { os: Os; setOs: (o: Os) => void; t: T }) {
           key={o}
           type="button"
           onClick={() => setOs(o)}
+          aria-pressed={os === o}
           className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
             os === o
               ? "bg-indigo-soft text-indigo-deep"
@@ -401,6 +406,8 @@ function Pill({ selected, onClick, children }: { selected: boolean; onClick: () 
     <button
       type="button"
       onClick={onClick}
+      // Seçilmişlik yalnız renkle anlatılmasın.
+      aria-pressed={selected}
       className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
         selected
           ? "bg-indigo-soft text-indigo-deep"
@@ -571,32 +578,37 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
   // kullanıcı API-anahtarı kapısına geçtiğinde ekranda "Özel" yazarken
   // kaydedilen üçlü sessizce "Denge" olurdu — etiket ile kaydedilen değerin
   // çeliştiği tam da bu ticket'ın kapatmaya çalıştığı belirsizlik.
-  const [storedQuality, setStoredQuality] = useState<{
-    provider: ProviderId;
-    quality: QualityProfileId | null;
-    /** Kayıtlı üçlünün kendisi — profil "Özel" iken (elle seçilmiş
-     * modeller) casual kaydın onu EZMEMESİ için saklanır. */
-    models: TierTriple;
-  } | null>(null);
+  const [storedQuality, setStoredQuality] = useState<StoredQuality | null>(null);
   const [picked, setPicked] = useState<QualityProfileId | null>(null);
 
-  useEffect(() => {
+  // Kayıtlı config'i oku (mount'ta ve gelişmiş panelden kaydedildiğinde —
+  // yoksa kayıtlı üçlü bayatlar ve casual kapı, panelde az önce elle
+  // seçilmiş modelleri eziyor olur).
+  const syncStored = useCallback(() => {
     let alive = true;
     llmConfigGet()
       .then((d) => {
-        if (!alive || !d.models) return;
+        if (!alive) return;
+        if (!d.models) {
+          setStoredQuality(null);
+          return;
+        }
         const provider: ProviderId =
           d.mode === "anthropic"
             ? "anthropic"
             : (providerForBaseUrl(d.baseUrl) ?? "custom");
+        const models: TierTriple = {
+          fast: d.models.fast ?? "",
+          balanced: d.models.balanced ?? "",
+          deep: d.models.deep ?? "",
+        };
         setStoredQuality({
           provider,
-          quality: qualityForModels(provider, d.models),
-          models: {
-            fast: d.models.fast ?? "",
-            balanced: d.models.balanced ?? "",
-            deep: d.models.deep ?? "",
-          },
+          // Backend BİLEREK geçilmiyor: mount anında kullanıcının hangi
+          // köprü backend'ini seçeceği bilinmiyor. Sentinel istisnası
+          // aşağıda, activeBackend'in bilindiği yerde uygulanıyor.
+          quality: qualityForModels(provider, models),
+          models,
         });
       })
       .catch(() => {});
@@ -604,6 +616,8 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
       alive = false;
     };
   }, []);
+
+  useEffect(() => syncStored(), [syncStored]);
 
   // Aktif sağlayıcı: kalite profili ve bütçe bunun üstünden hesaplanır.
   const activeProvider: ProviderId =
@@ -615,24 +629,17 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
 
   const activeBackend = door === "local" && lane === "sub" ? subBackend : undefined;
 
-  // Gösterilecek profil: kullanıcı bu oturumda seçtiyse o; yoksa kayıtlı
-  // config AYNI sağlayıcıya aitse ondan çıkarılan (null = Özel dahil);
-  // başka bir sağlayıcıya geçildiyse varsayılan "Denge".
-  const quality: QualityProfileId | null =
-    picked ??
-    (storedQuality && storedQuality.provider === activeProvider
-      ? storedQuality.quality
-      : "balanced");
-
-  // Kaydedilecek üçlü. "Özel" (quality === null) durumunda kullanıcının
-  // gelişmiş panelde elle seçtiği modeller AYNEN korunur — casual kapıya
-  // uğrayıp "Test et ve kaydet"e basmak onları sessizce "Denge"ye
-  // ezmemeli. Bu, ekrandaki etiket ("Özel") ile kaydedilen değerin
-  // çelişmemesini de sağlar.
-  const activeModels: TierTriple =
-    quality === null && storedQuality?.provider === activeProvider
-      ? storedQuality.models
-      : modelsForQuality(activeProvider, quality ?? "balanced", activeBackend);
+  // Kayıtlı config'in bu kapıya uygulanıp uygulanmayacağı (yabancı
+  // sağlayıcı / sentinel üçlüsü elemesi dahil) resolve* içinde,
+  // storedAppliesTo ile tek yerden hallediliyor — burada elle tekrarlamak
+  // ikinci bir doğruluk kaynağı yaratırdı.
+  const quality = resolveQuality(picked, storedQuality, activeProvider);
+  const activeModels = resolveModels(
+    quality,
+    storedQuality,
+    activeProvider,
+    activeBackend
+  );
 
   // Canlı algılama YALNIZ lokal kapı açıkken. Şeride göre daraltılır:
   // Ollama şeridinde köprüyü yoklamanın anlamı yok.
@@ -869,6 +876,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                   resetMsg();
                   setLane("ollama");
                 }}
+                aria-pressed={lane === "ollama"}
                 className={`flex-1 rounded-xl border-2 px-4 py-3 text-left transition-colors ${
                   lane === "ollama"
                     ? "border-indigo bg-indigo-soft/40"
@@ -884,6 +892,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                   resetMsg();
                   setLane("sub");
                 }}
+                aria-pressed={lane === "sub"}
                 className={`flex-1 rounded-xl border-2 px-4 py-3 text-left transition-colors ${
                   lane === "sub"
                     ? "border-indigo bg-indigo-soft/40"
@@ -1015,7 +1024,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
               <CmdBlock cmd={bridgeCmd} copyLabel={t.copy} copiedLabel={t.copied} />
               {IS_STATIC && (
                 <details className="text-xs text-ink-soft">
-                  <summary className="cursor-pointer">npx çalışmıyorsa</summary>
+                  <summary className="cursor-pointer">{t.npxFallback}</summary>
                   <div className="mt-2">
                     <CmdBlock
                       cmd={bridgeFallbackCmd}
@@ -1120,7 +1129,18 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
         </button>
         {advancedOpen && (
           <div className="mt-4">
-            <LlmAdvancedPanel onSaved={() => setTestMsg(null)} />
+            {/* Panelde kaydedilen config'i casual tarafa geri oku. Bunu
+                yapmazsak storedQuality bayatlar ve kullanıcı burada elle
+                model seçtikten sonra bir kapıya uğrayıp kaydettiğinde
+                seçtikleri sessizce eziliyor olur. `picked`'i de sıfırla:
+                artık geçerli olan, panelde yazılmış olan. */}
+            <LlmAdvancedPanel
+              onSaved={() => {
+                setTestMsg(null);
+                setPicked(null);
+                syncStored();
+              }}
+            />
           </div>
         )}
       </div>
@@ -1140,7 +1160,13 @@ function Checklist({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border-2 border-surface-2 px-3 py-2.5">
+    // Canlı algılama bu widget'ın bütün varlık sebebi — durum değişimi
+    // ekranı görmeyene de bildirilmeli, yoksa "köprü bulundu" hiç duyulmaz.
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col gap-1.5 rounded-xl border-2 border-surface-2 px-3 py-2.5"
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
           {title}

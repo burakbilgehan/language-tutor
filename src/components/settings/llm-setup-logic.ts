@@ -98,6 +98,93 @@ export function qualityForModels(
 }
 
 // ---------------------------------------------------------------------------
+// Etiket ↔ kaydedilecek değer çözümlemesi
+//
+// Sihirbaz ekranda bir PROFİL ADI gösterir ve bir MODEL ÜÇLÜSÜ kaydeder.
+// İkisi ayrışırsa ekran, birazdan yazacağı şey hakkında yalan söylüyor
+// demektir — bu ticket'ın kapatmaya çalıştığı belirsizliğin ta kendisi.
+// Kural bu yüzden komponentte DEĞİL burada: hem UI hem test aynı
+// fonksiyonu çağırsın, test kuralın kopyasını değil kendisini doğrulasın.
+// (İlk turda kural komponentte, kopyası testteydi; test yeşilken iki
+// gerçek ayrışma hatası hayatta kaldı.)
+// ---------------------------------------------------------------------------
+
+/** Kayıtlı config'ten çıkarılan profil — hangi sağlayıcıya ait olduğu ve
+ * üçlünün kendisiyle birlikte. Sağlayıcı bilgisi şart: "Özel" (elle
+ * seçilmiş modeller) yalnız okunduğu sağlayıcı için anlamlıdır, başka bir
+ * kapıya taşınamaz. */
+export interface StoredQuality {
+  provider: ProviderId;
+  quality: QualityProfileId | null;
+  models: TierTriple;
+}
+
+/** Kayıtlı config, aktif kapı için ANLAMLI bir profil bilgisi taşıyor mu?
+ *
+ * İki durumda taşımaz ve tamamen yok sayılır:
+ *  - Başka bir sağlayıcıya aitse ("Özel" deepseek içinse openai kapısına
+ *    taşınamaz).
+ *  - Üçlü SENTINEL ise. Sentinel "model seçilmedi" demektir, "kullanıcı elle
+ *    şunları seçti" değil — onu "Özel" diye göstermek, hiçbir şey seçmemiş
+ *    kullanıcıya elle seçim yapmış muamelesi yapar. Dahası claude
+ *    backend'ine geçildiğinde sentinel kaydedilir, köprü tier adlarını
+ *    soyar ve üç tier de backend'in tek varsayılanına çöker.
+ */
+export function storedAppliesTo(
+  stored: StoredQuality | null,
+  activeProvider: ProviderId
+): StoredQuality | null {
+  if (!stored || stored.provider !== activeProvider) return null;
+  const isSentinel =
+    stored.models.fast === BRIDGE_SENTINEL_TRIPLE.fast &&
+    stored.models.balanced === BRIDGE_SENTINEL_TRIPLE.balanced &&
+    stored.models.deep === BRIDGE_SENTINEL_TRIPLE.deep;
+  return isSentinel ? null : stored;
+}
+
+/** Ekranda gösterilecek profil. Sıra: kullanıcının bu oturumdaki seçimi →
+ * kayıtlı config AYNI sağlayıcıya aitse ondan çıkarılan (null = "Özel"
+ * dahil) → "Denge". */
+export function resolveQuality(
+  picked: QualityProfileId | null,
+  stored: StoredQuality | null,
+  activeProvider: ProviderId
+): QualityProfileId | null {
+  if (picked) return picked;
+  const applicable = storedAppliesTo(stored, activeProvider);
+  return applicable ? applicable.quality : "balanced";
+}
+
+/** Gerçekten kaydedilecek üçlü. "Özel" durumunda kullanıcının elle seçtiği
+ * modeller AYNEN korunur — casual kapıya uğrayıp kaydetmek onları sessizce
+ * bir profile ezmemeli. */
+export function resolveModels(
+  quality: QualityProfileId | null,
+  stored: StoredQuality | null,
+  activeProvider: ProviderId,
+  backend?: SubBackend
+): TierTriple {
+  const applicable = storedAppliesTo(stored, activeProvider);
+  if (quality === null && applicable) return applicable.models;
+  return modelsForQuality(activeProvider, quality ?? "balanced", backend);
+}
+
+/** Bir etiketin "denote" ettiği üçlü — yani ekrandaki ad neyi vaat ediyorsa
+ * o. resolveModels() bununla aynı şeyi döndürmek ZORUNDA; test bu eşitliği
+ * kilitler. */
+export function modelsDenotedBy(
+  quality: QualityProfileId | null,
+  stored: StoredQuality | null,
+  activeProvider: ProviderId,
+  backend?: SubBackend
+): TierTriple | null {
+  if (quality === null) {
+    return storedAppliesTo(stored, activeProvider)?.models ?? null;
+  }
+  return modelsForQuality(activeProvider, quality, backend);
+}
+
+// ---------------------------------------------------------------------------
 // "Kullanılacak: X · Y" görünürlük satırı
 // ---------------------------------------------------------------------------
 

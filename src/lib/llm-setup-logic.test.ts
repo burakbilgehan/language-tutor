@@ -5,11 +5,18 @@ import {
   backendSupportsQuality,
   budgetHintFor,
   modelLineFor,
+  modelsDenotedBy,
   modelsForQuality,
   ollamaPullCommand,
   qualityForModels,
+  resolveModels,
+  resolveQuality,
+  storedAppliesTo,
+  type QualityProfileId,
+  type StoredQuality,
+  type SubBackend,
 } from "../components/settings/llm-setup-logic";
-import { CATALOG, MODEL_REGISTRY } from "./llm/catalog";
+import { CATALOG, MODEL_REGISTRY, type ProviderId } from "./llm/catalog";
 
 // T-060. The test lives here rather than next to its module because the test
 // script glob is rooted at src/lib/ (package.json, outside this ticket's
@@ -108,40 +115,20 @@ test("qualityForModels: sentinel-carrying bridge backends have no profile", () =
 // ------------------------------------------------ label/value agreement
 // The wizard shows a profile LABEL and saves a model TRIPLE. If those two
 // ever disagree, the screen lies about what it is about to write — which is
-// the exact ambiguity this ticket exists to kill. Two bugs found in review
-// lived here, so the resolution rule is mirrored and pinned:
-//   quality = picked ?? (stored for THIS provider) ?? "balanced"
-//   models  = (quality === null && stored is for this provider)
-//               ? the stored triple verbatim
-//               : modelsForQuality(provider, quality ?? "balanced", backend)
-
-type Stored = {
-  provider: Parameters<typeof modelsForQuality>[0];
-  quality: ReturnType<typeof qualityForModels>;
-  models: ReturnType<typeof modelsForQuality>;
-} | null;
-
-function resolveQuality(
-  picked: ReturnType<typeof qualityForModels>,
-  stored: Stored,
-  active: Parameters<typeof modelsForQuality>[0]
-) {
-  return picked ?? (stored && stored.provider === active ? stored.quality : "balanced");
-}
-function resolveModels(
-  quality: ReturnType<typeof qualityForModels>,
-  stored: Stored,
-  active: Parameters<typeof modelsForQuality>[0],
-  backend?: Parameters<typeof modelsForQuality>[2]
-) {
-  return quality === null && stored?.provider === active
-    ? stored.models
-    : modelsForQuality(active, quality ?? "balanced", backend);
-}
+// the exact ambiguity this ticket exists to kill.
+//
+// These tests import resolveQuality/resolveModels — the SAME functions the
+// component calls. An earlier revision reimplemented the rule here instead;
+// it went green while two real divergences survived in the component, which
+// is the whole lesson: a test that copies the logic tests the copy.
 
 test("switching providers does not carry a foreign 'Özel' label onto a default triple", () => {
   const handPicked = { fast: "my-tiny", balanced: "my-mid", deep: "my-big" };
-  const stored: Stored = { provider: "deepseek", quality: null, models: handPicked };
+  const stored: StoredQuality = {
+    provider: "deepseek",
+    quality: null,
+    models: handPicked,
+  };
 
   // Same provider: the label says "Özel" and the hand-picked models are kept
   // verbatim — pressing save from the casual door must NOT overwrite them.
@@ -159,7 +146,13 @@ test("switching providers does not carry a foreign 'Özel' label onto a default 
 
 test("label and saved triple agree in every door/stored-config combination", () => {
   const handPicked = { fast: "my-tiny", balanced: "my-mid", deep: "my-big" };
-  const cases: [string, ReturnType<typeof qualityForModels>, Stored, Parameters<typeof modelsForQuality>[0], Parameters<typeof modelsForQuality>[2]][] = [
+  const cases: [
+    string,
+    QualityProfileId | null,
+    StoredQuality | null,
+    ProviderId,
+    SubBackend | undefined,
+  ][] = [
     ["fresh user", null, null, "deepseek", undefined],
     ["custom stored, same provider", null, { provider: "deepseek", quality: null, models: handPicked }, "deepseek", undefined],
     ["custom stored, other provider", null, { provider: "deepseek", quality: null, models: handPicked }, "openai", undefined],
@@ -171,14 +164,65 @@ test("label and saved triple agree in every door/stored-config combination", () 
   for (const [name, picked, stored, provider, backend] of cases) {
     const q = resolveQuality(picked, stored, provider);
     const models = resolveModels(q, stored, provider, backend);
-    const denoted =
-      q === null
-        ? stored?.provider === provider
-          ? stored.models
-          : null
-        : modelsForQuality(provider, q, backend);
-    assert.deepEqual(models, denoted, `${name}: label "${q ?? "Özel"}" does not denote the saved triple`);
+    const denoted = modelsDenotedBy(q, stored, provider, backend);
+    assert.deepEqual(
+      models,
+      denoted,
+      `${name}: label "${q ?? "Özel"}" does not denote the saved triple`
+    );
   }
+});
+
+// A stored SENTINEL triple carries no profile information at all: it means
+// "no model was selected", not "the user hand-picked these". Surfacing it as
+// "Özel" told someone who picked nothing that they had — and on a claude
+// backend, saving it sent the sentinel through, collapsing all three tiers
+// onto the bridge's single default. storedAppliesTo() drops it, so the door
+// falls through to a real profile.
+test("a stored sentinel triple never masquerades as 'Özel'", () => {
+  const stored: StoredQuality = {
+    provider: "bridge",
+    quality: qualityForModels("bridge", BRIDGE_SENTINEL_TRIPLE),
+    models: BRIDGE_SENTINEL_TRIPLE,
+  };
+  // Read at mount (no backend known yet) the sentinel matches no profile...
+  assert.equal(stored.quality, null);
+  // ...but it must NOT therefore be shown as hand-picked.
+  assert.equal(storedAppliesTo(stored, "bridge"), null);
+
+  for (const backend of ["claude", "codex"] as const) {
+    const q = resolveQuality(null, stored, "bridge");
+    assert.equal(q, "balanced", `${backend}: expected a real profile, not 'Özel'`);
+    assert.deepEqual(
+      resolveModels(q, stored, "bridge", backend),
+      modelsForQuality("bridge", "balanced", backend)
+    );
+  }
+  // And the claude backend specifically gets real aliases back, not the
+  // sentinel it had stored.
+  assert.deepEqual(
+    resolveModels(resolveQuality(null, stored, "bridge"), stored, "bridge", "claude"),
+    CATALOG.bridge.profiles.balanced.models
+  );
+});
+
+// The advanced panel's preset dropdown had the same hole from the other
+// side: picking "Yerel köprü" prefilled the catalog's bridge triple, which
+// is real Claude aliases, with no way to know the running backend. Anyone
+// on `--backend codex` who touched that dropdown broke every generation.
+// The panel now prefills the sentinel there — correct for ALL backends,
+// claude included, since the bridge strips tier names and lets the CLI
+// choose. This pins the value the panel must use.
+test("the bridge preset's prefill is backend-agnostic, not a Claude alias", () => {
+  const prefill = BRIDGE_SENTINEL_TRIPLE;
+  for (const id of Object.values(prefill)) {
+    assert.ok(
+      !(id in MODEL_REGISTRY),
+      `bridge prefill must not be a real model id, got ${id}`
+    );
+  }
+  // And it must differ from the catalog default that used to be used.
+  assert.notDeepEqual(prefill, CATALOG.bridge.defaultModels);
 });
 
 // ---------------------------------------------------------------- budget

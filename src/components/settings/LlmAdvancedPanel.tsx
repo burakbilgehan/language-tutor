@@ -20,6 +20,7 @@ import {
   providerForBaseUrl,
   type HttpProviderId,
 } from "@/lib/llm/catalog";
+import { BRIDGE_SENTINEL_TRIPLE } from "./llm-setup-logic";
 
 const S = {
   tr: {
@@ -40,6 +41,8 @@ const S = {
     models: "Modeller (hızlı / dengeli / derin)",
     modelsHint:
       "Boş bırakılan alan sağlayıcının katalog varsayılanına düşer.",
+    modelsBridgeHint:
+      "Köprüde \"fast/balanced/deep\" bırakmak = modeli backend'in kendisi seçsin. Belirli bir model istiyorsan (yalnız claude backend'i anlar) buraya yaz: haiku / sonnet / opus.",
     modelFast: "Hızlı",
     modelBalanced: "Dengeli",
     modelDeep: "Derin",
@@ -75,6 +78,8 @@ const S = {
     apiKeyKept: "The stored key is kept — type a new one to replace it.",
     models: "Models (fast / balanced / deep)",
     modelsHint: "An empty field falls back to the provider's catalog default.",
+    modelsBridgeHint:
+      "Leaving \"fast/balanced/deep\" on the bridge means the backend picks the model itself. For a specific model (only the claude backend understands these) type: haiku / sonnet / opus.",
     modelFast: "Fast",
     modelBalanced: "Balanced",
     modelDeep: "Deep",
@@ -157,7 +162,17 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
     setPreset(id);
     const entry = CATALOG[id];
     if (entry.baseUrl) setBaseUrl(entry.baseUrl);
-    setModels({ ...entry.defaultModels });
+    // Köprü istisnası: katalogdaki bridge üçlüsü GERÇEK claude alias'ları
+    // (haiku/sonnet/opus), ama köprü codex/copilot/gemini/opencode ile de
+    // çalışıyor olabilir ve bu form hangisi olduğunu bilemez. Claude
+    // alias'ını körlemesine doldurmak, backend claude değilse her üretimi
+    // patlatır (o CLI'lar bilinmeyen modeli reddeder). Sentinel üçlüsü ise
+    // HER backend'de doğru: llm-bridge tier adlarını soyar ve backend kendi
+    // varsayılanını kullanır — claude dahil. Belirli bir claude modeli
+    // isteyen kullanıcı alanlara elle yazar (hint bunu söylüyor).
+    setModels(
+      id === "bridge" ? { ...BRIDGE_SENTINEL_TRIPLE } : { ...entry.defaultModels }
+    );
     setJsonMode(entry.jsonMode);
   };
 
@@ -363,7 +378,9 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
               ))}
             </div>
             <span className="mt-1 block text-xs text-ink-soft">
-              {t.modelsHint}
+              {mode === "openai" && preset === "bridge"
+                ? t.modelsBridgeHint
+                : t.modelsHint}
             </span>
           </div>
         </div>
