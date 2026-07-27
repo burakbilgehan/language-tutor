@@ -44,6 +44,10 @@ next-env.d.ts
 data/
 public/strokes-data
 
+# T-064: local Argos Translate venv (scripts/mt/setup-argos.sh) — a build-time
+# tool for the maintainer, not a runtime/repo dependency. Multi-hundred-MB.
+.argos-venv/
+
 # claude code local state (settings + worktrees)
 .claude/
 .wrangler/

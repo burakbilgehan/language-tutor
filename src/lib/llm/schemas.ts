@@ -159,14 +159,34 @@ export const GrammarTableSchema = z.object({
 });
 export type GrammarTable = z.infer<typeof GrammarTableSchema>;
 
+// T-064: content provenance, carried INSIDE the json payload on purpose (no
+// DB column — see src/core/grammar.ts / isMachineTranslated below). Binary,
+// not a faithful three-way record: the only thing it drives is "was this
+// machine-translated", so absent/null means NOT machine-translated (real
+// content — covers every one of the 554 pre-T-064 rows in production, the
+// existing packaged tr seed, and every LLM generation, none of which need
+// backfilling). Only the MT export script ever stamps "mt". Never trust this
+// field if it comes back from an LLM call: the LLM never needs to see or set
+// it — it is not meant to author machine-translated content.
+export const ContentSource = z.enum(["mt"]);
+export type ContentSource = z.infer<typeof ContentSource>;
+
 export const GrammarTopicSchema = z.object({
   title_tr: z.string(),
   intro_tr: z.string(),
   tables: z.array(GrammarTableSchema).min(1),
   examples: z.array(LessonExampleSchema).min(2),
   related_slugs: z.array(z.string()).nullish(),
+  source: ContentSource.nullish(),
 });
 export type GrammarTopicContent = z.infer<typeof GrammarTopicSchema>;
+
+/** The one predicate every reader should use — never compare `.source` directly. */
+export function isMachineTranslated(
+  content: GrammarTopicContent | null | undefined
+): boolean {
+  return content?.source === "mt";
+}
 
 // -- Kanji entry ---------------------------------------------------------------
 

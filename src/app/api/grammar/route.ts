@@ -11,22 +11,26 @@ import type { NativeLang } from "@/lib/llm/lang-content";
 
 export const runtime = "nodejs";
 
-// Paketlenmiş seed (public/grammar-seed/<lang>.json) sunuculu modda da yeni
-// profilleri besler. Dosya profil başına en fazla bir kez okunur.
+// Paketlenmiş seed sunuculu modda da yeni profilleri besler. Dosya profil
+// başına en fazla bir kez okunur. İki katman (T-064): tr = gerçek içerik
+// (<lang>.json), diğer native diller = build-time MT (<lang>.<native>.json,
+// bkz. src/lib/grammar-seed.ts).
 const seedCache = new Map<string, Record<string, GrammarTopicContent> | null>();
-function loadSeed(lang: string) {
-  if (!seedCache.has(lang)) {
+function loadSeed(lang: string, nativeLang: NativeLang) {
+  const file = nativeLang === "tr" ? `${lang}.json` : `${lang}.${nativeLang}.json`;
+  const key = `${lang}:${nativeLang}`;
+  if (!seedCache.has(key)) {
     try {
       const raw = fs.readFileSync(
-        path.join(process.cwd(), "public", "grammar-seed", `${lang}.json`),
+        path.join(process.cwd(), "public", "grammar-seed", file),
         "utf8"
       );
-      seedCache.set(lang, JSON.parse(raw).topics ?? null);
+      seedCache.set(key, JSON.parse(raw).topics ?? null);
     } catch {
-      seedCache.set(lang, null);
+      seedCache.set(key, null);
     }
   }
-  return seedCache.get(lang) ?? null;
+  return seedCache.get(key) ?? null;
 }
 
 export async function GET(req: Request) {
@@ -41,10 +45,10 @@ export async function GET(req: Request) {
   const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
   let topics = listGrammarTopics(db, profile.targetLanguage, nativeLang);
   if (topics.some((t) => t.status === "pending" || t.status === "error")) {
-    const seed = loadSeed(profile.targetLanguage);
+    const seed = loadSeed(profile.targetLanguage, nativeLang);
     if (
       seed &&
-      applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+      applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
     ) {
       topics = listGrammarTopics(db, profile.targetLanguage, nativeLang);
     }

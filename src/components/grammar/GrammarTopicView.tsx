@@ -5,9 +5,10 @@ import Link from "next/link";
 import { GrammarTable } from "@/components/grammar/GrammarTable";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
-import type { GrammarTopicContent } from "@/lib/llm/schemas";
+import { isMachineTranslated, type GrammarTopicContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
+import { useLlmStatus } from "@/lib/llm-status";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { grammarTopic, grammarGenerate } from "@/lib/client-api";
 
@@ -22,6 +23,16 @@ const S = {
     notPrepared: "Bu konu henüz hazırlanmadı",
     lastAttemptFailed: " (son deneme başarısız oldu)",
     prepare: "Hazırla",
+    // T-064 — dürüst boşluk: LLM yok + konu hiç hazırlanmamış.
+    noLlmTitle: "Bu konu henüz hazır değil",
+    noLlmBody:
+      "İçeriğimiz her geçen gün güncellenip genişletiliyor. Kendi LLM'ini bağlarsan bu konuyu (ve tüm gramer kütüphanesini) hemen, kendine özel isabetli içerikle üretebilirsin.",
+    connectLlm: "LLM bağla →",
+    // T-064 — MT rozeti
+    mtBadge: "Otomatik çevrildi",
+    mtBody:
+      "Bu sayfa otomatik çevrildi. İçeriğimiz her geçen gün güncellenip düzenleniyor — kendi LLM'ini bağlarsan bu konuyu kendine özel, isabetli içerikle her an yeniden üretebilirsin.",
+    regenerate: "Kendi LLM'imle üret",
   },
   en: {
     loadFailed: "Failed to load",
@@ -33,6 +44,14 @@ const S = {
     notPrepared: "This topic hasn't been prepared yet",
     lastAttemptFailed: " (last attempt failed)",
     prepare: "Prepare",
+    noLlmTitle: "This topic isn't ready yet",
+    noLlmBody:
+      "Our content is being updated and expanded every day. Connect your own LLM to generate this topic (and the whole grammar library) right now, tailored to you.",
+    connectLlm: "Connect an LLM →",
+    mtBadge: "Machine-translated",
+    mtBody:
+      "This page was machine-translated. Our content is being refined every day — connect your own LLM to regenerate this topic with accurate, tailored content at any time.",
+    regenerate: "Generate with my LLM",
   },
 };
 
@@ -46,10 +65,12 @@ interface TopicResponse {
 export function GrammarTopicView({ slug }: { slug: string }) {
   const s = useStrings(S);
   const localize = useLocalizeError();
+  const llm = useLlmStatus();
   const targetLanguage = useProfileMeta()?.targetLanguage;
   const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
   const [topic, setTopic] = useState<TopicResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const stopped = useRef(false);
 
   const load = useCallback(async () => {
@@ -57,7 +78,14 @@ export function GrammarTopicView({ slug }: { slug: string }) {
       const body = (await grammarTopic(slug)) as TopicResponse;
       if (stopped.current) return;
       setTopic(body);
-      if (body.status === "generating") setTimeout(load, 3000);
+      if (body.status === "generating") {
+        setTimeout(load, 3000);
+      } else {
+        // Whatever happened (done, or the job errored out), the client-side
+        // "generating" placeholder is no longer authoritative — defer to the
+        // server status again so a finished/failed regen doesn't spin forever.
+        setRegenerating(false);
+      }
     } catch (e) {
       if (!stopped.current)
         setError(localize(e));
@@ -68,6 +96,7 @@ export function GrammarTopicView({ slug }: { slug: string }) {
     stopped.current = false;
     setTopic(null);
     setError(null);
+    setRegenerating(false);
     load();
     return () => {
       stopped.current = true;
@@ -75,6 +104,7 @@ export function GrammarTopicView({ slug }: { slug: string }) {
   }, [load]);
 
   const generate = async () => {
+    setRegenerating(true);
     await grammarGenerate(slug).catch(() => {});
     setTopic((t) => (t ? { ...t, status: "generating" } : t));
     setTimeout(load, 3000);
@@ -106,8 +136,33 @@ export function GrammarTopicView({ slug }: { slug: string }) {
         <h1 className="font-display text-xl font-bold">{topic.titleTr}</h1>
       </div>
 
-      {topic.status === "ready" && topic.content ? (
+      {topic.status === "ready" && topic.content && !regenerating ? (
         <>
+          {isMachineTranslated(topic.content) && (
+            <div className="flex flex-col gap-2 rounded-cozy bg-accent-soft p-4 text-sm shadow-cozy sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <span className="mr-2 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-ink-soft">
+                  {s.mtBadge}
+                </span>
+                <span className="text-ink-soft">{s.mtBody}</span>
+              </div>
+              {llm.configured ? (
+                <button
+                  onClick={generate}
+                  className="shrink-0 cursor-pointer rounded-full bg-surface px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-surface-2"
+                >
+                  {s.regenerate}
+                </button>
+              ) : (
+                <Link
+                  href="/settings"
+                  className="shrink-0 rounded-full bg-surface px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-surface-2"
+                >
+                  {s.connectLlm}
+                </Link>
+              )}
+            </div>
+          )}
           <p className="rounded-cozy bg-surface p-5 text-ink-soft shadow-cozy">
             <Furigana text={topic.content.intro_tr} lang={cjkLang} />
           </p>
@@ -143,10 +198,24 @@ export function GrammarTopicView({ slug }: { slug: string }) {
               </div>
             )}
         </>
-      ) : topic.status === "generating" ? (
+      ) : topic.status === "generating" || regenerating ? (
         <div className="flex flex-col items-center gap-4 py-20 text-center">
           <div className="animate-float-slow text-5xl">📜</div>
           <p className="text-ink-soft">{s.generating}</p>
+        </div>
+      ) : !llm.configured ? (
+        // T-064 honest gap: no LLM connected and no content of any kind
+        // (real, seed, or MT) exists for this topic yet. The old unconditional
+        // "Prepare" button called grammarGenerate, which 503s with no LLM
+        // configured, leaving the UI stuck on a spinner forever — this branch
+        // replaces that dead end with a CTA to actually fix the cause.
+        <div className="flex flex-col items-center gap-4 py-20 text-center">
+          <div className="text-5xl">🌱</div>
+          <p className="max-w-md font-semibold text-ink">{s.noLlmTitle}</p>
+          <p className="max-w-md text-ink-soft">{s.noLlmBody}</p>
+          <Link href="/settings">
+            <CozyButton>{s.connectLlm}</CozyButton>
+          </Link>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-4 py-20 text-center">

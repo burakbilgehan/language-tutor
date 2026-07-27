@@ -270,6 +270,15 @@ export async function generateGrammarContent(
       tier: "balanced",
       timeoutMs: 300_000,
     });
+    // T-064: `source` is exposed to the model (it's a field on the shared
+    // GrammarTopicSchema, so it appears in the --json-schema contract) even
+    // though it's never meant to be LLM-authored — only the MT export script
+    // (scripts/mt/translate-grammar-topic.ts) is allowed to set "mt". A real
+    // generation must never carry it through: a model that happens to fill
+    // the optional field would otherwise get permanently mislabeled
+    // "machine-translated" (wrong badge, and it would stay eligible for
+    // re-regeneration forever instead of being treated as done).
+    delete content.source;
     db.update(tables.grammarTopics)
       .set({
         content: mergeLangContent(

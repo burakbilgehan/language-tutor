@@ -925,13 +925,14 @@ export async function grammarTopics(): Promise<{ topics: GrammarTopicSummary[] }
   if (!profile) throw new AppError("profile_missing");
   const nativeLang = (profile.nativeLanguage ?? "tr") as "tr" | "en";
   let topics = coreG.listGrammarTopics(db, profile.targetLanguage, nativeLang);
-  // Boş konuları paketlenmiş seed'den doldur (LLM'siz tam gramer).
+  // Boş konuları paketlenmiş seed'den doldur: tr = gerçek içerik, diğer
+  // native diller = build-time MT (T-064).
   if (topics.some((t) => t.status === "pending" || t.status === "error")) {
     const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
-    const seed = await fetchGrammarSeed(profile.targetLanguage);
+    const seed = await fetchGrammarSeed(profile.targetLanguage, nativeLang);
     if (
       seed &&
-      coreG.applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+      coreG.applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
     ) {
       topics = coreG.listGrammarTopics(db, profile.targetLanguage, nativeLang);
     }
@@ -959,23 +960,24 @@ export async function grammarTopic(slug: string): Promise<{
   // Deep link (?topic=) liste yüklenmeden gelebilir — boşsa seed'den doldur.
   if (topic.status === "pending" || topic.status === "error") {
     const { fetchGrammarSeed } = await import("@/lib/grammar-seed");
-    const seed = await fetchGrammarSeed(profile.targetLanguage);
+    const seed = await fetchGrammarSeed(profile.targetLanguage, nativeLang);
     if (
       seed &&
-      coreG.applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+      coreG.applyGrammarSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
     ) {
       topic = coreG.findGrammarTopic(db, profile.targetLanguage, slug) ?? topic;
       persistSoon();
     }
   }
   const { readLangContent } = await import("@/lib/llm/lang-content");
+  const { titleFor } = await import("@/lib/grammar-index");
   const localized =
     topic.status === "ready"
       ? readLangContent(topic.content, nativeLang)
       : null;
   return {
     slug: topic.slug,
-    titleTr: topic.titleTr,
+    titleTr: titleFor(profile.targetLanguage, topic.slug, topic.titleTr, nativeLang),
     category: topic.category,
     status: localized ? "ready" : "pending",
     content: localized,

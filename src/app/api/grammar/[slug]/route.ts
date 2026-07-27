@@ -4,10 +4,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { findGrammarTopic } from "@/core/grammar";
+import { titleFor } from "@/lib/grammar-index";
 import { createJob, runJob, recoverStaleJobs } from "@/lib/jobs";
 import { requireLlm } from "@/lib/llm/require-llm";
 import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
-import type { GrammarTopicContent } from "@/lib/llm/schemas";
+import { isMachineTranslated, type GrammarTopicContent } from "@/lib/llm/schemas";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,13 @@ function findTopic(slug: string) {
     topic.status === "ready"
       ? readLangContent<GrammarTopicContent>(topic.content, nativeLang)
       : null;
-  return { topic, localized };
+  const displayTitle = titleFor(
+    profile.targetLanguage,
+    topic.slug,
+    topic.titleTr,
+    nativeLang
+  );
+  return { topic, localized, displayTitle };
 }
 
 export async function GET(
@@ -36,10 +43,10 @@ export async function GET(
   if (!found) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  const { topic, localized } = found;
+  const { topic, localized, displayTitle } = found;
   return NextResponse.json({
     slug: topic.slug,
-    titleTr: topic.titleTr,
+    titleTr: displayTitle,
     category: topic.category,
     status: localized ? "ready" : "pending",
     content: localized,
@@ -61,7 +68,10 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const { topic, localized } = found;
-  if (localized) {
+  // T-064: MT-filled content reads as "ready" (it's usable now) but must
+  // never block a real regeneration — the ruling requires the LLM to
+  // silently override MT the moment the user connects one.
+  if (localized && !isMachineTranslated(localized)) {
     return NextResponse.json({ status: "ready" });
   }
   const gate = requireLlm();

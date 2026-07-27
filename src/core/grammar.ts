@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
-import { grammarIndexFor } from "@/lib/grammar-index";
+import { grammarIndexFor, titleFor } from "@/lib/grammar-index";
 import type { GrammarTopicContent } from "@/lib/llm/schemas";
 import {
   mergeLangContent,
@@ -59,21 +59,30 @@ export function ensureSeeded(db: AppDb, targetLanguage: string) {
 }
 
 /**
- * Fill still-empty topics from the packaged seed (public/grammar-seed/<lang>.json,
- * exported from the owner's DB by scripts/export-grammar-seed.ts). Only rows
- * with status pending/error are touched — user-generated content always wins.
- * Returns how many topics were filled.
+ * Fill still-empty topics from a packaged seed file. Only rows with status
+ * pending/error are touched — user-generated content always wins (LLM output
+ * is never overwritten by any seed layer, regardless of `seedLang`).
+ *
+ * `seedLang` is the language THE SEED FILE ITSELF is written in, which is NOT
+ * necessarily the caller's `nativeLanguage` — it always is for the two seed
+ * layers actually in use (T-064):
+ *   - public/grammar-seed/<target>.json        → tr  (scripts/export-grammar-seed.ts,
+ *     exported from the owner's tr-native DB)
+ *   - public/grammar-seed/<target>.<lang>.json  → <lang>  (scripts/mt-grammar-seed.ts,
+ *     build-time machine translation of the tr seed, content stamped source:"mt")
+ * A mismatch (e.g. handing the tr file to an en-native profile) is refused —
+ * that was the T-031 bug this function used to hardcode a fix for; genericizing
+ * the language instead of dropping the check keeps the fix intact for both
+ * layers. Returns how many topics were filled.
  */
 export function applyGrammarSeed(
   db: AppDb,
   targetLanguage: string,
   seed: Record<string, GrammarTopicContent>,
-  nativeLanguage: NativeLang = "tr"
+  nativeLanguage: NativeLang = "tr",
+  seedLang: NativeLang = "tr"
 ): number {
-  // Packaged seed content is Turkish (exported from the owner's tr-native DB).
-  // Applying it to a non-tr profile would show Turkish content to an English
-  // user (T-031). Non-tr users generate from the LLM instead.
-  if (nativeLanguage !== "tr") return 0;
+  if (seedLang !== nativeLanguage) return 0;
   const empty = db
     .select({
       id: tables.grammarTopics.id,
@@ -93,11 +102,11 @@ export function applyGrammarSeed(
     const content = seed[row.slug];
     if (!content) continue;
     // Merge, don't replace: an error/pending row may already hold the OTHER
-    // language's content (interrupted generation). Wholesale {tr: content}
+    // language's content (interrupted generation). Wholesale {lang: content}
     // would wipe it permanently (T-031).
     db.update(tables.grammarTopics)
       .set({
-        content: mergeLangContent(row.content, "tr", content),
+        content: mergeLangContent(row.content, seedLang, content),
         status: "ready",
         generatedAt: new Date(),
       })
@@ -122,7 +131,12 @@ export function listGrammarTopics(
     .all()
     .map((t) => ({
       slug: t.slug,
-      titleTr: t.titleTr,
+      // T-064: display title in the profile's native language when a
+      // committed translation exists (src/lib/grammar-index titles.*.json);
+      // falls back to the tr titleTr column otherwise. Field name kept as
+      // `titleTr` (no shape change) — see the _tr naming convention note in
+      // CLAUDE.md, it means "learner-facing title", not literally Turkish.
+      titleTr: titleFor(targetLanguage, t.slug, t.titleTr, nativeLanguage),
       category: t.category,
       level: t.level,
       // Effective status: a row whose content isn't in the current native
