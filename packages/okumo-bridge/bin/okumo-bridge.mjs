@@ -311,7 +311,8 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  if (req.method === "GET" && req.url === "/health") {
+  const urlPath = (req.url ?? "").split("?")[0];
+  if (req.method === "GET" && urlPath === "/health") {
     res.writeHead(200, { ...cors, "content-type": "application/json" });
     return res.end(
       JSON.stringify({ ok: true, backend: BACKEND, cliFound: checkCliFound() })

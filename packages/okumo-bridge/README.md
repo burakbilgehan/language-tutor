@@ -8,19 +8,31 @@ running in your browser.
 
 ## Usage
 
+The bridge only allows requests whose browser `Origin` is `localhost`/
+`127.0.0.1` unless you add more with `--origin`. **Okumo itself
+(`https://okumo.dev`) is not in the default allowlist** — a bare
+`npx okumo-bridge` will reject the app's live "is the bridge running?"
+probe with `403 origin_not_allowed`. If you're using the hosted app, pass
+its origin explicitly:
+
 ```
-npx okumo-bridge
+npx okumo-bridge --origin https://okumo.dev
+```
+
+Other flags:
+
+```
 npx okumo-bridge --backend codex
 npx okumo-bridge --backend claude --port 9000
 npx okumo-bridge --origin https://your-static-deploy.example
-npx okumo-bridge --token some-secret   # require a bearer token
+npx okumo-bridge --token some-secret   # require a bearer token (gates /health too)
 ```
 
 Pin the version so a future release can't silently change behavior under
 you:
 
 ```
-npx okumo-bridge@0.1.0
+npx okumo-bridge@0.1.0 --origin https://okumo.dev
 ```
 
 Then in Okumo: Settings → LLM Provider → "API / Local server" → Base URL
@@ -68,9 +80,10 @@ documented at the top of the source file and in ticket T-039. Summary:
 - `--token` adds an optional bearer-token requirement on top of all of the
   above.
 
-If you're pointing this at a deploy other than `okumo.dev`, pass
-`--origin https://your-deploy.example` — otherwise the bridge will reject
-requests from it.
+`--origin` accepts the site you're using — `https://okumo.dev`, a fork's
+deploy, or a static build served from somewhere else. Only
+`localhost`/`127.0.0.1` are allowed by default; every other origin,
+`okumo.dev` included, must be added explicitly (see Usage above).
 
 ## Source of truth
 
