@@ -152,7 +152,10 @@ export function GrammarSidebar() {
 
   const localize = useLocalizeError();
   const [topics, setTopics] = useState<TopicDto[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Raw error, localized at render time: localize is a fresh function every
+  // render, so it must NOT be a dependency of load — that refires the load
+  // effect each render and the resulting ensureSeeded loop freezes the tab.
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [levelFilter, setLevelFilter] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -196,9 +199,9 @@ export function GrammarSidebar() {
         pollRef.current = setTimeout(load, 3000);
       }
     } catch (e) {
-      setLoadError(localize(e));
+      setLoadError(e);
     }
-  }, [localize]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -234,10 +237,10 @@ export function GrammarSidebar() {
     }
   };
 
-  if (loadError && !topics) {
+  if (loadError != null && !topics) {
     return (
       <div className="p-6 text-center text-sm">
-        <p className="text-danger">{loadError}</p>
+        <p className="text-danger">{localize(loadError)}</p>
         <button
           className="mt-2 cursor-pointer underline text-ink-soft"
           onClick={() => {

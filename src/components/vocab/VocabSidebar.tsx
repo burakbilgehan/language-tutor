@@ -97,7 +97,9 @@ export function VocabSidebar() {
 
   const localize = useLocalizeError();
   const [entries, setEntries] = useState<VocabEntrySummary[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Raw error, localized at render — same freeze trap as GrammarSidebar:
+  // localize is unstable, it must not be a dependency of load.
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [query, setQuery] = useState("");
   const [openLevels, setOpenLevels] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
@@ -115,9 +117,9 @@ export function VocabSidebar() {
         pollRef.current = setTimeout(load, 3000);
       }
     } catch (e) {
-      setLoadError(localize(e));
+      setLoadError(e);
     }
-  }, [localize]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -170,10 +172,10 @@ export function VocabSidebar() {
     }
   };
 
-  if (loadError && !entries) {
+  if (loadError != null && !entries) {
     return (
       <div className="p-6 text-center text-sm">
-        <p className="text-danger">{loadError}</p>
+        <p className="text-danger">{localize(loadError)}</p>
         <button
           className="mt-2 cursor-pointer underline text-ink-soft"
           onClick={() => {
