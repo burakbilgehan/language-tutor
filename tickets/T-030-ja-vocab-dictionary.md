@@ -82,3 +82,17 @@ sözlüğü ve ranking iyileştirmeleri (gloss kalite alt-skoru) yerinde kaldı.
 Ders: JMdict distilasyonu Jisho-seviyesi sunum yapısı (sense grupları,
 appliesToKana, çoklu okunuş) olmadan yayınlanmamalı; yeniden denenecekse
 önce görsel prototip onayı, sonra veri işi.
+
+DB artığı (2026-07-27 keşif + temizlik): revert kod dosyalarını (index,
+build script, nav gate) sildi ama denemenin `ensureVocabSeeded` ile
+`vocab_entries` tablosuna yazdığı 8190 ja satırını (N1=3157, N2=1892,
+N3=1731, N4=690, N5=720 — biri `ready`, gerçek bir LLM çağrısı yakmış)
+DB'de bırakmıştı. `scripts/blast-generate.ts` index dosyasını değil
+doğrudan `vocab_entries WHERE status IN ('pending','error')`'ı okuduğu
+için bu 8190 hayalet satırı görüp kuyruğa aldı — hiçbir UI'da asla
+gösterilemeyecek içerik için gereksiz LLM üretimi tetikleyecekti.
+`DELETE FROM vocab_entries WHERE target_language='ja'` ile temizlendi;
+tablo artık yalnızca gerçek zh satırlarını (4991) içeriyor. Ders: kod
+revert'i DB seed'ini otomatik temizlemiyor — bir index/dil sürümünü geri
+alırken ilgili DB satırlarının da silinip silinmediği ayrıca kontrol
+edilmeli.

@@ -25,6 +25,11 @@ gerçek koşu). Kalanlar:
   taşıyor, muhtemelen yalnız content MT gerekir.
 - **Bilinçli bırakılan:** `seed-strip.ts` MT (en) yarılarını strip'lemiyor
   (israf byte, veri kaybı değil); tarayıcı/manuel UI testi yapılmadı.
+- **Bilinen kalite boşluğu (Burak gördü, "kalsın" dedi, 2026-07-27):**
+  tablo alanları (`column_headers`, `tables[].rows`) CJK'yı korumak için
+  MT'den toptan hariç — karma alanlardaki Türkçe proz ("Satır", "boş
+  ünsüz") en seed'inde çevrilmeden kalıyor. İstenirse fix: protect.ts
+  tripwire'ı hücre içinde uygulanıp yalnız Latin kısım çevrilir (S efor).
 T-056'da saptanan en-native boşluğunun çözümü, Burak'ın 2026-07-27 ruling'iyle
 katmanlı fallback zincirine genişledi. **Bağlayıcı ilkeler (Burak):**
 - Çeviri içerik YALNIZ gerçek içerik yokken gösterilir; gerçek içerikle asla
