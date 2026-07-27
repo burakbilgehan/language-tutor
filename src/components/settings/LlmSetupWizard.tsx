@@ -550,7 +550,16 @@ function TestRow({
 
 // ------------------------------------------------------------------ sihirbaz
 
-export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
+/** Sihirbazdan nasıl çıkıldı. Onboarding ikisini de "bu adım bitti" diye
+ * okur; Settings ikisini ayırt edip doğru özeti gösterir (bir şey bağlamadan
+ * çıkan kullanıcıya "bağlandı" demek yalan olurdu). */
+export type WizardOutcome = "connected" | "skipped";
+
+export function LlmSetupWizard({
+  onDone,
+}: {
+  onDone: (outcome: WizardOutcome) => void;
+}) {
   const t = useStrings(S);
   const [door, setDoor] = useState<Door>("choose");
   const [lane, setLane] = useState<Lane | null>(null);
@@ -560,6 +569,10 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
   const [subBackend, setSubBackend] = useState<SubBackend>("claude");
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  // Başarı AYRI bir boolean: eskiden `testMsg === t.testOk` ile canlı string
+  // tablosuna kimlik karşılaştırması yapılıyordu, kullanıcı dili değiştirince
+  // "Bitti" düğmesi kayboluyordu.
+  const [succeeded, setSucceeded] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -682,11 +695,13 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
   const testAndSave = async (config: Parameters<typeof llmConfigPut>[0]) => {
     setTesting(true);
     setTestMsg(null);
+    setSucceeded(false);
     try {
       await llmConfigPut(config);
       const r = await llmTest();
       if (r.ok) {
         setTestMsg(t.testOk);
+        setSucceeded(true);
         invalidateLlmStatus();
       } else {
         setTestMsg(`${t.testFail} ${r.error ?? ""}`);
@@ -698,8 +713,10 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
     }
   };
 
-  const succeeded = testMsg === t.testOk;
-  const resetMsg = () => setTestMsg(null);
+  const resetMsg = () => {
+    setTestMsg(null);
+    setSucceeded(false);
+  };
 
   const keyNote = KEY_PROVIDERS[keyProvider].note;
   const keyNoteText = keyNote ? (t === S.en ? keyNote.en : keyNote.tr) : null;
@@ -735,7 +752,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
           <div className="flex flex-col gap-2">
             {/* No-LLM kapısı config'e DOKUNMAZ — sadece sihirbazdan çıkar.
                 Kayıtlı anahtarı olan biri buraya basınca kaybetmemeli. */}
-            {doorCard(onDone, t.doorNoneTitle, t.doorNoneDesc, t.doorNoneBadge)}
+            {doorCard(() => onDone("skipped"), t.doorNoneTitle, t.doorNoneDesc, t.doorNoneBadge)}
             {doorCard(
               () => {
                 resetMsg();
@@ -823,12 +840,23 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
             testing={testing}
             testMsg={testMsg}
             succeeded={succeeded}
-            onDone={onDone}
+            onDone={() => onDone("connected")}
             disabled={!apiKey}
             onTest={() =>
               testAndSave(
                 keyProvider === "anthropic"
-                  ? { mode: "anthropic", apiKey, models: activeModels }
+                  ? {
+                      mode: "anthropic",
+                      // baseUrl ŞART: sunucu modunda llmConfigured()
+                      // (src/lib/llm/config.ts) cli/none dışındaki her modda
+                      // `Boolean(config?.baseUrl)`e düşer. Bunu göndermezsek
+                      // "bağlandı ve kaydedildi ✅" dedikten sonra ilk üretim
+                      // 503 llm_unconfigured alır. Tarayıcı tarafı anthropic
+                      // için apiKey'e bakıyor, orada zararsız.
+                      baseUrl: CATALOG.anthropic.baseUrl,
+                      apiKey,
+                      models: activeModels,
+                    }
                   : {
                       mode: "openai",
                       baseUrl: CATALOG[keyProvider].baseUrl,
@@ -850,7 +878,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
             <p className="text-sm font-semibold">{t.frictionTitle}</p>
             <p className="mt-1 text-xs text-ink-soft">{t.frictionBody}</p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
-              <button type="button" onClick={onDone} className="text-indigo underline">
+              <button type="button" onClick={() => onDone("skipped")} className="text-indigo underline">
                 {t.frictionToNone}
               </button>
               <button
@@ -976,7 +1004,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                 testing={testing}
                 testMsg={testMsg}
                 succeeded={succeeded}
-                onDone={onDone}
+                onDone={() => onDone("connected")}
                 onTest={() =>
                   testAndSave({
                     mode: "openai",
@@ -1096,7 +1124,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                 testing={testing}
                 testMsg={testMsg}
                 succeeded={succeeded}
-                onDone={onDone}
+                onDone={() => onDone("connected")}
                 onTest={() =>
                   testAndSave({
                     mode: "openai",

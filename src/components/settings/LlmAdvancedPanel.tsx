@@ -180,7 +180,10 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
     setMode(m);
     setSaveMsg(null);
     if (m === "anthropic") {
-      setBaseUrl("");
+      // baseUrl'ü BOŞALTMA: sunucu modunda llmConfigured() cli/none dışındaki
+      // her modda `Boolean(config?.baseUrl)`e düşüyor, boş baseUrl kaydetmek
+      // "kaydedildi" diyip ilk üretimde 503 llm_unconfigured almak demek.
+      setBaseUrl(CATALOG.anthropic.baseUrl);
       setModels((prev) =>
         prev.fast || prev.balanced || prev.deep
           ? prev
@@ -196,7 +199,14 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
     try {
       await llmConfigPut({
         mode,
-        baseUrl: baseUrl || undefined,
+        // anthropic'te baseUrl boşsa katalog adresine düş. switchMode zaten
+        // dolduruyor ama o yalnız kullanıcı modu ELLE değiştirince çalışır;
+        // boş baseUrl'lü eski bir config'i yükleyip doğrudan Kaydet'e basan
+        // kullanıcı yine llmConfigured() === false ile baş başa kalırdı.
+        baseUrl:
+          mode === "anthropic"
+            ? baseUrl || CATALOG.anthropic.baseUrl
+            : baseUrl || undefined,
         // Boş input = kayıtlı anahtarı koru (iki tarafta da böyle).
         apiKey: apiKey || undefined,
         models:

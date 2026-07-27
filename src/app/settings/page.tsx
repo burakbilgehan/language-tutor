@@ -5,7 +5,7 @@ import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
-import { LlmSetupWizard } from "@/components/settings/LlmSetupWizard";
+import { LlmSettingsSection } from "@/components/settings/LlmSettingsSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
 import { useStrings } from "@/lib/i18n/use-strings";
@@ -134,8 +134,6 @@ export default function SettingsPage() {
     totalCalls: number;
     byPurpose?: { purpose: string; calls: number; usd: number }[];
   } | null>(null);
-  // Remount key for the LLM wizard — see its render site below.
-  const [llmWizardKey, setLlmWizardKey] = useState(0);
 
   useEffect(() => {
     stats()
@@ -261,12 +259,10 @@ export default function SettingsPage() {
         </section>
 
         {/* T-060: the wizard IS the LLM surface now (the old LlmProviderSection
-            melted into its "Gelişmiş" accordion). In Settings there is no next
-            step to hand off to, so "done" just remounts it back to the doors. */}
-        <LlmSetupWizard
-          key={llmWizardKey}
-          onDone={() => setLlmWizardKey((k) => k + 1)}
-        />
+            melted into its "Gelişmiş" accordion). The Settings embed wraps it
+            so finishing collapses to a summary instead of silently bouncing
+            back to the doors. */}
+        <LlmSettingsSection />
 
         <JobQueuePanel />
 
