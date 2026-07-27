@@ -1,7 +1,7 @@
 ---
 id: T-055
 title: Sky kalıntıları — T-053 fence'i dışında kalan küçük dokunuşlar
-status: backlog
+status: wontfix
 priority: p3
 effort: S
 confidence: high
@@ -23,3 +23,7 @@ setinin gerektirdiği küçük kalıntılar (T-053 agent raporundan):
 
 Kural referansı: `design/okumo-sky/README.md` "Color usage rules".
 Doğrulama: dark/light iki temada göz kontrolü + `npm run build:static`.
+
+## Wontfix (2026-07-27)
+Sky uygulaması (T-052/T-053) revert edildi; bu kalıntılar revert edilen
+implementasyona bağlıydı. Yeni dizayn handoff'u kendi kapsamını getirecek.

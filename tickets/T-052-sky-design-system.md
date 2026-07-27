@@ -1,7 +1,7 @@
 ---
 id: T-052
 title: Sky renk ailesi + Kumo mark + info variant (design handoff task 1-3)
-status: done
+status: backlog
 priority: p2
 effort: S
 confidence: high
@@ -34,3 +34,9 @@ Kod büyük ölçüde handoff'ta hazır — mekanik. Doğrulama: dark/light ikis
 token'lar çözülüyor + Kumo mark iki temada da okunur (beyaz-cream'de bulut
 görünmez kuralı — mark accent kullanıyor, sorun yok). `npm run build:static`
 (ELLE — build izni olan session'da).
+
+## Revert notu (2026-07-27)
+İlk uygulama aynı gün merge edilip geri alındı — Burak sky dizaynını
+beğenmedi, Claude design ile yeni iterasyon üzerinde çalışıyor. Kod git
+geçmişinde duruyor: geri getirmek = `git revert 1907e54` (T-052 revert'i).
+Yeni handoff gelince bu ticket güncellenip yeniden açılır.

@@ -1,7 +1,7 @@
 ---
 id: T-053
 title: Sky kullanım kuralları — mevcut ekranlara uygula (before/after)
-status: done
+status: backlog
 priority: p2
 effort: M
 confidence: medium
@@ -33,3 +33,9 @@ hedefle. Doğrulama: her ekran dark/light iki temada + mock ile karşılaştır.
 Fence: yukarıdaki 5 ekranın component'leri; T-052 (globals/CozyButton/
 StatsHeader) bittikten SONRA. Bu ekranların paylaştığı ortak component'lere
 (CozyButton zaten T-052'de) dikkat — çakışma varsa dar tut.
+
+## Revert notu (2026-07-27)
+İlk uygulama aynı gün merge edilip geri alındı (T-052 ile birlikte —
+dizayn yeni iterasyona girdi). Geri getirmek = `git revert 244ec86`
+(T-053 revert'i), T-052 geri geldikten sonra. Yeni handoff'la yeniden
+değerlendirilecek.
