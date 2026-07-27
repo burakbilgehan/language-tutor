@@ -97,7 +97,7 @@ function timeLabel(ms: number | null): string {
 function statusTone(status: string): string {
   switch (status) {
     case "running":
-      return "text-sky-deep";
+      return "text-accent";
     case "error":
       return "text-danger";
     case "done":
@@ -137,7 +137,7 @@ export function JobQueuePanel() {
       </span>
       <span
         className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-          j.kind === "user" ? "bg-sky-soft" : "bg-surface-2 text-ink-soft"
+          j.kind === "user" ? "bg-accent-soft" : "bg-surface-2 text-ink-soft"
         }`}
       >
         {j.kind === "user" ? t.user : t.system}

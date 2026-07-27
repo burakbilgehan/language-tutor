@@ -580,7 +580,7 @@ export function OnboardingWizard() {
   // return leg after a successful import while signed in. Inline + dismissible
   // (skip navigates on to the app), never a window.confirm.
   const pushOfferBlock = pushOffer !== null && (
-    <div className="mt-4 rounded-xl border-2 border-sky/40 bg-sky-50 px-4 py-3">
+    <div className="mt-4 rounded-xl border-2 border-accent/40 bg-accent-soft/20 px-4 py-3">
       <div className="font-semibold">{t.pushOfferTitle}</div>
       {pushOffer === "done" ? (
         <>
@@ -899,37 +899,18 @@ export function OnboardingWizard() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
-      {/* Step indicator: terracotta marks only the CURRENT step (the page's one
-          dominant accent); completed steps are sky (state), the rest neutral. */}
       <div className="mb-8 flex gap-2">
         {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
           <div
             key={i}
             className={`h-1.5 flex-1 rounded-full transition-colors ${
-              i === step ? "bg-accent" : i < step ? "bg-sky" : "bg-surface-2"
+              i <= step ? "bg-accent" : "bg-surface-2"
             }`}
           />
         ))}
       </div>
 
       <div className="rounded-cozy bg-surface p-5 shadow-cozy sm:p-8">
-        {step === 0 && (
-          /* The Kumo mark greets here — the brand's first hello (okumo-sky). */
-          <svg
-            viewBox="0 0 128 86"
-            className="mx-auto mb-4 h-12 w-18 animate-float-slow"
-            aria-hidden="true"
-          >
-            <g fill="var(--accent)">
-              <circle cx="40" cy="44" r="22" />
-              <circle cx="68" cy="34" r="27" />
-              <circle cx="94" cy="47" r="18" />
-              <rect x="18" y="44" width="94" height="22" rx="11" />
-            </g>
-            <rect x="30" y="74" width="26" height="7" rx="3.5" fill="var(--sky-light)" />
-            <rect x="64" y="74" width="42" height="7" rx="3.5" fill="var(--sky-light)" />
-          </svg>
-        )}
         {step === 0 && (
           <StepShell title={t.step0Title} subtitle={t.step0Subtitle}>
             <input
@@ -939,7 +920,7 @@ export function OnboardingWizard() {
                 setDraft((d) => ({ ...d, displayName: e.target.value }))
               }
               placeholder={t.namePlaceholder}
-              className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
+              className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
             />
             <div className="mt-4 grid grid-cols-2 gap-3">
               {LANGUAGES.map((l) => {
@@ -1035,11 +1016,11 @@ export function OnboardingWizard() {
               }
               rows={4}
               placeholder={t.motivationPlaceholder}
-              className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
+              className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
             />
             {!llm.configured && !llmDone && (
               <div className="mt-6">
-                <p className="mb-3 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-deep">
+                <p className="mb-3 rounded-xl bg-accent-soft/40 px-4 py-3 text-sm">
                   {t.llmNeeded}
                 </p>
                 <LlmSetupWizard onDone={() => setLlmDone(true)} />

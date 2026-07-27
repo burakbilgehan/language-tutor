@@ -363,7 +363,7 @@ export function CloudAccountSection() {
               setApiSaved(false);
             }}
             placeholder={t.apiBasePlaceholder}
-            className="min-w-0 flex-1 rounded-lg border border-surface-2 bg-background px-3 py-2 text-sm outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
+            className="min-w-0 flex-1 rounded-lg border border-surface-2 bg-background px-3 py-2 text-sm"
           />
           <CozyButton variant="soft" onClick={onSaveApiBase}>
             {apiSaved ? t.saved : t.save}

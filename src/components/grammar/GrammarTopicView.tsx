@@ -135,7 +135,7 @@ export function GrammarTopicView({ slug }: { slug: string }) {
                   <Link
                     key={s}
                     href={`/grammar?topic=${encodeURIComponent(s)}`}
-                    className="rounded-full bg-surface-2 px-4 py-2 text-sm text-sky-deep hover:bg-sky-soft transition-colors"
+                    className="rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors"
                   >
                     → {s}
                   </Link>
@@ -154,7 +154,7 @@ export function GrammarTopicView({ slug }: { slug: string }) {
           <p className="text-ink-soft">
             {s.notPrepared}{topic.status === "error" ? s.lastAttemptFailed : ""}.
           </p>
-          <CozyButton variant="info" onClick={generate}>{s.prepare}</CozyButton>
+          <CozyButton onClick={generate}>{s.prepare}</CozyButton>
         </div>
       )}
     </div>

@@ -261,7 +261,7 @@ export function ProfileSection() {
                       d ? { ...d, displayName: e.target.value } : d
                     )
                   }
-                  className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
+                  className="w-full rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
                 />
               </Field>
 
@@ -353,7 +353,7 @@ export function ProfileSection() {
                     )
                   }
                   rows={3}
-                  className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-sky focus:ring-4 focus:ring-sky/15"
+                  className="w-full resize-none rounded-xl border-2 border-surface-2 bg-background px-4 py-3 outline-none focus:border-accent"
                 />
               </Field>
 
