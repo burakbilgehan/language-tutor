@@ -227,26 +227,9 @@ export function StatsHeader({
     <header className="sticky top-0 z-20 border-b border-surface-2 bg-background/80 backdrop-blur">
       <div className="mx-auto max-w-6xl px-4">
         <div className="flex h-14 items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <svg
-              viewBox="0 0 128 86"
-              height="28"
-              aria-hidden="true"
-              className="shrink-0"
-            >
-              <g fill="var(--accent)">
-                <circle cx="40" cy="44" r="22" />
-                <circle cx="68" cy="34" r="27" />
-                <circle cx="94" cy="47" r="18" />
-                <rect x="18" y="44" width="94" height="22" rx="11" />
-              </g>
-              <rect x="30" y="74" width="26" height="7" rx="3.5" fill="var(--sky-light)" />
-              <rect x="64" y="74" width="42" height="7" rx="3.5" fill="var(--sky-light)" />
-            </svg>
-            <h1 className="min-w-0 truncate font-display text-lg font-semibold">
-              {title}
-            </h1>
-          </div>
+          <h1 className="min-w-0 truncate font-display text-lg font-semibold">
+            {title}
+          </h1>
           <div className="flex shrink-0 items-center gap-2">
             {streak && (
               <span

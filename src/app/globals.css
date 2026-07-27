@@ -17,11 +17,6 @@
   --gold: #d9a441;
   --locked: #cfc6b8;
   --danger: #b2503f;
-  --sky-50: #eaf3f7;
-  --sky-soft: #d6e8f0;
-  --sky-light: #7fb9d1;
-  --sky: #4f93b0;
-  --sky-deep: #3a7691;
 }
 
 .dark {
@@ -37,11 +32,6 @@
   --gold: #e0b25e;
   --locked: #4a4237;
   --danger: #d1705d;
-  --sky-50: #1d2a31;
-  --sky-soft: #2b3d47;
-  --sky-light: #5f9cb5;
-  --sky: #8fc7dc;
-  --sky-deep: #b6dcea;
 }
 
 @theme inline {
@@ -57,11 +47,6 @@
   --color-gold: var(--gold);
   --color-locked: var(--locked);
   --color-danger: var(--danger);
-  --color-sky-50: var(--sky-50);
-  --color-sky-soft: var(--sky-soft);
-  --color-sky-light: var(--sky-light);
-  --color-sky: var(--sky);
-  --color-sky-deep: var(--sky-deep);
   --font-display: var(--font-fraunces);
   --font-sans: var(--font-nunito);
   --font-cjk-ja: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
@@ -86,11 +71,6 @@
     --gold: #e0b25e;
     --locked: #4a4237;
     --danger: #d1705d;
-    --sky-50: #1d2a31;
-    --sky-soft: #2b3d47;
-    --sky-light: #5f9cb5;
-    --sky: #8fc7dc;
-    --sky-deep: #b6dcea;
   }
 }
 
@@ -164,11 +144,6 @@ h3,
   text-align: left;
 }
 .prose-cozy th { background: var(--surface-2); }
-.prose-cozy a {
-  color: var(--sky-deep);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
 
 @keyframes pulse-glow {
   0%,

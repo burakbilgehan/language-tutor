@@ -2,14 +2,13 @@
 
 import type { ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "ghost" | "soft" | "info";
+type Variant = "primary" | "ghost" | "soft";
 
 const styles: Record<Variant, string> = {
   primary:
     "bg-accent text-surface hover:brightness-110 shadow-cozy disabled:opacity-40",
   soft: "bg-surface-2 text-ink hover:bg-accent-soft disabled:opacity-40",
   ghost: "bg-transparent text-ink-soft hover:text-ink disabled:opacity-40",
-  info: "bg-sky text-surface hover:brightness-110 shadow-cozy disabled:opacity-40",
 };
 
 export function CozyButton({
