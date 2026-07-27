@@ -9,6 +9,7 @@ import { stats as stats$, saveExportApi } from "@/lib/client-api";
 import { useShortcutLabel } from "@/components/shared/CommandPalette";
 import { useLlmStatus } from "@/lib/llm-status";
 import { useBackup } from "@/lib/backup/use-backup";
+import { useTheme } from "@/lib/use-theme";
 
 const S = {
   tr: {
@@ -28,6 +29,8 @@ const S = {
     settings: "Ayarlar",
     settingsUnconfigured: "Ayarlar — LLM yapılandırılmadı",
     search: "Ara",
+    themeToDark: "Koyu temaya geç",
+    themeToLight: "Açık temaya geç",
     save: "Yedekle",
     saveTitle: "İlerlemeni indir / yedekle",
     saveNudge: "İlerlemeni yedeklemeyi unutma",
@@ -51,6 +54,8 @@ const S = {
     settings: "Settings",
     settingsUnconfigured: "Settings — LLM not configured",
     search: "Search",
+    themeToDark: "Switch to dark theme",
+    themeToLight: "Switch to light theme",
     save: "Back up",
     saveTitle: "Download / back up your progress",
     saveNudge: "Don't forget to back up your progress",
@@ -118,6 +123,30 @@ function SaveButton({
           className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-gold ring-2 ring-background"
         />
       )}
+    </button>
+  );
+}
+
+/** Single-symbol dark/light toggle; state shared with the settings switch
+ * via useTheme. Shows the theme a click switches TO (☾ in light, ☀︎ in dark). */
+function ThemeButton({
+  titleToDark,
+  titleToLight,
+}: {
+  titleToDark: string;
+  titleToLight: string;
+}) {
+  const { dark, toggle } = useTheme();
+  const title = dark ? titleToLight : titleToDark;
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      title={title}
+      aria-label={title}
+      className="flex min-h-11 min-w-11 items-center justify-center rounded-full bg-surface text-base leading-none shadow-cozy transition-colors hover:bg-surface-2"
+    >
+      {dark ? "☀︎" : "☾"}
     </button>
   );
 }
@@ -239,6 +268,10 @@ export function StatsHeader({
               nudgeTitle={t.saveNudge}
             />
             <SearchButton title={t.search} />
+            <ThemeButton
+              titleToDark={t.themeToDark}
+              titleToLight={t.themeToLight}
+            />
             <Link
               href="/settings"
               title={llmStatus.configured ? t.settings : t.settingsUnconfigured}

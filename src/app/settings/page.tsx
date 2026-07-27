@@ -10,6 +10,7 @@ import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
+import { useTheme } from "@/lib/use-theme";
 import { AppError } from "@/lib/errors";
 import { stats, saveExportApi, saveImportApi, cloudPush } from "@/lib/client-api";
 import { fetchAuthStatus } from "@/lib/auth-status";
@@ -125,7 +126,7 @@ const S = {
 export default function SettingsPage() {
   const t = useStrings(S);
   const localize = useLocalizeError();
-  const [dark, setDark] = useState(false);
+  const { dark, toggle: toggleDark } = useTheme();
   const [llm, setLlm] = useState<{
     todayUsd: number;
     todayCalls: number;
@@ -138,16 +139,7 @@ export default function SettingsPage() {
     stats()
       .then((d) => setLlm(d.llm))
       .catch(() => {});
-    setDark(document.documentElement.classList.contains("dark"));
   }, []);
-
-  const toggleDark = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    document.documentElement.classList.toggle("light", !next);
-    localStorage.setItem("theme", next ? "dark" : "light");
-  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
