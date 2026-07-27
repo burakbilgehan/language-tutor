@@ -170,7 +170,7 @@ function SearchButton({ title }: { title: string }) {
   );
 }
 
-interface NavItem {
+export interface NavItem {
   href: string;
   label: keyof typeof S.tr.nav;
   /** Extra path prefixes that count as "this section is active". */
@@ -195,6 +195,15 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/chat", label: "chat" },
 ];
 
+/** Nav items visible for a target language. Single source for the header tabs
+ * AND the /map no-curriculum hub (T-056) — a new page added here reaches both. */
+export function visibleNavItems(lang: string | undefined): NavItem[] {
+  return NAV_ITEMS.filter(
+    (i) =>
+      (!i.jaOnly || lang === "ja") && (!i.langs || i.langs.includes(lang ?? ""))
+  );
+}
+
 /**
  * The single site-wide navigation bar: page title + stats on the top row,
  * section tabs on the bottom row. Total height is fixed at var(--header-h)
@@ -213,10 +222,7 @@ export function StatsHeader({
   const t = useStrings(S);
   const lang = useProfileMeta()?.targetLanguage;
   const llmStatus = useLlmStatus();
-  const items = NAV_ITEMS.filter(
-    (i) =>
-      (!i.jaOnly || lang === "ja") && (!i.langs || i.langs.includes(lang ?? ""))
-  );
+  const items = visibleNavItems(lang);
 
   const isActive = (item: NavItem) =>
     [item.href, ...(item.match ?? [])].some(

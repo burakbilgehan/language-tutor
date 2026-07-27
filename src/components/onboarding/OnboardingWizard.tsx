@@ -62,14 +62,19 @@ const TOTAL_STEPS = 6;
 const S = {
   tr: {
     introTitle: "Merhaba! 🌸",
-    introSubtitle: "Önce bir kayıt var mı diye soralım.",
-    loadTitle: "Kayıt yükle",
+    introSubtitle:
+      "Ben Kumo — bu yolculukta yol arkadaşınım. Nasıl başlamak istersin?",
+    setupTitle: "Yolculuğuna başla",
+    setupDesc:
+      "Birkaç soruyla seni tanıyayım; hedefine göre sana özel bir yol haritası çizeyim.",
+    setupButton: "✨ Hadi başlayalım",
+    loadTitle: "Kaydını geri yükle",
     loadDesc: "Daha önce indirdiğin bir kayıt dosyan varsa yükle, kaldığın yerden devam et.",
     loadButton: "📂 Dosya seç",
     loadingLabel: "Yükleniyor...",
-    newTitle: "Yeni başla",
-    newDesc: "Sıfırdan bir dil yolculuğuna başla — birkaç soruyla seni tanıyalım.",
-    newButton: "✨ Yeni başla",
+    anonTitle: "Önce bir göz at",
+    anonDesc:
+      "Soruları atla — gramer ve sözlük kütüphanesi hemen açılsın. Ayrıntıları sonra Ayarlar'dan kişiselleştirebilirsin. Hangi dile bakıyoruz?",
     signInTitle: "Giriş yap",
     signInDesc:
       "Google hesabınla giriş yap, buluttaki kaydını bu cihaza getir. (Giriş isteğe bağlı — istemezsen anonim devam edebilirsin.)",
@@ -157,14 +162,19 @@ const S = {
   },
   en: {
     introTitle: "Hello! 🌸",
-    introSubtitle: "First, let's check if you already have a save.",
-    loadTitle: "Load save",
+    introSubtitle:
+      "I'm Kumo — your companion on this journey. How would you like to start?",
+    setupTitle: "Start your journey",
+    setupDesc:
+      "A few questions so I can get to know you; I'll draw a map tailored to your goal.",
+    setupButton: "✨ Let's begin",
+    loadTitle: "Restore a save",
     loadDesc: "If you have a save file from before, load it and pick up where you left off.",
     loadButton: "📂 Choose file",
     loadingLabel: "Loading...",
-    newTitle: "New game",
-    newDesc: "Start a fresh language journey — a few questions and we'll get to know you.",
-    newButton: "✨ Start new",
+    anonTitle: "Look around first",
+    anonDesc:
+      "Skip the questions — the grammar and dictionary library opens right away. You can customize the details later in Settings. Which language shall we look at?",
     signInTitle: "Sign in",
     signInDesc:
       "Sign in with your Google account and bring your cloud save to this device. (Optional — you can continue anonymously instead.)",
@@ -286,6 +296,41 @@ export function OnboardingWizard() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ---- T-056: the anonymous door — one-touch language pick, sensible
+  // defaults for everything else, straight to the /map hub. --------------
+  const [anonBusy, setAnonBusy] = useState<string | null>(null);
+  const [anonError, setAnonError] = useState<string | null>(null);
+
+  const startAnonymous = async (lang: LanguageCode) => {
+    setAnonBusy(lang);
+    setAnonError(null);
+    try {
+      // A NORMAL profile (no schema special-casing): targetLanguage is the one
+      // question that can't be defaulted (core reads are profile-bound and the
+      // language is immutable per profile). Everything else falls to neutral
+      // defaults the user can change in Settings — or by re-running the wizard
+      // for the same language, which reuses this profile (createOrReuseProfile).
+      await createProfileApi({
+        targetLanguage: lang,
+        nativeLanguage: draft.nativeLanguage, // browser-locale preselection
+        uiLanguage: draft.uiLanguage,
+        displayName: draft.uiLanguage === "en" ? "Guest" : "Misafir",
+        goals: ["Günlük konuşma"],
+        selfLevel: "zero",
+        minutesPerWeek: 150,
+        interests: ["Seyahat"],
+        motivation: "",
+      });
+      // Deliberately NO curriculumGenerate here, even with an LLM configured:
+      // the personalization questions are unanswered, so generating from
+      // defaults would waste tokens. The /map hub owns the trigger.
+      window.location.href = withBase("/map");
+    } catch (err) {
+      setAnonError(localizeError(err, resolveUiLang(draft.uiLanguage)));
+      setAnonBusy(null);
+    }
+  };
 
   // ---- T-048: the third door (Google sign-in) + the OAuth return leg -------
   //
@@ -782,36 +827,44 @@ export function OnboardingWizard() {
           <div
             className={`grid gap-4 sm:grid-cols-2 ${pushOffer !== null ? "hidden" : ""}`}
           >
-            <div className="rounded-xl border-2 border-surface-2 bg-background p-5">
+            {/* 1 — the primary door: guided setup (T-056 reorder) */}
+            <div className="rounded-xl border-2 border-accent/40 bg-background p-5 sm:col-span-2">
+              <div className="font-semibold">{t.setupTitle}</div>
+              <p className="mt-1 mb-4 text-sm text-ink-soft">{t.setupDesc}</p>
+              <CozyButton
+                onClick={() => setShowIntro(false)}
+                disabled={anonBusy !== null}
+              >
+                {t.setupButton}
+              </CozyButton>
+            </div>
+
+            {/* 2 — restore a save file */}
+            <div
+              className={`rounded-xl border-2 border-surface-2 bg-background p-5 ${
+                auth.backendAvailable ? "" : "sm:col-span-2"
+              }`}
+            >
               <div className="font-semibold">{t.loadTitle}</div>
               <p className="mt-1 mb-4 text-sm text-ink-soft">{t.loadDesc}</p>
               <CozyButton
                 variant="soft"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={importing}
+                disabled={importing || anonBusy !== null}
               >
                 {importing ? t.loadingLabel : t.loadButton}
               </CozyButton>
             </div>
 
-            <div className="rounded-xl border-2 border-surface-2 bg-background p-5">
-              <div className="font-semibold">{t.newTitle}</div>
-              <p className="mt-1 mb-4 text-sm text-ink-soft">{t.newDesc}</p>
-              <CozyButton onClick={() => setShowIntro(false)}>
-                {t.newButton}
-              </CozyButton>
-            </div>
-
-            {/* T-048 third door. Rendered only where a cloud backend actually
-                exists — the GitHub Pages mirror is anonymous-only and shows
-                exactly the two original doors, unchanged. Signing in is never
-                a gate: the anonymous path above is untouched.
+            {/* 3 — cloud (T-048). Rendered only where a cloud backend actually
+                exists — a backend-less static mirror shows the other three
+                doors, unchanged. Signing in is never a gate.
                 T-049 fix 3: an ALREADY signed-in user must not be shown a
                 sign-in button (T-048's known polish debt). While `auth.loading`
                 the card renders its "checking" line rather than flashing the
                 signed-out shape first — useAuthStatus defaults pessimistic. */}
             {auth.backendAvailable && (
-              <div className="rounded-xl border-2 border-surface-2 bg-background p-5 sm:col-span-2">
+              <div className="rounded-xl border-2 border-surface-2 bg-background p-5">
                 {auth.loading ? (
                   <p className="text-sm text-ink-soft">{t.checkingAccount}</p>
                 ) : auth.user ? (
@@ -850,6 +903,28 @@ export function OnboardingWizard() {
                 )}
               </div>
             )}
+
+            {/* 4 — T-056: start anonymously. One-touch language pick; the
+                rest of the wizard is skipped and the user lands on the /map
+                hub (static library + "connect an LLM" state). */}
+            <div className="rounded-xl border-2 border-surface-2 bg-background p-5 sm:col-span-2">
+              <div className="font-semibold">{t.anonTitle}</div>
+              <p className="mt-1 mb-4 text-sm text-ink-soft">{t.anonDesc}</p>
+              <div className="flex flex-wrap gap-3">
+                {LANGUAGES.map((l) => (
+                  <CozyButton
+                    key={l.code}
+                    variant="soft"
+                    disabled={anonBusy !== null || importing}
+                    onClick={() => void startAnonymous(l.code)}
+                  >
+                    {anonBusy === l.code
+                      ? t.preparing
+                      : languageLabel(l.code, draft.uiLanguage)}
+                  </CozyButton>
+                ))}
+              </div>
+            </div>
           </div>
 
           {fileInput}
@@ -884,6 +959,12 @@ export function OnboardingWizard() {
           {importError && (
             <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
               {importError}
+            </p>
+          )}
+
+          {anonError && (
+            <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
+              {anonError}
             </p>
           )}
         </div>

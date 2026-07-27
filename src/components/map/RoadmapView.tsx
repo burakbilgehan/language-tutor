@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatsHeader } from "@/components/shared/StatsHeader";
+import { StatsHeader, visibleNavItems } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { GeneratingScreen } from "@/components/onboarding/GeneratingScreen";
@@ -44,15 +44,47 @@ const S = {
     retranslate: "Bu dile çevir",
     retranslating: "Çevriliyor...",
     hiddenTitle: "(bu dilde henüz yok)",
-    noCurriculumTitle: "Müfredatın henüz hazır değil",
+    noCurriculumTitle: "Kişisel haritan henüz çizilmedi",
     noCurriculumNoLlm:
-      "Kişisel ders haritan için bir yapay zekâ bağlantısı gerekiyor — Ayarlar'dan bağlayabilirsin. Bu arada gramer ve sözlük kütüphanesi tamamen hazır, hemen çalışmaya başlayabilirsin.",
+      "Ders haritanı sana özel çizmem için bir yapay zekâ bağlantısı gerekiyor — Ayarlar'dan bağlayabilirsin. Acele yok: aşağıdaki kütüphane şimdiden açık.",
     noCurriculumLlm:
       "Yapay zekâ bağlantın hazır — kişisel müfredatını şimdi oluşturabilirsin. (Birkaç dakika sürebilir.)",
     generateNow: "Müfredatı oluştur",
     generating: "Hazırlanıyor...",
-    goGrammar: "📖 Gramer kütüphanesi",
     goSettings: "⚙️ LLM bağla",
+    hubHeading: "Bu arada kütüphane açık — bunlar tamamen hazır:",
+    hubCards: {
+      grammar: {
+        icon: "📖",
+        title: "Gramer",
+        desc: "Seviye seviye tüm konular, örnekleriyle.",
+      },
+      vocab: {
+        icon: "📚",
+        title: "Sözlük",
+        desc: "HSK kelime listeleri: pinyin, anlam, örnekler.",
+      },
+      pinyin: {
+        icon: "🔤",
+        title: "Pinyin",
+        desc: "Ses ve ton tablosu.",
+      },
+      stroke: {
+        icon: "✍️",
+        title: "Yazım",
+        desc: "Kanji çizim sırası pratiği.",
+      },
+      conjugate: {
+        icon: "🔀",
+        title: "Çekim",
+        desc: "Fiil çekimleri ve kalıp tabloları.",
+      },
+      exam: {
+        icon: "🎓",
+        title: "Sınav",
+        desc: "Sınav formatları ve kaynak rehberi.",
+      },
+    } as Record<string, { icon: string; title: string; desc: string }>,
   },
   en: {
     loadFailed: "Failed to load",
@@ -74,15 +106,47 @@ const S = {
     retranslate: "Translate to this language",
     retranslating: "Translating...",
     hiddenTitle: "(not in this language yet)",
-    noCurriculumTitle: "Your curriculum isn't ready yet",
+    noCurriculumTitle: "Your personal map isn't drawn yet",
     noCurriculumNoLlm:
-      "Your personal lesson map needs an AI connection — you can set one up in Settings. Meanwhile the grammar and dictionary library is fully ready; start studying right away.",
+      "Drawing a lesson map made just for you needs an AI connection — you can set one up in Settings. No rush: the library below is already open.",
     noCurriculumLlm:
       "Your AI connection is ready — you can generate your personal curriculum now. (This can take a few minutes.)",
     generateNow: "Generate curriculum",
     generating: "Preparing...",
-    goGrammar: "📖 Grammar library",
     goSettings: "⚙️ Connect an LLM",
+    hubHeading: "Meanwhile the library is open — these are fully ready:",
+    hubCards: {
+      grammar: {
+        icon: "📖",
+        title: "Grammar",
+        desc: "Every topic, level by level, with examples.",
+      },
+      vocab: {
+        icon: "📚",
+        title: "Dictionary",
+        desc: "HSK word lists: pinyin, meanings, examples.",
+      },
+      pinyin: {
+        icon: "🔤",
+        title: "Pinyin",
+        desc: "Sound and tone chart.",
+      },
+      stroke: {
+        icon: "✍️",
+        title: "Writing",
+        desc: "Kanji stroke-order practice.",
+      },
+      conjugate: {
+        icon: "🔀",
+        title: "Conjugate",
+        desc: "Verb conjugations and pattern tables.",
+      },
+      exam: {
+        icon: "🎓",
+        title: "Exams",
+        desc: "Exam formats and resource guide.",
+      },
+    } as Record<string, { icon: string; title: string; desc: string }>,
   },
 };
 
@@ -320,35 +384,79 @@ export function RoadmapView() {
       />
     );
   }
-  // T-056: no curriculum yet. Never a blind empty map — say what's missing,
-  // open the static library, and offer generation once an LLM exists.
+  // T-056: no curriculum yet. Never a blind empty map — the hub: an honest
+  // status card (generate when an LLM exists, "connect one" otherwise) over
+  // the language-aware static library, which is instantly usable.
   if (notReady) {
+    const cards = visibleNavItems(meta?.targetLanguage).filter(
+      // Not in the hub: lessons (this page), review (a fresh LLM-less profile
+      // has no SRS cards yet), chat (LLM-gated surface).
+      (i) => !["/map", "/review", "/chat"].includes(i.href)
+    );
     return (
-      <CenteredPage>
-        <div className="text-4xl">🗺️</div>
-        <h2 className="text-xl font-semibold">{t.noCurriculumTitle}</h2>
-        <p className="text-sm text-ink-soft">
-          {llm.configured ? t.noCurriculumLlm : t.noCurriculumNoLlm}
-        </p>
-        {llm.configured ? (
-          <CozyButton
-            onClick={() => void startGenerate()}
-            disabled={genBusy || !profileId}
-          >
-            {genBusy ? t.generating : t.generateNow}
-          </CozyButton>
-        ) : (
-          <div className="flex flex-wrap justify-center gap-3">
-            <CozyButton onClick={() => router.push("/grammar")}>
-              {t.goGrammar}
-            </CozyButton>
-            <CozyButton variant="soft" onClick={() => router.push("/settings")}>
-              {t.goSettings}
-            </CozyButton>
-          </div>
-        )}
-        {genError && <p className="text-sm text-danger">{genError}</p>}
-      </CenteredPage>
+      <div className="min-h-dvh pb-16">
+        <StatsHeader
+          title={
+            meta
+              ? languageLabel(meta.targetLanguage, meta.uiLanguage)
+              : undefined
+          }
+        />
+        <main className="mx-auto max-w-xl px-4">
+          <section className="mt-10 rounded-cozy bg-surface p-6 text-center shadow-cozy">
+            <div className="text-4xl">🗺️</div>
+            <h2 className="mt-2 text-xl font-semibold">
+              {t.noCurriculumTitle}
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">
+              {llm.configured ? t.noCurriculumLlm : t.noCurriculumNoLlm}
+            </p>
+            <div className="mt-4 flex justify-center">
+              {llm.configured ? (
+                <CozyButton
+                  onClick={() => void startGenerate()}
+                  disabled={genBusy || !profileId}
+                >
+                  {genBusy ? t.generating : t.generateNow}
+                </CozyButton>
+              ) : (
+                <CozyButton
+                  variant="soft"
+                  onClick={() => router.push("/settings")}
+                >
+                  {t.goSettings}
+                </CozyButton>
+              )}
+            </div>
+            {genError && (
+              <p className="mt-3 text-sm text-danger">{genError}</p>
+            )}
+          </section>
+
+          <section className="mt-8">
+            <p className="mb-3 text-sm font-semibold text-ink-soft">
+              {t.hubHeading}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {cards.map((c) => {
+                const card = t.hubCards[c.label];
+                if (!card) return null;
+                return (
+                  <button
+                    key={c.href}
+                    onClick={() => router.push(c.href)}
+                    className="cursor-pointer rounded-xl border-2 border-surface-2 bg-surface p-4 text-left transition-colors hover:border-accent"
+                  >
+                    <div className="text-2xl">{card.icon}</div>
+                    <div className="mt-1 font-semibold">{card.title}</div>
+                    <p className="mt-0.5 text-sm text-ink-soft">{card.desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </main>
+      </div>
     );
   }
   if (!data) {
