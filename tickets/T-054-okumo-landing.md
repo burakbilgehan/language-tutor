@@ -8,8 +8,11 @@ confidence: low
 depends: [T-052]
 created: 2026-07-27
 ---
-Handoff'ta ayrı scope (task 1-3 dışı): okumo.dev için landing sayfası.
-Referans: `design/okumo-sky/Okumo Landing.dc.html`.
+Handoff'ta ayrı scope: okumo.dev için landing sayfası.
+Referans: v1 mock `design/okumo-sky/Okumo Landing.dc.html` idi — v1 handoff
+GEÇERSİZ ve silindi (git geçmişinde: `5ad0c88`). Bu iş çekildiğinde v2
+Yūyake sistemi (`design/okumo-yuyake/`) baz alınır; landing mock'u v2'de
+yok, DS v2 token/bileşen rolleriyle sıfırdan kurgulanır.
 
 Şu an okumo.dev = uygulamanın kendisi (Worker static assets, anonim başlangıç
 + login). Landing = ürünü tanıtan, "başla" ile app'e geçiren pazarlama yüzeyi.

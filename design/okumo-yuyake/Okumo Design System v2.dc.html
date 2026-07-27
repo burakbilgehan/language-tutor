@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+body { margin:0; background:#f6ead2; font-family:"Nunito Sans",ui-sans-serif,system-ui,sans-serif; color:#251e18; }
+a { color:#2f4a70; text-decoration:none; border-bottom:1px solid rgba(47,74,112,.35); }
+a:hover { color:#24395a; border-bottom-color:#24395a; }
+@keyframes pulse-glow { 0%,100%{ box-shadow:0 0 0 0 rgb(193 74 29/.35) } 50%{ box-shadow:0 0 0 10px rgb(193 74 29/0) } }
+@keyframes float-slow { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
+</style>
+</helmet>
+
+<div style="max-width:1180px; margin:0 auto; padding:0 40px 120px">
+
+<header style="padding:88px 0 56px; display:flex; flex-direction:column; gap:28px">
+  <div style="display:flex; align-items:center; gap:20px">
+    <svg viewBox="0 0 128 86" width="72" height="48" aria-label="Okumo markası">
+      <g fill="#c14a1d"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g>
+      <rect x="30" y="74" width="26" height="7" rx="3.5" fill="#2f4a70"></rect>
+      <rect x="64" y="74" width="42" height="7" rx="3.5" fill="#2f4a70"></rect>
+    </svg>
+    <div style="display:flex; flex-direction:column; gap:2px">
+      <div style="font-family:Fraunces,Georgia,serif; font-size:38px; font-weight:600; letter-spacing:-.015em; line-height:1">okumo</div>
+      <div style="font-size:11px; font-weight:800; letter-spacing:.24em; text-transform:uppercase; color:#6e5b45">dil yolculuğun</div>
+    </div>
+  </div>
+  <h1 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:64px; font-weight:600; letter-spacing:-.02em; line-height:1.05; max-width:16ch">Tasarım Sistemi v2 · Yūyake</h1>
+  <p style="margin:0; max-width:62ch; font-size:19px; line-height:1.65; color:#6e5b45; text-wrap:pretty">Samurai Champloo'dan gelen ders: doygunluk değil <strong>derinlik</strong>. Sıcak krem zemin üzerinde üç mürekkep: <strong style="color:#c14a1d">vermilyon</strong> harekete çağırır, <strong style="color:#2f4a70">aizome indigo</strong> bilgilendirir ve onaylar, <strong style="color:#b07414">amber</strong> ödüllendirir. Yeşil emekli; soluk pastel yok.</p>
+  <div style="display:flex; gap:10px; flex-wrap:wrap; padding-top:8px">
+    <span style="background:#fdf6e7; border-radius:999px; padding:8px 16px; font-size:13px; font-weight:700; box-shadow:0 2px 8px rgb(37 30 24/.07)">Fraunces + Nunito Sans</span>
+    <span style="background:#fdf6e7; border-radius:999px; padding:8px 16px; font-size:13px; font-weight:700; box-shadow:0 2px 8px rgb(37 30 24/.07)">Açık + koyu mod</span>
+    <span style="background:#fdf6e7; border-radius:999px; padding:8px 16px; font-size:13px; font-weight:700; box-shadow:0 2px 8px rgb(37 30 24/.07)">Tailwind v4 <code style="background:#f4e5cb; border-radius:6px; padding:1px 5px">@theme</code> token'ları</span>
+  </div>
+</header>
+
+<section style="padding:48px 0; border-top:1px solid #e3d3ae">
+  <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:8px">
+    <span style="font-size:12px; font-weight:800; letter-spacing:.2em; color:#a08b6e">01</span>
+    <h2 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:36px; font-weight:600; letter-spacing:-.01em">Renk</h2>
+  </div>
+  <p style="margin:0 0 32px; max-width:60ch; font-size:16px; line-height:1.7; color:#6e5b45">v2'de tokenlar <strong>değişiyor</strong>: zemin ısınır, terracotta vermilyona koyulaşır, yosun yeşili kalkar, soluk gökyüzü ailesi yerini koyu indigoya bırakır.</p>
+
+  <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:14px">Zemin &amp; mürekkep</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:14px; margin-bottom:36px">
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#f6ead2; border-bottom:1px solid #eee0c2"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">background</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#f6ead2</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#fdf6e7; border-bottom:1px solid #eee0c2"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">surface</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#fdf6e7</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#f4e5cb"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">surface-2</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#f4e5cb</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#251e18"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">ink</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#251e18</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#6e5b45"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">ink-soft</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#6e5b45</div></div></div>
+  </div>
+
+  <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#a0552e; margin-bottom:14px">Vermilyon — eylem</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:14px; margin-bottom:36px">
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#c14a1d"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">accent</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#c14a1d</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#f2d8c4"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">accent-soft</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#f2d8c4</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#8f3116"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">danger</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#8f3116</div></div></div>
+  </div>
+
+  <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#2f4a70; margin-bottom:14px">Aizome indigo — bilgi + başarı</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:14px; margin-bottom:20px">
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#e4ebf3; border-bottom:1px solid #d5e0ec"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">indigo-soft</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#e4ebf3</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#41608c"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">indigo-mid</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#41608c</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#2f4a70"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">indigo</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#2f4a70</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#24395a"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">indigo-deep</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#24395a</div></div></div>
+  </div>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:36px">
+    <div style="flex:1; min-width:280px; background:#e4ebf3; border-radius:16px; padding:18px 20px">
+      <div style="font-size:13px; font-weight:800; color:#24395a; margin-bottom:6px">İndigo ne zaman</div>
+      <div style="font-size:14.5px; line-height:1.65; color:#33507a">Bilgi, durum <strong>ve başarı</strong>: tamamlanma işaretleri, ilerleme çubukları, linkler, ipuçları, Kumo maskotu, odak hâli, tablo başlıkları. Yeşilin tüm görevlerini devralır.</div>
+    </div>
+    <div style="flex:1; min-width:280px; background:#f2d8c4; border-radius:16px; padding:18px 20px">
+      <div style="font-size:13px; font-weight:800; color:#8f3116; margin-bottom:6px">Vermilyon ne zaman</div>
+      <div style="font-size:14.5px; line-height:1.65; color:#6f3a24">Eylem ve enerji: birincil buton, aktif sekme, açılabilir ders düğümü, ünite etiketi, kutlama. Sayfada en fazla <strong>bir</strong> baskın vermilyon odak — gücü kıtlığından gelir.</div>
+    </div>
+    <div style="flex:1; min-width:280px; background:#f7ecd2; border:1px solid #e8d5a6; border-radius:16px; padding:18px 20px">
+      <div style="font-size:13px; font-weight:800; color:#b07414; margin-bottom:6px">Amber ne zaman</div>
+      <div style="font-size:14.5px; line-height:1.65; color:#7d6031">Ödül: XP, seri, rozetler, yıldızlar. Metin olarak <code style="background:#efe0ba; border-radius:5px; padding:0 4px">#b07414</code> (kontrast), dolgu olarak <code style="background:#efe0ba; border-radius:5px; padding:0 4px">#e8a13c</code>.</div>
+    </div>
+  </div>
+
+  <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:14px">Semantik</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:14px; margin-bottom:36px">
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#2f4a70"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">tamamlandı → indigo</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#2f4a70</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#e8a13c"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">amber · XP</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#e8a13c</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#d9c6a4"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">locked</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#d9c6a4</div></div></div>
+    <div style="background:#fdf6e7; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgb(37 30 24/.07)"><div style="height:76px; background:#8f3116"></div><div style="padding:12px 14px"><div style="font-size:13px; font-weight:800">danger / yanlış</div><div style="font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace">#8f3116</div></div></div>
+  </div>
+
+  <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:14px">Koyu mod — Yūyake Gece</div>
+  <div style="background:#1c1712; border-radius:22px; padding:26px">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px">
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#1c1712"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">background</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#1c1712</div></div></div>
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#282019"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">surface</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#282019</div></div></div>
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#322a20"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">surface-2</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#322a20</div></div></div>
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#e07b3f"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">accent</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#e07b3f</div></div></div>
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#8fa9cf"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">indigo</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#8fa9cf</div></div></div>
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#222c3e"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">indigo-soft</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#222c3e</div></div></div>
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#e8a13c"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">amber</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#e8a13c</div></div></div>
+      <div style="background:#282019; border-radius:14px; overflow:hidden"><div style="height:56px; background:#4a3f30"></div><div style="padding:10px 12px"><div style="font-size:12px; font-weight:800; color:#f0e4cd">locked</div><div style="font-size:11px; color:#a08b6e; font-family:ui-monospace,monospace">#4a3f30</div></div></div>
+    </div>
+    <p style="margin:16px 0 0; font-size:13.5px; line-height:1.6; color:#a08b6e">Gece ölçek tersine döner: indigo aydınlanır (<code style="background:#322a20; border-radius:5px; padding:0 5px; color:#d9c9ab">#8fa9cf</code>), vermilyon yumuşar (<code style="background:#322a20; border-radius:5px; padding:0 5px; color:#d9c9ab">#e07b3f</code>). Zemin siyah değil, sıcak mürekkep-kahve.</p>
+  </div>
+</section>
+
+<section style="padding:48px 0; border-top:1px solid #e3d3ae">
+  <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:8px">
+    <span style="font-size:12px; font-weight:800; letter-spacing:.2em; color:#a08b6e">02</span>
+    <h2 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:36px; font-weight:600; letter-spacing:-.01em">Tipografi</h2>
+  </div>
+  <p style="margin:0 0 32px; max-width:60ch; font-size:16px; line-height:1.7; color:#6e5b45">Değişmedi: Fraunces başlıklarda, Nunito Sans her yerde. CJK metin kendi yığınını ve 1.55em boyutunu korur.</p>
+  <div style="background:#fdf6e7; border-radius:22px; padding:36px 40px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09); display:flex; flex-direction:column; gap:26px">
+    <div style="display:flex; align-items:baseline; gap:24px; border-bottom:1px solid #f4e5cb; padding-bottom:22px">
+      <div style="width:170px; flex-shrink:0; font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace; line-height:1.6">Display / 56<br>Fraunces 600</div>
+      <div style="font-family:Fraunces,serif; font-size:56px; font-weight:600; letter-spacing:-.02em; line-height:1.08">Dil yolculuğun</div>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:24px; border-bottom:1px solid #f4e5cb; padding-bottom:22px">
+      <div style="width:170px; flex-shrink:0; font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace; line-height:1.6">H1 / 32<br>Fraunces 600</div>
+      <div style="font-family:Fraunces,serif; font-size:32px; font-weight:600; letter-spacing:-.01em">Şehirde yön sormak</div>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:24px; border-bottom:1px solid #f4e5cb; padding-bottom:22px">
+      <div style="width:170px; flex-shrink:0; font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace; line-height:1.6">H2 / 22<br>Fraunces 600</div>
+      <div style="font-family:Fraunces,serif; font-size:22px; font-weight:600">Ünite başlığı</div>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:24px; border-bottom:1px solid #f4e5cb; padding-bottom:22px">
+      <div style="width:170px; flex-shrink:0; font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace; line-height:1.6">Gövde / 16<br>Nunito 400 · 1.7</div>
+      <div style="font-size:16px; line-height:1.7; max-width:52ch">Türkçe'de nezaket biçimleri, Japonca'daki keigo kadar katmanlı değildir; yine de -sınız eki günlük konuşmada mesafeyi belirler. ğ ü ş İ ı ö ç Ğ Ü Ş Ö Ç</div>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:24px; border-bottom:1px solid #f4e5cb; padding-bottom:22px">
+      <div style="width:170px; flex-shrink:0; font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace; line-height:1.6">Küçük / 14<br>Nunito 400</div>
+      <div style="font-size:14px; line-height:1.6; color:#6e5b45">Yardımcı metin, alt başlık, ipucu satırı.</div>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:24px; border-bottom:1px solid #f4e5cb; padding-bottom:22px">
+      <div style="width:170px; flex-shrink:0; font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace; line-height:1.6">Etiket / 11<br>Nunito 800 · .16em</div>
+      <div style="font-size:11px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#c14a1d">Ünite 3</div>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:24px">
+      <div style="width:170px; flex-shrink:0; font-size:12px; color:#8a6f52; font-family:ui-monospace,monospace; line-height:1.6">CJK / 1.55em<br>lh 1.9</div>
+      <div>
+        <div style="font-family:'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif; font-size:24.8px; line-height:1.9">駅はどこですか。</div>
+        <div style="font-family:'PingFang SC','Noto Sans SC',sans-serif; font-size:24.8px; line-height:1.9">车站在哪里？</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:48px 0; border-top:1px solid #e3d3ae">
+  <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:8px">
+    <span style="font-size:12px; font-weight:800; letter-spacing:.2em; color:#a08b6e">03</span>
+    <h2 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:36px; font-weight:600; letter-spacing:-.01em">Şekil, gölge, boşluk</h2>
+  </div>
+  <p style="margin:0 0 32px; max-width:60ch; font-size:16px; line-height:1.7; color:#6e5b45">Değişmedi: tek gölge tokenı <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">shadow-cozy</code>; yükseklik yüzey rengiyle anlatılır.</p>
+  <div style="display:flex; gap:20px; flex-wrap:wrap">
+    <div style="flex:1; min-width:220px; background:#fdf6e7; border-radius:20px; padding:24px; box-shadow:0 2px 8px rgb(37 30 24/.07)">
+      <div style="display:flex; gap:14px; align-items:flex-end; margin-bottom:18px">
+        <div style="width:56px; height:56px; background:#f2d8c4; border-radius:8px"></div>
+        <div style="width:56px; height:56px; background:#f2d8c4; border-radius:16px"></div>
+        <div style="width:56px; height:56px; background:#c14a1d; border-radius:20px"></div>
+        <div style="width:56px; height:56px; background:#f2d8c4; border-radius:999px"></div>
+      </div>
+      <div style="font-size:13px; font-weight:800; margin-bottom:4px">Köşe yarıçapı</div>
+      <div style="font-size:13.5px; line-height:1.6; color:#6e5b45; font-family:ui-monospace,monospace">8 · 16 · 20 (cozy) · full</div>
+    </div>
+    <div style="flex:1; min-width:220px; background:#fdf6e7; border-radius:20px; padding:24px; box-shadow:0 2px 8px rgb(37 30 24/.07)">
+      <div style="display:flex; gap:16px; align-items:center; margin-bottom:18px; height:56px">
+        <div style="width:74px; height:44px; background:#f6ead2; border-radius:14px"></div>
+        <div style="width:74px; height:44px; background:#fdf6e7; border-radius:14px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09)"></div>
+      </div>
+      <div style="font-size:13px; font-weight:800; margin-bottom:4px">Gölge</div>
+      <div style="font-size:13.5px; line-height:1.6; color:#6e5b45; font-family:ui-monospace,monospace">yok · shadow-cozy</div>
+    </div>
+    <div style="flex:1; min-width:220px; background:#fdf6e7; border-radius:20px; padding:24px; box-shadow:0 2px 8px rgb(37 30 24/.07)">
+      <div style="display:flex; gap:6px; align-items:flex-end; margin-bottom:18px; height:56px">
+        <div style="width:4px; height:20px; background:#41608c"></div>
+        <div style="width:8px; height:28px; background:#41608c"></div>
+        <div style="width:12px; height:34px; background:#2f4a70"></div>
+        <div style="width:16px; height:40px; background:#2f4a70"></div>
+        <div style="width:24px; height:48px; background:#24395a"></div>
+        <div style="width:32px; height:56px; background:#24395a"></div>
+      </div>
+      <div style="font-size:13px; font-weight:800; margin-bottom:4px">Boşluk ölçeği</div>
+      <div style="font-size:13.5px; line-height:1.6; color:#6e5b45; font-family:ui-monospace,monospace">4 · 8 · 12 · 16 · 24 · 32</div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:48px 0; border-top:1px solid #e3d3ae">
+  <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:8px">
+    <span style="font-size:12px; font-weight:800; letter-spacing:.2em; color:#a08b6e">04</span>
+    <h2 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:36px; font-weight:600; letter-spacing:-.01em">Bileşenler</h2>
+  </div>
+  <p style="margin:0 0 32px; max-width:60ch; font-size:16px; line-height:1.7; color:#6e5b45">Yapı aynı, renk rolleri yeni: başarı ve bilgi indigoda, eylem vermilyonda, ödül amberde.</p>
+
+  <div style="display:flex; flex-direction:column; gap:22px">
+
+    <div style="background:#fdf6e7; border-radius:22px; padding:28px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09)">
+      <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:18px">Butonlar · CozyButton</div>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center">
+        <button style="border:0; border-radius:999px; padding:12px 24px; font-family:inherit; font-size:16px; font-weight:700; background:#c14a1d; color:#fdf6e7; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09); cursor:pointer" style-hover="filter:brightness(1.1)" style-active="transform:scale(.95)">Derse başla</button>
+        <button style="border:0; border-radius:999px; padding:12px 24px; font-family:inherit; font-size:16px; font-weight:700; background:#f4e5cb; color:#251e18; cursor:pointer" style-hover="background:#f2d8c4" style-active="transform:scale(.95)">Sonra</button>
+        <button style="border:0; border-radius:999px; padding:12px 24px; font-family:inherit; font-size:16px; font-weight:700; background:transparent; color:#6e5b45; cursor:pointer" style-hover="color:#251e18">Atla</button>
+        <button style="border:0; border-radius:999px; padding:12px 24px; font-family:inherit; font-size:16px; font-weight:700; background:#2f4a70; color:#fdf6e7; box-shadow:0 2px 8px rgb(37 30 24/.07); cursor:pointer" style-hover="filter:brightness(1.12)" style-active="transform:scale(.95)">Nasıl çalışır?</button>
+        <button disabled style="border:0; border-radius:999px; padding:12px 24px; font-family:inherit; font-size:16px; font-weight:700; background:#c14a1d; color:#fdf6e7; opacity:.4; cursor:not-allowed">Kilitli</button>
+      </div>
+      <div style="margin-top:14px; font-size:13.5px; color:#8a6f52; line-height:1.6">primary · soft · ghost · <strong style="color:#2f4a70">info (indigo)</strong> · disabled — hepsi <code style="background:#f4e5cb; border-radius:6px; padding:1px 5px">rounded-full</code>, <code style="background:#f4e5cb; border-radius:6px; padding:1px 5px">active:scale-95</code></div>
+    </div>
+
+    <div style="background:#fdf6e7; border-radius:22px; padding:28px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09)">
+      <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:18px">Durum pill'leri · StatsHeader</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+        <span style="display:flex; align-items:center; gap:6px; background:#fdf6e7; border-radius:999px; padding:7px 14px; font-size:14px; font-weight:700; box-shadow:0 2px 8px rgb(37 30 24/.07)">🔥 12</span>
+        <span style="display:flex; align-items:center; gap:6px; background:#fdf6e7; border-radius:999px; padding:7px 14px; font-size:14px; font-weight:700; color:#b07414; box-shadow:0 2px 8px rgb(37 30 24/.07)">✦ 840 XP</span>
+        <span style="display:flex; align-items:center; gap:6px; background:#fdf6e7; border-radius:999px; padding:7px 14px; font-size:14px; font-weight:700; color:#2f4a70; box-shadow:0 2px 8px rgb(37 30 24/.07)">💸 $0.24</span>
+        <span style="position:relative; display:flex; align-items:center; gap:6px; background:#fdf6e7; border-radius:999px; padding:7px 14px; font-size:14px; font-weight:700; box-shadow:0 2px 8px rgb(37 30 24/.07)">⬇︎ Yedekle<span style="position:absolute; right:-2px; top:-2px; width:10px; height:10px; border-radius:999px; background:#e8a13c; box-shadow:0 0 0 2px #f6ead2"></span></span>
+        <span style="display:flex; align-items:center; gap:8px; background:#fdf6e7; border-radius:999px; padding:7px 14px; font-size:14px; box-shadow:0 2px 8px rgb(37 30 24/.07)">🔍 <kbd style="font-family:inherit; font-size:12px; color:#6e5b45">⌘K</kbd></span>
+        <span style="position:relative; display:flex; align-items:center; gap:6px; background:#fdf6e7; border-radius:999px; padding:7px 14px; font-size:14px; font-weight:700; box-shadow:0 2px 8px rgb(37 30 24/.07)">⚙︎ Ayarlar<span style="position:absolute; right:-2px; top:-2px; width:10px; height:10px; border-radius:999px; background:#8f3116; box-shadow:0 0 0 2px #f6ead2"></span></span>
+      </div>
+    </div>
+
+    <div style="background:#fdf6e7; border-radius:22px; padding:28px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09)">
+      <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:18px">Sekmeler · bölüm navigasyonu</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center">
+        <span style="border-radius:999px; padding:7px 18px; font-size:15px; font-weight:600; background:#c14a1d; color:#fdf6e7; box-shadow:0 2px 8px rgb(37 30 24/.07)">Dersler</span>
+        <span style="border-radius:999px; padding:7px 18px; font-size:15px; font-weight:500; color:#251e18">Gramer</span>
+        <span style="border-radius:999px; padding:7px 18px; font-size:15px; font-weight:500; background:#f4e5cb; color:#251e18">Sözlük</span>
+        <span style="border-radius:999px; padding:7px 18px; font-size:15px; font-weight:500; color:#251e18">Çekim</span>
+        <span style="border-radius:999px; padding:7px 18px; font-size:15px; font-weight:500; color:#251e18">Tekrar</span>
+        <span style="border-radius:999px; padding:7px 18px; font-size:15px; font-weight:500; color:#251e18">Sohbet</span>
+      </div>
+      <div style="margin-top:14px; font-size:13.5px; color:#8a6f52">aktif · varsayılan · hover</div>
+    </div>
+
+    <div style="background:#fdf6e7; border-radius:22px; padding:28px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09)">
+      <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:18px">Ders düğümleri · RoadmapView</div>
+      <div style="display:flex; gap:34px; flex-wrap:wrap; align-items:flex-start">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px; width:96px">
+          <div style="width:64px; height:64px; border-radius:999px; background:#2f4a70; color:#fdf6e7; display:flex; align-items:center; justify-content:center; font-size:26px; box-shadow:0 2px 8px rgb(37 30 24/.07)">✓</div>
+          <div style="font-size:12px; font-weight:700; text-align:center; line-height:1.25">Selamlaşma</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px; width:96px">
+          <div style="width:64px; height:64px; border-radius:999px; background:#c14a1d; color:#fdf6e7; display:flex; align-items:center; justify-content:center; font-size:26px; animation:pulse-glow 2.2s ease-in-out infinite">📖</div>
+          <div style="font-size:12px; font-weight:700; text-align:center; line-height:1.25">Şehirde yön</div>
+          <div style="font-size:10px; font-weight:800; color:#b07414">+20 XP</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px; width:96px">
+          <div style="width:64px; height:64px; border-radius:999px; background:#d9c6a4; color:#fdf6e7; display:flex; align-items:center; justify-content:center; font-size:26px">🔒</div>
+          <div style="font-size:12px; font-weight:700; text-align:center; line-height:1.25; color:rgba(110,91,69,.6)">Alışveriş</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px; width:96px">
+          <div style="width:64px; height:64px; border-radius:999px; background:#c14a1d; color:#fdf6e7; display:flex; align-items:center; justify-content:center; font-size:26px">🏮</div>
+          <div style="font-size:12px; font-weight:700; text-align:center; line-height:1.25">Kontrol noktası</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px; width:96px">
+          <div style="width:64px; height:64px; border-radius:999px; background:#c14a1d; color:#fdf6e7; display:flex; align-items:center; justify-content:center; font-size:26px">⛩️</div>
+          <div style="font-size:12px; font-weight:700; text-align:center; line-height:1.25">Ünite sınavı</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:6px; width:96px">
+          <div style="width:64px; height:64px; border-radius:999px; background:#e4ebf3; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 2px 8px rgb(37 30 24/.07)">🔁</div>
+          <div style="font-size:12px; font-weight:700; text-align:center; line-height:1.25">Tekrar (8)</div>
+        </div>
+      </div>
+      <div style="margin-top:14px; font-size:13.5px; color:#8a6f52; line-height:1.6">Tamamlanan düğüm yosun yeşilinden <strong style="color:#2f4a70">indigoya</strong> geçti; tekrar düğümünün zemini <code style="background:#f4e5cb; border-radius:6px; padding:1px 5px">indigo-soft</code>.</div>
+    </div>
+
+    <div style="display:flex; gap:22px; flex-wrap:wrap">
+      <div style="flex:1; min-width:360px; background:#fdf6e7; border-radius:22px; padding:28px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09)">
+        <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:18px">Banner'lar</div>
+        <div style="display:flex; flex-direction:column; gap:12px">
+          <div style="background:#e4ebf3; border-radius:16px; padding:14px 18px; display:flex; gap:12px; align-items:flex-start">
+            <span style="font-size:18px; line-height:1.3">💡</span>
+            <div><div style="font-size:14.5px; font-weight:700; color:#24395a">Kelimeler tarayıcında kalıyor</div><div style="font-size:13.5px; line-height:1.6; color:#33507a">Hiçbir yere yüklenmez. Yedeklemeyi unutma.</div></div>
+          </div>
+          <div style="background:#fdf6e7; border:1px solid rgba(193,74,29,.35); border-radius:16px; padding:14px 18px; box-shadow:0 2px 8px rgb(37 30 24/.07)">
+            <div style="font-size:14.5px; font-weight:700">Müfredat başka bir dilde hazırlanmış</div>
+            <div style="font-size:13.5px; line-height:1.6; color:#6e5b45; margin-top:2px">İlerlemen korunur — yalnızca başlıklar çevrilir.</div>
+            <button style="margin-top:10px; border:0; border-radius:20px; background:#c14a1d; color:#fdf6e7; font-family:inherit; font-size:13.5px; font-weight:700; padding:8px 16px; cursor:pointer">Bu dile çevir</button>
+          </div>
+          <div style="background:#f4ded4; border-radius:16px; padding:14px 18px; display:flex; gap:12px; align-items:flex-start">
+            <span style="font-size:18px; line-height:1.3">⚠︎</span>
+            <div><div style="font-size:14.5px; font-weight:700; color:#8f3116">LLM yapılandırılmadı</div><div style="font-size:13.5px; line-height:1.6; color:#6f3a24">Yeni ders üretmek için Ayarlar → LLM.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1; min-width:360px; background:#fdf6e7; border-radius:22px; padding:28px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09)">
+        <div style="font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#8a6f52; margin-bottom:18px">Form &amp; alan</div>
+        <div style="display:flex; flex-direction:column; gap:14px">
+          <div>
+            <div style="font-size:13px; font-weight:700; margin-bottom:6px">Cevabın</div>
+            <div style="background:#f6ead2; border:1.5px solid #e3d3ae; border-radius:14px; padding:12px 16px; font-size:15.5px; color:#a08b6e">Buraya yaz…</div>
+          </div>
+          <div>
+            <div style="font-size:13px; font-weight:700; margin-bottom:6px">Odaklı</div>
+            <div style="background:#fdf6e7; border:1.5px solid #2f4a70; border-radius:14px; padding:12px 16px; font-size:15.5px; box-shadow:0 0 0 4px rgb(47 74 112/.15)">駅はどこですか</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap">
+            <span style="background:#f4e5cb; border-radius:999px; padding:8px 16px; font-size:14.5px; font-weight:600">bugün</span>
+            <span style="background:#e4ebf3; border:1.5px solid #2f4a70; border-radius:999px; padding:6.5px 14.5px; font-size:14.5px; font-weight:700; color:#24395a">yarın</span>
+            <span style="background:#e4ebf3; border-radius:999px; padding:8px 16px; font-size:14.5px; font-weight:700; color:#24395a">✓ doğru</span>
+            <span style="background:#f4ded4; border-radius:999px; padding:8px 16px; font-size:14.5px; font-weight:700; color:#8f3116">✕ yanlış</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:48px 0; border-top:1px solid #e3d3ae">
+  <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:8px">
+    <span style="font-size:12px; font-weight:800; letter-spacing:.2em; color:#a08b6e">05</span>
+    <h2 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:36px; font-weight:600; letter-spacing:-.01em">İkonografi</h2>
+  </div>
+  <p style="margin:0 0 32px; max-width:62ch; font-size:16px; line-height:1.7; color:#6e5b45">Emoji kalıyor — sıcaklığın kaynağı. Kural: <strong>her emoji sabit bir anlam taşır</strong>, dekoratif emoji yok. Bir kavram bir emoji.</p>
+  <div style="background:#fdf6e7; border-radius:22px; padding:28px; box-shadow:0 2px 8px rgb(37 30 24/.07), 0 8px 24px rgb(37 30 24/.09); display:grid; grid-template-columns:repeat(auto-fill,minmax(158px,1fr)); gap:18px">
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">📖</span><span style="font-size:13.5px; font-weight:600">ders</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🏮</span><span style="font-size:13.5px; font-weight:600">kontrol noktası</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">⛩️</span><span style="font-size:13.5px; font-weight:600">ünite sınavı</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🔒</span><span style="font-size:13.5px; font-weight:600">kilitli</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🔁</span><span style="font-size:13.5px; font-weight:600">tekrar / SRS</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🔥</span><span style="font-size:13.5px; font-weight:600">seri</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">✦</span><span style="font-size:13.5px; font-weight:600">XP</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🗻</span><span style="font-size:13.5px; font-weight:600">sonraki seviye</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🎌</span><span style="font-size:13.5px; font-weight:600">tamamlandı</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🍂</span><span style="font-size:13.5px; font-weight:600">hata / boş</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">💸</span><span style="font-size:13.5px; font-weight:600">LLM maliyeti</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">⬇︎</span><span style="font-size:13.5px; font-weight:600">yedekle</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">⚙︎</span><span style="font-size:13.5px; font-weight:600">ayarlar</span></div>
+    <div style="display:flex; align-items:center; gap:10px"><span style="font-size:24px">🔍</span><span style="font-size:13.5px; font-weight:600">ara ⌘K</span></div>
+  </div>
+</section>
+
+<section style="padding:48px 0; border-top:1px solid #e3d3ae">
+  <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:8px">
+    <span style="font-size:12px; font-weight:800; letter-spacing:.2em; color:#a08b6e">06</span>
+    <h2 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:36px; font-weight:600; letter-spacing:-.01em">Hareket</h2>
+  </div>
+  <p style="margin:0 0 32px; max-width:62ch; font-size:16px; line-height:1.7; color:#6e5b45">Yavaş ve nefes alan. Hiçbir animasyon dikkat çekmek için hızlanmaz.</p>
+  <div style="display:flex; gap:20px; flex-wrap:wrap">
+    <div style="flex:1; min-width:230px; background:#fdf6e7; border-radius:20px; padding:26px; box-shadow:0 2px 8px rgb(37 30 24/.07); display:flex; flex-direction:column; align-items:center; gap:16px">
+      <div style="width:56px; height:56px; border-radius:999px; background:#c14a1d; color:#fdf6e7; display:flex; align-items:center; justify-content:center; font-size:22px; animation:pulse-glow 2.2s ease-in-out infinite">📖</div>
+      <div style="text-align:center"><div style="font-size:13.5px; font-weight:800">pulse-glow</div><div style="font-size:12.5px; color:#8a6f52; font-family:ui-monospace,monospace; margin-top:2px">2.2s · sıradaki ders</div></div>
+    </div>
+    <div style="flex:1; min-width:230px; background:#fdf6e7; border-radius:20px; padding:26px; box-shadow:0 2px 8px rgb(37 30 24/.07); display:flex; flex-direction:column; align-items:center; gap:16px">
+      <svg viewBox="0 0 128 86" width="56" height="38" style="animation:float-slow 3.5s ease-in-out infinite"><g fill="#41608c"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g></svg>
+      <div style="text-align:center"><div style="font-size:13.5px; font-weight:800">float-slow</div><div style="font-size:12.5px; color:#8a6f52; font-family:ui-monospace,monospace; margin-top:2px">3.5s · yükleme, boş ekran</div></div>
+    </div>
+    <div style="flex:1; min-width:230px; background:#fdf6e7; border-radius:20px; padding:26px; box-shadow:0 2px 8px rgb(37 30 24/.07); display:flex; flex-direction:column; align-items:center; gap:16px">
+      <div style="height:56px; display:flex; align-items:center; gap:8px"><div style="width:34px; height:34px; border-radius:12px; background:#f4e5cb"></div><div style="width:34px; height:34px; border-radius:12px; background:#f2d8c4"></div><div style="width:34px; height:34px; border-radius:12px; background:#c14a1d"></div></div>
+      <div style="text-align:center"><div style="font-size:13.5px; font-weight:800">geçişler</div><div style="font-size:12.5px; color:#8a6f52; font-family:ui-monospace,monospace; margin-top:2px">150ms renk · 500ms panel</div></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:48px 0 0; border-top:1px solid #e3d3ae">
+  <div style="display:flex; align-items:baseline; gap:16px; margin-bottom:8px">
+    <span style="font-size:12px; font-weight:800; letter-spacing:.2em; color:#a08b6e">07</span>
+    <h2 style="margin:0; font-family:Fraunces,Georgia,serif; font-size:36px; font-weight:600; letter-spacing:-.01em">Uygulama · v1 → v2 göçü</h2>
+  </div>
+  <p style="margin:0 0 24px; max-width:62ch; font-size:16px; line-height:1.7; color:#6e5b45">Bu kez tokenlar <strong>değişiyor</strong>. Göç haritası: <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">--moss</code> kaldırılır → tüm kullanımlar <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">--indigo</code>; <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">--sky-*</code> ailesi kaldırılır → <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">--indigo-*</code>; <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">--gold</code> → <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">--amber</code>. Dark blok <strong>iki</strong> yerde güncellenir: <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">.dark</code> ve <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">prefers-color-scheme</code> media query.</p>
+  <pre style="margin:0; background:#251e18; color:#f0e4cd; border-radius:18px; padding:26px 28px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px; line-height:1.85; overflow-x:auto">:root {
+  --background:  #f6ead2;
+  --surface:     #fdf6e7;
+  --surface-2:   #f4e5cb;
+  --ink:         #251e18;
+  --ink-soft:    #6e5b45;
+  --accent:      #c14a1d;   <span style="color:#a08b6e">/* eski #c4643b */</span>
+  --accent-soft: #f2d8c4;
+  --danger:      #8f3116;
+  --indigo-soft: #e4ebf3;   <span style="color:#a08b6e">/* --sky-* ailesinin yerine */</span>
+  --indigo-mid:  #41608c;
+  --indigo:      #2f4a70;
+  --indigo-deep: #24395a;
+  --amber:       #e8a13c;   <span style="color:#a08b6e">/* eski --gold */</span>
+  --amber-text:  #b07414;
+  --locked:      #d9c6a4;
+  <span style="color:#a08b6e">/* --moss, --moss-soft: KALDIRILDI → indigo kullan */</span>
+}
+
+.dark {
+  --background:  #1c1712;
+  --surface:     #282019;
+  --surface-2:   #322a20;
+  --ink:         #f0e4cd;
+  --ink-soft:    #d9c9ab;
+  --accent:      #e07b3f;
+  --accent-soft: #3a2c20;
+  --danger:      #d96a4a;
+  --indigo-soft: #222c3e;
+  --indigo-mid:  #5f7db0;
+  --indigo:      #8fa9cf;   <span style="color:#a08b6e">/* gece aydınlanır */</span>
+  --indigo-deep: #c7d4e8;
+  --amber:       #e8a13c;
+  --amber-text:  #e8a13c;
+  --locked:      #4a3f30;
+}
+<span style="color:#a08b6e">/* AYNI değerler prefers-color-scheme bloğuna da: */</span>
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) { <span style="color:#a08b6e">/* … .dark ile birebir … */</span> }
+}
+
+@theme inline {
+  --color-indigo-soft: var(--indigo-soft);
+  --color-indigo-mid:  var(--indigo-mid);
+  --color-indigo:      var(--indigo);
+  --color-indigo-deep: var(--indigo-deep);
+  --color-amber:       var(--amber);
+  --color-amber-text:  var(--amber-text);
+  <span style="color:#a08b6e">/* --color-sky-*, --color-moss*: SİL */</span>
+}
+
+.prose-cozy a {
+  color: var(--indigo);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}</pre>
+  <p style="margin:24px 0 12px; max-width:62ch; font-size:16px; line-height:1.7; color:#6e5b45"><code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">CozyButton.tsx</code> — info varyantı artık indigo:</p>
+  <pre style="margin:0; background:#251e18; color:#f0e4cd; border-radius:18px; padding:26px 28px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px; line-height:1.85; overflow-x:auto">type Variant = "primary" | "ghost" | "soft" | "info";
+
+const styles: Record&lt;Variant, string&gt; = {
+  <span style="color:#a08b6e">/* primary/ghost/soft aynen; renkleri token'dan gelir */</span>
+  info: "bg-indigo text-surface hover:brightness-110 shadow-cozy disabled:opacity-40",
+}</pre>
+  <p style="margin:24px 0 0; max-width:62ch; font-size:16px; line-height:1.7; color:#6e5b45"><strong>Kod tarama listesi:</strong> <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">bg-moss</code>, <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">text-moss</code>, <code style="background:#f4e5cb; border-radius:6px; padding:1px 6px; font-size:14px">bg-sky*</code> sınıfları repo genelinde aranıp indigo karşılıklarıyla değiştirilir; başarı işaretleri (✓ düğümleri, ilerleme) indigoya, XP/seri amber'e bağlanır.</p>
+</section>
+
+</div>
+</x-dc>
+</body>
+</html>

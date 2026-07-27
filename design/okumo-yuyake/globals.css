@@ -1,0 +1,190 @@
+@import "tailwindcss";
+
+/* Yūyake palette v2 — light: cream/vermilion/indigo/amber, dark: warm ink-brown.
+   Moss (green) removed: indigo carries info + success + state. */
+:root {
+  /* Fixed height of the sticky StatsHeader (title row + nav row + border);
+     sticky offsets below the header reference this. */
+  --header-h: 101px;
+  --background: #f6ead2;
+  --surface: #fdf6e7;
+  --surface-2: #f4e5cb;
+  --ink: #251e18;
+  --ink-soft: #6e5b45;
+  --accent: #c14a1d;
+  --accent-soft: #f2d8c4;
+  --indigo-soft: #e4ebf3;
+  --indigo-mid: #41608c;
+  --indigo: #2f4a70;
+  --indigo-deep: #24395a;
+  --amber: #e8a13c;
+  --amber-text: #b07414;
+  --locked: #d9c6a4;
+  --danger: #8f3116;
+}
+
+.dark {
+  --background: #1c1712;
+  --surface: #282019;
+  --surface-2: #322a20;
+  --ink: #f0e4cd;
+  --ink-soft: #d9c9ab;
+  --accent: #e07b3f;
+  --accent-soft: #3a2c20;
+  --indigo-soft: #222c3e;
+  --indigo-mid: #5f7db0;
+  --indigo: #8fa9cf;
+  --indigo-deep: #c7d4e8;
+  --amber: #e8a13c;
+  --amber-text: #e8a13c;
+  --locked: #4a3f30;
+  --danger: #d96a4a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-indigo-soft: var(--indigo-soft);
+  --color-indigo-mid: var(--indigo-mid);
+  --color-indigo: var(--indigo);
+  --color-indigo-deep: var(--indigo-deep);
+  --color-amber: var(--amber);
+  --color-amber-text: var(--amber-text);
+  --color-locked: var(--locked);
+  --color-danger: var(--danger);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-nunito);
+  --font-cjk-ja: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+    "Noto Sans JP", sans-serif;
+  --font-cjk-zh: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans SC", sans-serif;
+  --shadow-cozy: 0 2px 8px rgb(37 30 24 / 0.07), 0 8px 24px rgb(37 30 24 / 0.09);
+  --radius-cozy: 1.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: #1c1712;
+    --surface: #282019;
+    --surface-2: #322a20;
+    --ink: #f0e4cd;
+    --ink-soft: #d9c9ab;
+    --accent: #e07b3f;
+    --accent-soft: #3a2c20;
+    --indigo-soft: #222c3e;
+    --indigo-mid: #5f7db0;
+    --indigo: #8fa9cf;
+    --indigo-deep: #c7d4e8;
+    --amber: #e8a13c;
+    --amber-text: #e8a13c;
+    --locked: #4a3f30;
+    --danger: #d96a4a;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+/* CJK text gets an explicit script-specific font stack, breathing room, and a
+   size bump — kanji/hanzi at Latin sizes are illegible; 1.55em keeps them
+   readable without zooming. Without an explicit stack the browser falls back
+   to whichever system font happens to cover the glyph, per element, which
+   reads as "the font keeps changing"; without lang="ja"/"zh" the same
+   Han-unified code point can render with the wrong regional glyph shape. */
+[lang="ja"] {
+  font-family: var(--font-cjk-ja);
+  font-size: 1.55em;
+  line-height: 1.9;
+}
+
+[lang="zh"],
+[lang="zh-Hans"],
+[lang="zh-CN"] {
+  font-family: var(--font-cjk-zh);
+  font-size: 1.55em;
+  line-height: 1.9;
+}
+
+/* Minimal typographic styles for LLM-generated markdown. */
+.prose-cozy h1,
+.prose-cozy h2,
+.prose-cozy h3 {
+  margin: 1em 0 0.4em;
+  font-weight: 600;
+}
+.prose-cozy h1 { font-size: 1.35rem; }
+.prose-cozy h2 { font-size: 1.15rem; }
+.prose-cozy h3 { font-size: 1.05rem; }
+.prose-cozy p { margin: 0.6em 0; line-height: 1.7; }
+.prose-cozy ul,
+.prose-cozy ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.prose-cozy ul { list-style: disc; }
+.prose-cozy ol { list-style: decimal; }
+.prose-cozy li { margin: 0.25em 0; }
+.prose-cozy strong { color: var(--accent); }
+.prose-cozy a {
+  color: var(--indigo);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-cozy code {
+  background: var(--surface-2);
+  border-radius: 0.375rem;
+  padding: 0.1em 0.4em;
+}
+.prose-cozy table {
+  width: 100%;
+  margin: 0.8em 0;
+  border-collapse: collapse;
+}
+.prose-cozy th,
+.prose-cozy td {
+  border: 1px solid var(--surface-2);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.prose-cozy th { background: var(--surface-2); }
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(193 74 29 / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgb(193 74 29 / 0);
+  }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.animate-float-slow {
+  animation: float-slow 3.5s ease-in-out infinite;
+}

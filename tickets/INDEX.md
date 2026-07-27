@@ -25,8 +25,8 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-042](T-042-scrub-rawoutput-export.md) | Save export'tan raw_output scrub (LLM key sızma yolu) | done | p3 | S | high |
 | [T-043](T-043-multi-tenant-isolation.md) | Server-mode (self-host) multi-tenant izolasyon — cloud tenancy T-046/47'ye taşındı | backlog | p3 | XL | low |
 | [T-051](T-051-rebrand-okumo.md) | Rebranding — isim okumo + marka copy/tone (görsel → T-052/53) | done | p2 | M | medium |
-| [T-052](T-052-sky-design-system.md) | Sky renk ailesi + Kumo mark + info variant — ilk uygulama revert edildi, yeni handoff bekliyor | backlog | p2 | S | high |
-| [T-053](T-053-sky-usage-screens.md) | Sky kullanım kuralları — 5 ekrana uygula — ilk uygulama revert edildi, yeni handoff bekliyor | backlog | p2 | M | medium |
+| [T-052](T-052-yuyake-palette.md) | Yūyake palet göçü (v2 handoff) — globals drop-in + moss/gold→indigo/amber + info variant + Kumo mark | in-progress | p2 | S | high |
+| [T-053](T-053-yuyake-usage-screens.md) | Yūyake kullanım kuralları — 5 ekrana uygula (vermilyon=aksiyon, indigo=bilgi/durum, amber=ödül) | backlog | p2 | M | medium |
 | [T-055](T-055-sky-polish-leftovers.md) | Sky kalıntıları (revert edilen implementasyona bağlıydı) | wontfix | p3 | S | high |
 | [T-054](T-054-okumo-landing.md) | okumo.dev landing sayfası (handoff, ayrı scope) | backlog | p3 | M | low |
 | [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) — stack DOĞRULANDI | done | p1 | M | medium |
