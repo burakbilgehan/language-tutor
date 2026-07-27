@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useLlmStatus } from "@/lib/llm-status";
 import { useListFocus } from "@/lib/use-list-focus";
 import { grammarTopics, grammarGenerate, grammarGenerateBatch } from "@/lib/client-api";
@@ -68,7 +69,8 @@ const S = {
       C2: "C2 — Ustalık",
     } as Record<string, string>,
     loading: "Yükleniyor...",
-    empty: "Müfredat oluşunca gramer konuları burada listelenecek.",
+    empty: "Bu dil için gramer konusu bulunamadı.",
+    retry: "Tekrar dene",
     all: "Hepsi",
     prepareCount: (n: number) => `${n} konuyu hazırla`,
     clickToGenerate: (status: string) => `${status} — üretmek için tıkla`,
@@ -117,7 +119,8 @@ const S = {
       C2: "C2 — Mastery",
     } as Record<string, string>,
     loading: "Loading...",
-    empty: "Grammar topics will be listed here once your curriculum is created.",
+    empty: "No grammar topics found for this language.",
+    retry: "Try again",
     all: "All",
     prepareCount: (n: number) => `Prepare ${n} topics`,
     clickToGenerate: (status: string) => `${status} — click to generate`,
@@ -147,7 +150,9 @@ export function GrammarSidebar() {
   const llm = useLlmStatus();
   const activeSlug = useSearchParams().get("topic");
 
+  const localize = useLocalizeError();
   const [topics, setTopics] = useState<TopicDto[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [levelFilter, setLevelFilter] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,13 +185,20 @@ export function GrammarSidebar() {
   );
 
   const load = useCallback(async () => {
-    const d = await grammarTopics().catch(() => ({ topics: [] }));
-    const list: TopicDto[] = d.topics ?? [];
-    setTopics(list);
-    if (list.some((t) => t.status === "generating")) {
-      pollRef.current = setTimeout(load, 3000);
+    // A load error must never collapse into an empty list: the index is
+    // curriculum-independent static content, so "empty" would misdiagnose a
+    // broken DB/profile as missing content (T-056).
+    try {
+      const d = await grammarTopics();
+      setTopics(d.topics ?? []);
+      setLoadError(null);
+      if ((d.topics ?? []).some((t) => t.status === "generating")) {
+        pollRef.current = setTimeout(load, 3000);
+      }
+    } catch (e) {
+      setLoadError(localize(e));
     }
-  }, []);
+  }, [localize]);
 
   useEffect(() => {
     load();
@@ -222,6 +234,22 @@ export function GrammarSidebar() {
     }
   };
 
+  if (loadError && !topics) {
+    return (
+      <div className="p-6 text-center text-sm">
+        <p className="text-danger">{loadError}</p>
+        <button
+          className="mt-2 cursor-pointer underline text-ink-soft"
+          onClick={() => {
+            setLoadError(null);
+            void load();
+          }}
+        >
+          {s.retry}
+        </button>
+      </div>
+    );
+  }
   if (!topics) {
     return (
       <div className="p-6 text-center text-sm text-ink-soft">{s.loading}</div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
+import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useLlmStatus } from "@/lib/llm-status";
 import { useListFocus } from "@/lib/use-list-focus";
 import {
@@ -51,6 +52,7 @@ const S = {
     } as Record<string, string>,
     loading: "Yükleniyor...",
     empty: "Bu dil için sözlük index'i yok.",
+    retry: "Tekrar dene",
     searchPlaceholder: "Ara: kelime, okunuş veya anlam",
     searchMore: (n: number) => `+${n} sonuç daha — aramayı daralt`,
     noResults: "Sonuç yok.",
@@ -79,6 +81,7 @@ const S = {
     } as Record<string, string>,
     loading: "Loading...",
     empty: "No dictionary index for this language.",
+    retry: "Try again",
     searchPlaceholder: "Search: word, reading or meaning",
     searchMore: (n: number) => `+${n} more results — narrow the search`,
     noResults: "No results.",
@@ -92,20 +95,29 @@ export function VocabSidebar() {
   const llm = useLlmStatus();
   const activeWord = useSearchParams().get("word");
 
+  const localize = useLocalizeError();
   const [entries, setEntries] = useState<VocabEntrySummary[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [openLevels, setOpenLevels] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
-    const d = await vocabList().catch(() => ({ entries: [] }));
-    const list = d.entries ?? [];
-    setEntries(list);
-    if (list.some((e) => e.status === "generating")) {
-      pollRef.current = setTimeout(load, 3000);
+    // A load error must never collapse into an empty list — same rule as the
+    // grammar sidebar (T-056): the index is static content, "empty" would
+    // misdiagnose a broken DB/profile as missing content.
+    try {
+      const d = await vocabList();
+      setEntries(d.entries ?? []);
+      setLoadError(null);
+      if ((d.entries ?? []).some((e) => e.status === "generating")) {
+        pollRef.current = setTimeout(load, 3000);
+      }
+    } catch (e) {
+      setLoadError(localize(e));
     }
-  }, []);
+  }, [localize]);
 
   useEffect(() => {
     load();
@@ -158,6 +170,22 @@ export function VocabSidebar() {
     }
   };
 
+  if (loadError && !entries) {
+    return (
+      <div className="p-6 text-center text-sm">
+        <p className="text-danger">{loadError}</p>
+        <button
+          className="mt-2 cursor-pointer underline text-ink-soft"
+          onClick={() => {
+            setLoadError(null);
+            void load();
+          }}
+        >
+          {s.retry}
+        </button>
+      </div>
+    );
+  }
   if (!entries) {
     return (
       <div className="p-6 text-center text-sm text-ink-soft">{s.loading}</div>
