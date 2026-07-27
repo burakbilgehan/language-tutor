@@ -132,8 +132,12 @@ const S = {
     profileSaveFailed: "Profil kaydedilemedi",
     curriculumStartFailed: "Müfredat üretimi başlatılamadı",
     genericError: "Bir şeyler ters gitti",
+    // T-060: aşağıdaki sihirbaz "bağlamadan devam"ı zaten birinci sınıf bir
+    // kapı olarak sunuyor — burada onu "atla" diye ikinci kez adlandırmak
+    // ikisini çelişkiye düşürüyordu. Bu satır artık yalnız BAĞLAMın ne
+    // olduğunu söyler, kararı kapılara bırakır.
     llmNeeded:
-      "Kişisel müfredatını üretmek için bir yapay zekâ bağlantısı gerekiyor. İstersen şimdi bağla — ya da atla: gramer ve sözlük kütüphanesi hemen hazır, müfredatı sonra ekleyebilirsin.",
+      "Kişisel müfredat üretimi bir yapay zekâ bağlantısı ister. Gramer ve sözlük kütüphanesi ise bağlantı olmadan da hazır — aşağıdan sana uyan yolu seç.",
     step0Title: "Merhaba! 🌸",
     step0Subtitle:
       "Ben Kumo. Sana özel bir dil yolculuğu hazırlayacağım. Önce tanışalım — adın ne, hangi dili öğreniyoruz?",
@@ -228,7 +232,7 @@ const S = {
     curriculumStartFailed: "Could not start curriculum generation",
     genericError: "Something went wrong",
     llmNeeded:
-      "Generating your personal curriculum needs an AI connection. Set one up now if you like — or skip it: the grammar and dictionary library is ready right away, and you can add the curriculum later.",
+      "Generating your personal curriculum needs an AI connection. The grammar and dictionary library works without one — pick the path that suits you below.",
     step0Title: "Hello! 🌸",
     step0Subtitle:
       "I'm Kumo. I'll craft a language journey just for you. First, let's meet — what's your name, and which language are we learning?",

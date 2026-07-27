@@ -5,7 +5,7 @@ import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
-import { LlmProviderSection } from "@/components/settings/LlmProviderSection";
+import { LlmSettingsSection } from "@/components/settings/LlmSettingsSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
 import { useStrings } from "@/lib/i18n/use-strings";
@@ -258,7 +258,11 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-ink-soft">{t.billingNote}</p>
         </section>
 
-        <LlmProviderSection />
+        {/* T-060: the wizard IS the LLM surface now (the old LlmProviderSection
+            melted into its "Gelişmiş" accordion). The Settings embed wraps it
+            so finishing collapses to a summary instead of silently bouncing
+            back to the doors. */}
+        <LlmSettingsSection />
 
         <JobQueuePanel />
 
