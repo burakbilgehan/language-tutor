@@ -19,7 +19,7 @@ const nunito = Nunito_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Kumo — Dil Yolculuğun",
+  title: "okumo — Dil Yolculuğun",
   description: "Kişisel dil öğretmenin",
 };
 
