@@ -164,11 +164,16 @@ export function useLocalLlmProbe(
   useEffect(() => {
     if (!enabled) {
       // Kapı kapandı: uçuştakini kes, durumu sıfırla ki tekrar açıldığında
-      // bayat bir "bulundu" göstermesin.
+      // bayat bir "bulundu" göstermesin. Sıfırlama IDEMPOTENT: zaten idle
+      // ise aynı state'i yeni bir nesne olarak yazmak gereksiz render
+      // doğurur (dep'ler sabit olduğu için bugün döngüye girmez, ama
+      // buraya bir dep eklendiğinde girerdi — kapıyı şimdiden kapat).
       abortRef.current?.abort();
       abortRef.current = null;
-      setBridge({ state: "idle", backend: null, cliFound: null });
-      setOllama({ state: "idle", models: [] });
+      setBridge((p) =>
+        p.state === "idle" ? p : { state: "idle", backend: null, cliFound: null }
+      );
+      setOllama((p) => (p.state === "idle" ? p : { state: "idle", models: [] }));
       return;
     }
 

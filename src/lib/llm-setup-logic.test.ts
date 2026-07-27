@@ -105,6 +105,82 @@ test("qualityForModels: sentinel-carrying bridge backends have no profile", () =
   );
 });
 
+// ------------------------------------------------ label/value agreement
+// The wizard shows a profile LABEL and saves a model TRIPLE. If those two
+// ever disagree, the screen lies about what it is about to write — which is
+// the exact ambiguity this ticket exists to kill. Two bugs found in review
+// lived here, so the resolution rule is mirrored and pinned:
+//   quality = picked ?? (stored for THIS provider) ?? "balanced"
+//   models  = (quality === null && stored is for this provider)
+//               ? the stored triple verbatim
+//               : modelsForQuality(provider, quality ?? "balanced", backend)
+
+type Stored = {
+  provider: Parameters<typeof modelsForQuality>[0];
+  quality: ReturnType<typeof qualityForModels>;
+  models: ReturnType<typeof modelsForQuality>;
+} | null;
+
+function resolveQuality(
+  picked: ReturnType<typeof qualityForModels>,
+  stored: Stored,
+  active: Parameters<typeof modelsForQuality>[0]
+) {
+  return picked ?? (stored && stored.provider === active ? stored.quality : "balanced");
+}
+function resolveModels(
+  quality: ReturnType<typeof qualityForModels>,
+  stored: Stored,
+  active: Parameters<typeof modelsForQuality>[0],
+  backend?: Parameters<typeof modelsForQuality>[2]
+) {
+  return quality === null && stored?.provider === active
+    ? stored.models
+    : modelsForQuality(active, quality ?? "balanced", backend);
+}
+
+test("switching providers does not carry a foreign 'Özel' label onto a default triple", () => {
+  const handPicked = { fast: "my-tiny", balanced: "my-mid", deep: "my-big" };
+  const stored: Stored = { provider: "deepseek", quality: null, models: handPicked };
+
+  // Same provider: the label says "Özel" and the hand-picked models are kept
+  // verbatim — pressing save from the casual door must NOT overwrite them.
+  assert.equal(resolveQuality(null, stored, "deepseek"), null);
+  assert.deepEqual(resolveModels(null, stored, "deepseek"), handPicked);
+
+  // Different provider: "Özel" was about deepseek, so openai falls back to
+  // balanced — and the label must say balanced, not "Özel".
+  assert.equal(resolveQuality(null, stored, "openai"), "balanced");
+  assert.deepEqual(
+    resolveModels(resolveQuality(null, stored, "openai"), stored, "openai"),
+    modelsForQuality("openai", "balanced")
+  );
+});
+
+test("label and saved triple agree in every door/stored-config combination", () => {
+  const handPicked = { fast: "my-tiny", balanced: "my-mid", deep: "my-big" };
+  const cases: [string, ReturnType<typeof qualityForModels>, Stored, Parameters<typeof modelsForQuality>[0], Parameters<typeof modelsForQuality>[2]][] = [
+    ["fresh user", null, null, "deepseek", undefined],
+    ["custom stored, same provider", null, { provider: "deepseek", quality: null, models: handPicked }, "deepseek", undefined],
+    ["custom stored, other provider", null, { provider: "deepseek", quality: null, models: handPicked }, "openai", undefined],
+    ["custom stored, then picks eco", "eco", { provider: "deepseek", quality: null, models: handPicked }, "deepseek", undefined],
+    ["eco stored, same provider", null, { provider: "deepseek", quality: "eco", models: modelsForQuality("deepseek", "eco") }, "deepseek", undefined],
+    ["bridge/codex ignores the pick", "best", null, "bridge", "codex"],
+    ["bridge/claude honours it", "best", null, "bridge", "claude"],
+  ];
+  for (const [name, picked, stored, provider, backend] of cases) {
+    const q = resolveQuality(picked, stored, provider);
+    const models = resolveModels(q, stored, provider, backend);
+    const denoted =
+      q === null
+        ? stored?.provider === provider
+          ? stored.models
+          : null
+        : modelsForQuality(provider, q, backend);
+    assert.deepEqual(models, denoted, `${name}: label "${q ?? "Özel"}" does not denote the saved triple`);
+  }
+});
+
 // ---------------------------------------------------------------- budget
 // describeModel() hands back price 0 for ids it has never heard of, so a
 // naive estimate would print "~$0/month" for a custom endpoint — a lie about

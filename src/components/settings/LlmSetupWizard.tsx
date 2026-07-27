@@ -41,6 +41,7 @@ import {
   qualityForModels,
   type QualityProfileId,
   type SubBackend,
+  type TierTriple,
 } from "./llm-setup-logic";
 import { useLocalLlmProbe, type ProbeState } from "./useLocalLlmProbe";
 import { LlmAdvancedPanel } from "./LlmAdvancedPanel";
@@ -439,16 +440,17 @@ function QualityPicker({
   provider,
   quality,
   onChange,
-  backend,
+  models,
 }: {
   t: T;
   provider: ProviderId;
   quality: QualityProfileId | null;
   onChange: (q: QualityProfileId) => void;
-  backend?: SubBackend;
+  /** GERÇEKTEN kaydedilecek üçlü — burada yeniden türetilmez. Türetseydi
+   * "Özel" etiketinin altında katalog varsayılanları görünürdü; ekrandaki
+   * ad ile kaydedilen değer ayrışırdı. */
+  models: TierTriple;
 }) {
-  const effective = quality ?? "balanced";
-  const models = modelsForQuality(provider, effective, backend);
   const line = modelLineFor(models);
   const budget = budgetHintFor(provider, models);
   const labels: Record<QualityProfileId, { label: string; desc: string }> = {
@@ -549,7 +551,6 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
   const [keyProvider, setKeyProvider] = useState<KeyProvider>("deepseek");
   const [apiKey, setApiKey] = useState("");
   const [subBackend, setSubBackend] = useState<SubBackend>("claude");
-  const [quality, setQuality] = useState<QualityProfileId | null>("balanced");
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -563,8 +564,22 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
 
   // Kayıtlı config'ten kalite profilini geri çıkar. Config'te profil alanı
   // yok (llmConfigPut yalnız çözülmüş üçlüyü taşır), o yüzden üçlüyü
-  // katalogla eşleştiriyoruz; eşleşme yoksa null = "Özel" ve hiçbir radio
-  // zorla seçilmez.
+  // katalogla eşleştiriyoruz.
+  //
+  // Çıkarım HANGİ SAĞLAYICIYA ait olduğuyla birlikte saklanır. Aksi hâlde
+  // "elle seçilmiş modeller" (null = Özel) durumu tüm kapılara sızardı:
+  // kullanıcı API-anahtarı kapısına geçtiğinde ekranda "Özel" yazarken
+  // kaydedilen üçlü sessizce "Denge" olurdu — etiket ile kaydedilen değerin
+  // çeliştiği tam da bu ticket'ın kapatmaya çalıştığı belirsizlik.
+  const [storedQuality, setStoredQuality] = useState<{
+    provider: ProviderId;
+    quality: QualityProfileId | null;
+    /** Kayıtlı üçlünün kendisi — profil "Özel" iken (elle seçilmiş
+     * modeller) casual kaydın onu EZMEMESİ için saklanır. */
+    models: TierTriple;
+  } | null>(null);
+  const [picked, setPicked] = useState<QualityProfileId | null>(null);
+
   useEffect(() => {
     let alive = true;
     llmConfigGet()
@@ -574,7 +589,15 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
           d.mode === "anthropic"
             ? "anthropic"
             : (providerForBaseUrl(d.baseUrl) ?? "custom");
-        setQuality(qualityForModels(provider, d.models));
+        setStoredQuality({
+          provider,
+          quality: qualityForModels(provider, d.models),
+          models: {
+            fast: d.models.fast ?? "",
+            balanced: d.models.balanced ?? "",
+            deep: d.models.deep ?? "",
+          },
+        });
       })
       .catch(() => {});
     return () => {
@@ -591,7 +614,25 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
         : "bridge";
 
   const activeBackend = door === "local" && lane === "sub" ? subBackend : undefined;
-  const activeModels = modelsForQuality(activeProvider, quality ?? "balanced", activeBackend);
+
+  // Gösterilecek profil: kullanıcı bu oturumda seçtiyse o; yoksa kayıtlı
+  // config AYNI sağlayıcıya aitse ondan çıkarılan (null = Özel dahil);
+  // başka bir sağlayıcıya geçildiyse varsayılan "Denge".
+  const quality: QualityProfileId | null =
+    picked ??
+    (storedQuality && storedQuality.provider === activeProvider
+      ? storedQuality.quality
+      : "balanced");
+
+  // Kaydedilecek üçlü. "Özel" (quality === null) durumunda kullanıcının
+  // gelişmiş panelde elle seçtiği modeller AYNEN korunur — casual kapıya
+  // uğrayıp "Test et ve kaydet"e basmak onları sessizce "Denge"ye
+  // ezmemeli. Bu, ekrandaki etiket ("Özel") ile kaydedilen değerin
+  // çelişmemesini de sağlar.
+  const activeModels: TierTriple =
+    quality === null && storedQuality?.provider === activeProvider
+      ? storedQuality.models
+      : modelsForQuality(activeProvider, quality ?? "balanced", activeBackend);
 
   // Canlı algılama YALNIZ lokal kapı açıkken. Şeride göre daraltılır:
   // Ollama şeridinde köprüyü yoklamanın anlamı yok.
@@ -701,7 +742,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
             {doorCard(
               () => {
                 resetMsg();
-                setQuality("balanced");
+                setPicked(null);
                 setDoor("key");
               },
               t.doorKeyTitle,
@@ -767,7 +808,8 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
             t={t}
             provider={keyProvider}
             quality={quality}
-            onChange={setQuality}
+            onChange={setPicked}
+            models={activeModels}
           />
           <TestRow
             t={t}
@@ -808,7 +850,7 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                 type="button"
                 onClick={() => {
                   resetMsg();
-                  setQuality("balanced");
+                  setPicked(null);
                   setDoor("key");
                 }}
                 className="text-indigo underline"
@@ -876,7 +918,8 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                 t={t}
                 provider="ollama"
                 quality={quality}
-                onChange={setQuality}
+                onChange={setPicked}
+                models={activeModels}
               />
               <p>{t.ollamaStep2}</p>
               {/* Pull komutu SEÇİLEN profilden türer — "En iyi" seçip 7b
@@ -989,8 +1032,8 @@ export function LlmSetupWizard({ onDone }: { onDone: () => void }) {
                   t={t}
                   provider="bridge"
                   quality={quality}
-                  onChange={setQuality}
-                  backend="claude"
+                  onChange={setPicked}
+                  models={activeModels}
                 />
               ) : (
                 <p className="rounded-xl bg-surface-2/60 px-3 py-2 text-xs text-ink-soft">
