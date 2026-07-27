@@ -1,7 +1,7 @@
 ---
 id: T-051
 title: Rebranding — ürün adı okumo, Kumo maskot/asistan olarak kalır
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: medium

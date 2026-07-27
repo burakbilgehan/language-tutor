@@ -1,7 +1,7 @@
 ---
 id: T-052
 title: Sky renk ailesi + Kumo mark + info variant (design handoff task 1-3)
-status: backlog
+status: done
 priority: p2
 effort: S
 confidence: high
