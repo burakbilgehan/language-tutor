@@ -50,3 +50,14 @@ Bunlar asistan karakteri = maskot. Burak ayrıca değiştirmek isterse ayrı kar
 
 Not: efor asset entegrasyonu geldiğinde M→L büyüyebilir. Envanter (A) mekanik
 (sonnet); asset + copy revizyonu tasarım-duyarlı.
+
+## Görsel kimlik AYRILDI (2026-07-27, Claude design handoff geldi)
+`design/okumo-sky/` handoff'u renk/mark/landing'i getirdi → görsel iş ayrı
+ticket'lara alındı: **T-052** (sky renk ailesi + Kumo mark SVG + info variant),
+**T-053** (sky kullanım kuralları — 5 ekran), **T-054** (okumo.dev landing).
+Bu ticket (T-051) SADECE **isim değişimi + marka copy'si/tone** kalıyor:
+- (A) ürün-adı yüzeyleri → okumo (yukarıdaki envanter)
+- Tone of voice + logo do/don't → `design/okumo-sky/Okumo Marka.dc.html`'den
+  uygulanır (marka sesi copy'ye yansır).
+Kumo maskot görseli artık soyut değil: header mark'ı T-052'de geliyor (bulut
+SVG). T-051 = metinsel kimlik, T-052/53 = görsel sistem.

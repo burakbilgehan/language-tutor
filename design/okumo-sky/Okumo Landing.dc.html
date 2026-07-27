@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+body { margin:0; background:#f7f2e9; font-family:"Nunito Sans",ui-sans-serif,system-ui,sans-serif; color:#2e2a24; }
+a { color:#3a7691; text-decoration:none; }
+a:hover { color:#2c5b71; }
+@keyframes float-slow { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-8px) } }
+@keyframes float-slower { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-14px) } }
+@keyframes pulse-glow { 0%,100%{ box-shadow:0 0 0 0 rgb(196 100 59/.35) } 50%{ box-shadow:0 0 0 12px rgb(196 100 59/0) } }
+</style>
+</helmet>
+
+<header style="position:sticky; top:0; z-index:20; background:rgba(247,242,233,.88); backdrop-filter:blur(10px); border-bottom:1px solid #ece3d3">
+  <div style="max-width:1120px; margin:0 auto; padding:0 32px; height:68px; display:flex; align-items:center; justify-content:space-between; gap:24px">
+    <div style="display:flex; align-items:center; gap:11px">
+      <svg viewBox="0 0 128 86" width="34" height="23"><g fill="#c4643b"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g></svg>
+      <span style="font-family:Fraunces,serif; font-size:25px; font-weight:600; letter-spacing:-.015em">okumo</span>
+    </div>
+    <nav style="display:flex; align-items:center; gap:26px">
+      <a href="#nasil" style="font-size:15px; font-weight:600; color:#6b6257">Nasıl çalışır</a>
+      <a href="#kutuphane" style="font-size:15px; font-weight:600; color:#6b6257">Kütüphane</a>
+      <a href="#gizlilik" style="font-size:15px; font-weight:600; color:#6b6257">Gizlilik</a>
+      <a href="#basla" style="background:#c4643b; color:#fffdf7; border-radius:999px; padding:10px 22px; font-size:15px; font-weight:700; box-shadow:0 2px 8px rgb(46 42 36/.06)">Başla</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<section style="position:relative; overflow:hidden; padding:84px 32px 92px">
+  <svg viewBox="0 0 128 86" width="150" height="101" style="position:absolute; left:4%; top:130px; opacity:.55; animation:float-slower 7s ease-in-out infinite"><g fill="#e6eef1"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g></svg>
+  <svg viewBox="0 0 128 86" width="106" height="71" style="position:absolute; right:6%; top:70px; opacity:.5; animation:float-slow 5.5s ease-in-out infinite"><g fill="#efe7d9"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g></svg>
+
+  <div style="position:relative; max-width:900px; margin:0 auto; display:flex; flex-direction:column; align-items:center; gap:24px; text-align:center">
+    <span style="background:#d6e8f0; color:#2c5b71; border-radius:999px; padding:7px 17px; font-size:13.5px; font-weight:700">Japonca · Çince · Hollandaca — diğer diller CEFR ile</span>
+    <h1 style="margin:0; font-family:Fraunces,serif; font-size:74px; font-weight:600; letter-spacing:-.03em; line-height:1.03; max-width:15ch">Dil yolculuğun, kendi hızında.</h1>
+    <p style="margin:0; max-width:56ch; font-size:20px; line-height:1.65; color:#6b6257; text-wrap:pretty">Sana özel yazılan dersler, kalıcı bir tekrar sistemi ve paketlenmiş sözlük–gramer kütüphanesi. Hesap yok, abonelik yok — her şey tarayıcında kalır.</p>
+    <div style="display:flex; gap:14px; flex-wrap:wrap; justify-content:center; padding-top:6px">
+      <a href="#basla" style="background:#c4643b; color:#fffdf7; border-radius:999px; padding:16px 34px; font-size:17px; font-weight:700; box-shadow:0 2px 8px rgb(46 42 36/.06), 0 8px 24px rgb(46 42 36/.08)">Ücretsiz başla</a>
+      <a href="#nasil" style="background:#fffdf7; color:#2e2a24; border-radius:999px; padding:16px 34px; font-size:17px; font-weight:700; box-shadow:0 2px 8px rgb(46 42 36/.06)">Nasıl çalışır?</a>
+    </div>
+    <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center; font-size:14px; color:#8b8175; padding-top:2px">
+      <span>Kayıt gerekmez</span><span>·</span><span>Veriler cihazında</span><span>·</span><span>Türkçe &amp; İngilizce arayüz</span>
+    </div>
+  </div>
+
+  <div style="position:relative; max-width:940px; margin:60px auto 0; border-radius:24px; overflow:hidden; background:#f7f2e9; box-shadow:0 2px 8px rgb(46 42 36/.08), 0 24px 60px rgb(46 42 36/.14)">
+    <div style="border-bottom:1px solid #f1e9db; background:rgba(247,242,233,.92); padding:0 20px">
+      <div style="display:flex; height:56px; align-items:center; justify-content:space-between; gap:14px">
+        <div style="display:flex; align-items:center; gap:10px">
+          <svg viewBox="0 0 128 86" width="28" height="19"><g fill="#c4643b"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g></svg>
+          <span style="font-family:Fraunces,serif; font-size:17px; font-weight:600; white-space:nowrap">Japonca <span style="color:#a2988a">·</span> N5</span>
+        </div>
+        <div style="display:flex; gap:7px; align-items:center">
+          <span style="white-space:nowrap; background:#fffdf7; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; box-shadow:0 2px 8px rgb(46 42 36/.06)">🔥 12</span>
+          <span style="white-space:nowrap; background:#fffdf7; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700; color:#d9a441; box-shadow:0 2px 8px rgb(46 42 36/.06)">✦ 840 XP</span>
+          <span style="background:#eaf3f7; border-radius:999px; padding:6px 12px; font-size:13px; color:#2c5b71">🔍</span>
+          <span style="background:#fffdf7; border-radius:999px; padding:6px 12px; font-size:13px; box-shadow:0 2px 8px rgb(46 42 36/.06)">⚙︎</span>
+        </div>
+      </div>
+      <div style="display:flex; height:44px; align-items:center; gap:6px">
+        <span style="border-radius:999px; padding:5px 15px; font-size:14px; font-weight:600; background:#c4643b; color:#fffdf7">Dersler</span>
+        <span style="border-radius:999px; padding:5px 15px; font-size:14px; font-weight:500">Gramer</span>
+        <span style="border-radius:999px; padding:5px 15px; font-size:14px; font-weight:500">Yazım</span>
+        <span style="border-radius:999px; padding:5px 15px; font-size:14px; font-weight:500">Çekim</span>
+        <span style="border-radius:999px; padding:5px 15px; font-size:14px; font-weight:500">Tekrar</span>
+        <span style="border-radius:999px; padding:5px 15px; font-size:14px; font-weight:500">Sohbet</span>
+      </div>
+    </div>
+    <div style="position:relative; padding:24px 20px 40px; height:330px; overflow:hidden">
+      <div style="position:absolute; left:20px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:9px">
+        <div style="width:48px; height:48px; border-radius:999px; background:#d6e8f0; display:flex; align-items:center; justify-content:center; font-size:20px; box-shadow:0 2px 8px rgb(46 42 36/.06)">🔁</div>
+        <span style="background:#fffdf7; border-radius:999px; padding:5px 12px; font-size:12px; font-weight:700; box-shadow:0 2px 8px rgb(46 42 36/.06); white-space:nowrap">Tekrar (8)</span>
+      </div>
+      <div style="max-width:430px; margin:0 auto">
+        <div style="background:#fffdf7; border-radius:20px; padding:16px 20px; box-shadow:0 2px 8px rgb(46 42 36/.06), 0 8px 24px rgb(46 42 36/.08)">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px">
+            <span style="font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#c4643b">Ünite 3</span>
+            <span style="display:flex; align-items:center; gap:7px"><span style="display:block; width:62px; height:5px; border-radius:999px; background:#d6e8f0; overflow:hidden"><span style="display:block; width:34%; height:100%; background:#4f93b0"></span></span><span style="font-size:11px; font-weight:700; color:#3a7691">1/3</span></span>
+          </div>
+          <div style="font-family:Fraunces,serif; font-size:18px; font-weight:600; margin-top:3px">Şehirde yön sormak</div>
+          <div style="font-size:13.5px; color:#6b6257; margin-top:2px">İstasyon, tabela ve yol tarifleri</div>
+        </div>
+        <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; padding:20px 0">
+          <div style="position:absolute; left:50%; top:0; bottom:0; width:0; border-left:2px dashed #d6e8f0"></div>
+          <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; transform:translateX(-58px)">
+            <div style="width:60px; height:60px; border-radius:999px; background:#7a8b6f; color:#fffdf7; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 2px 8px rgb(46 42 36/.06)">✓</div>
+            <div style="font-size:12px; font-weight:700">Tren istasyonu</div>
+          </div>
+          <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; transform:translateX(52px)">
+            <div style="width:60px; height:60px; border-radius:999px; background:#c4643b; color:#fffdf7; display:flex; align-items:center; justify-content:center; font-size:24px; animation:pulse-glow 2.2s ease-in-out infinite">📖</div>
+            <div style="font-size:12px; font-weight:700">Sağa mı sola mı</div>
+            <div style="font-size:10px; font-weight:800; color:#d9a441">+20 XP</div>
+          </div>
+          <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; transform:translateX(-34px)">
+            <div style="width:60px; height:60px; border-radius:999px; background:#cfc6b8; color:#fffdf7; display:flex; align-items:center; justify-content:center; font-size:24px">🔒</div>
+            <div style="font-size:12px; font-weight:700; color:rgba(107,98,87,.6)">Otobüs bileti</div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute; left:0; right:0; bottom:0; height:90px; background:linear-gradient(to bottom, rgba(247,242,233,0), #f7f2e9)"></div>
+    </div>
+  </div>
+</section>
+
+<!-- NASIL ÇALIŞIR -->
+<section id="nasil" style="padding:88px 32px; background:#fffdf7; border-top:1px solid #f1e9db; border-bottom:1px solid #f1e9db">
+  <div style="max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:44px">
+    <div style="display:flex; flex-direction:column; gap:12px; max-width:620px">
+      <div style="font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; color:#a2988a">Nasıl çalışır</div>
+      <h2 style="margin:0; font-family:Fraunces,serif; font-size:44px; font-weight:600; letter-spacing:-.02em; line-height:1.1">Üç parça, hepsi senin cihazında</h2>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:22px">
+      <div style="background:#f7f2e9; border-radius:22px; padding:30px; display:flex; flex-direction:column; gap:14px">
+        <div style="width:52px; height:52px; border-radius:16px; background:#e8c4b0; display:flex; align-items:center; justify-content:center; font-size:24px">📖</div>
+        <h3 style="margin:0; font-family:Fraunces,serif; font-size:24px; font-weight:600">Sana yazılan dersler</h3>
+        <p style="margin:0; font-size:15.5px; line-height:1.7; color:#6b6257">Müfredatın iskeleti kod ve veriyle kurulur; ders içeriğini bağladığın model yazar. Beğenmediğin dersi geri bildirimle yeniden ürettirirsin.</p>
+      </div>
+      <div style="background:#f7f2e9; border-radius:22px; padding:30px; display:flex; flex-direction:column; gap:14px">
+        <div style="width:52px; height:52px; border-radius:16px; background:#d6e8f0; display:flex; align-items:center; justify-content:center; font-size:24px">🔁</div>
+        <h3 style="margin:0; font-family:Fraunces,serif; font-size:24px; font-weight:600">Unutmadan tekrar</h3>
+        <p style="margin:0; font-size:15.5px; line-height:1.7; color:#6b6257">Her dersten çıkan kelimeler tekrar kutuna düşer. Aralıklı tekrar, ne zaman hangi kartı göreceğine karar verir — sen sadece açarsın.</p>
+      </div>
+      <div style="background:#f7f2e9; border-radius:22px; padding:30px; display:flex; flex-direction:column; gap:14px">
+        <div style="width:52px; height:52px; border-radius:16px; background:#d7e0cf; display:flex; align-items:center; justify-content:center; font-size:24px">🏮</div>
+        <h3 style="margin:0; font-family:Fraunces,serif; font-size:24px; font-weight:600">Hazır kütüphane</h3>
+        <p style="margin:0; font-size:15.5px; line-height:1.7; color:#6b6257">Kanji, HSK kelime listeleri ve gramer föyleri kutudan çıkar — hiçbir model bağlamadan da sözlük ve gramer bölümlerini kullanabilirsin.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- KÜTÜPHANE / ÖZELLİKLER -->
+<section id="kutuphane" style="padding:88px 32px">
+  <div style="max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:40px">
+    <div style="display:flex; flex-direction:column; gap:12px; max-width:620px">
+      <div style="font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; color:#a2988a">Kütüphane</div>
+      <h2 style="margin:0; font-family:Fraunces,serif; font-size:44px; font-weight:600; letter-spacing:-.02em; line-height:1.1">Dile göre değişen araçlar</h2>
+      <p style="margin:0; font-size:17px; line-height:1.7; color:#6b6257">Japonca çalışıyorsan kana tablosu ve yazım pratiği; Çince’de pinyin ve HSK sözlüğü; Hollandaca’da inburgering deneme sınavları açılır.</p>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:18px">
+      <div style="background:#fffdf7; border-radius:20px; padding:26px; box-shadow:0 2px 8px rgb(46 42 36/.06); display:flex; flex-direction:column; gap:10px">
+        <div style="font-family:'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif; font-size:34px; line-height:1.2; color:#c4643b">書</div>
+        <div style="font-size:16px; font-weight:800">Yazım pratiği</div>
+        <div style="font-size:14.5px; line-height:1.65; color:#6b6257">Kanji ve hanzi için vuruş sırası; parmağınla veya fareyle çiz, sistem kontrol etsin.</div>
+      </div>
+      <div style="background:#fffdf7; border-radius:20px; padding:26px; box-shadow:0 2px 8px rgb(46 42 36/.06); display:flex; flex-direction:column; gap:10px">
+        <div style="font-size:32px; line-height:1.25">⛩️</div>
+        <div style="font-size:16px; font-weight:800">Çekim tabloları</div>
+        <div style="font-size:14.5px; line-height:1.65; color:#6b6257">Japonca fiil çekimi, Çince görünüş yapıları, Hollandaca düzensiz fiiller — hepsi tek yerde.</div>
+      </div>
+      <div style="background:#fffdf7; border-radius:20px; padding:26px; box-shadow:0 2px 8px rgb(46 42 36/.06); display:flex; flex-direction:column; gap:10px">
+        <div style="font-size:32px; line-height:1.25">🔍</div>
+        <div style="font-size:16px; font-weight:800">Okuma bilen arama</div>
+        <div style="font-size:14.5px; line-height:1.65; color:#6b6257">Kelimeyi kanjisiyle, kanasıyla, romajisiyle veya pinyiniyle ara — hepsi aynı sonuca gider.</div>
+      </div>
+      <div style="background:#fffdf7; border-radius:20px; padding:26px; box-shadow:0 2px 8px rgb(46 42 36/.06); display:flex; flex-direction:column; gap:10px">
+        <div style="font-size:32px; line-height:1.25">💬</div>
+        <div style="font-size:16px; font-weight:800">Sohbet</div>
+        <div style="font-size:14.5px; line-height:1.65; color:#6b6257">Seviyene göre konuşma pratiği. Takıldığın kelimeyi seç, anlamı yerinde açılsın.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GİZLİLİK -->
+<section id="gizlilik" style="padding:88px 32px; background:#2e2a24; color:#f7f2e9">
+  <div style="max-width:1120px; margin:0 auto; display:flex; gap:56px; flex-wrap:wrap; align-items:center">
+    <div style="flex:1; min-width:320px; display:flex; flex-direction:column; gap:20px">
+      <div style="font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; color:#a2988a">Gizlilik</div>
+      <h2 style="margin:0; font-family:Fraunces,serif; font-size:44px; font-weight:600; letter-spacing:-.02em; line-height:1.1; color:#f7f2e9">İlerlemen senin cihazında kalır</h2>
+      <p style="margin:0; font-size:17px; line-height:1.7; color:#c8bfb1; max-width:52ch">Profiller, ilerleme, tekrar kutun ve üretilmiş derslerin tarayıcındaki bir veritabanında durur. Hiçbir yere yüklenmez. İstersen tek dosya olarak indirir, başka bir bilgisayarda kaldığın yerden devam edersin.</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; padding-top:4px">
+        <span style="background:#3b342b; border-radius:999px; padding:9px 17px; font-size:14px; font-weight:600">Anonim varsayılan</span>
+        <span style="background:#3b342b; border-radius:999px; padding:9px 17px; font-size:14px; font-weight:600">Tek dosya yedek</span>
+        <span style="background:#3b342b; border-radius:999px; padding:9px 17px; font-size:14px; font-weight:600">İsteğe bağlı bulut</span>
+      </div>
+    </div>
+    <div style="flex:1; min-width:320px; background:#3b342b; border-radius:24px; padding:30px; display:flex; flex-direction:column; gap:16px">
+      <div style="display:flex; align-items:center; gap:12px">
+        <span style="font-size:22px">⬇︎</span>
+        <div>
+          <div style="font-size:15.5px; font-weight:800">Kaydı indir</div>
+          <div style="font-size:13.5px; color:#a89c8c; margin-top:1px">okumo-2026-07-27.db · 8,2 MB</div>
+        </div>
+      </div>
+      <div style="height:1px; background:#4a4237"></div>
+      <div style="font-size:14.5px; line-height:1.7; color:#c8bfb1">Modeli de sen getirirsin: kendi API anahtarın, yerel bir Ollama, ya da terminaldeki kodlama aboneliğin. Anahtar tarayıcından çıkmaz.</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <span style="background:#4a4237; border-radius:10px; padding:7px 13px; font-size:13px; font-weight:600">Anthropic</span>
+        <span style="background:#4a4237; border-radius:10px; padding:7px 13px; font-size:13px; font-weight:600">OpenAI uyumlu</span>
+        <span style="background:#4a4237; border-radius:10px; padding:7px 13px; font-size:13px; font-weight:600">Ollama</span>
+        <span style="background:#4a4237; border-radius:10px; padding:7px 13px; font-size:13px; font-weight:600">CLI köprüsü</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="basla" style="padding:96px 32px; text-align:center">
+  <div style="max-width:720px; margin:0 auto; display:flex; flex-direction:column; align-items:center; gap:24px">
+    <svg viewBox="0 0 128 86" width="100" height="67" style="animation:float-slow 3.5s ease-in-out infinite"><g fill="#c4643b"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g><rect x="30" y="74" width="26" height="7" rx="3.5" fill="#7fb9d1"></rect><rect x="64" y="74" width="42" height="7" rx="3.5" fill="#7fb9d1"></rect></svg>
+    <h2 style="margin:0; font-family:Fraunces,serif; font-size:48px; font-weight:600; letter-spacing:-.02em; line-height:1.08">Bugün ilk dersini aç.</h2>
+    <p style="margin:0; max-width:46ch; font-size:18px; line-height:1.65; color:#6b6257">Beş dakikalık bir tanışma, sonrası senin yolculuğun.</p>
+    <a href="#basla" style="background:#c4643b; color:#fffdf7; border-radius:999px; padding:17px 40px; font-size:18px; font-weight:700; box-shadow:0 2px 8px rgb(46 42 36/.06), 0 8px 24px rgb(46 42 36/.08)">Ücretsiz başla</a>
+  </div>
+</section>
+
+<footer style="border-top:1px solid #ece3d3; padding:36px 32px">
+  <div style="max-width:1120px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap">
+    <div style="display:flex; align-items:center; gap:10px">
+      <svg viewBox="0 0 128 86" width="26" height="17"><g fill="#cfc6b8"><circle cx="40" cy="44" r="22"></circle><circle cx="68" cy="34" r="27"></circle><circle cx="94" cy="47" r="18"></circle><rect x="18" y="44" width="94" height="22" rx="11"></rect></g></svg>
+      <span style="font-size:14px; color:#8b8175">okumo.dev — kişisel bir proje</span>
+    </div>
+    <div style="display:flex; gap:22px; font-size:14px">
+      <a href="#kutuphane" style="color:#6b6257">Kaynaklar &amp; lisanslar</a>
+      <a href="#gizlilik" style="color:#6b6257">Gizlilik</a>
+      <a href="#basla" style="color:#6b6257">Geri bildirim</a>
+    </div>
+  </div>
+</footer>
+</x-dc>
+</body>
+</html>
