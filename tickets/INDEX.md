@@ -17,7 +17,8 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-043](T-043-multi-tenant-isolation.md) | Server-mode (self-host) multi-tenant izolasyon — cloud tenancy T-046/47'ye taşındı | backlog | p3 | XL | low |
 | [T-051](T-051-rebrand-okumo.md) | Rebranding — isim okumo + marka copy/tone (görsel → T-052/53) | done | p2 | M | medium |
 | [T-052](T-052-sky-design-system.md) | Sky renk ailesi + Kumo mark + info variant (design handoff task 1-3) | done | p2 | S | high |
-| [T-053](T-053-sky-usage-screens.md) | Sky kullanım kuralları — 5 ekrana uygula (before/after) | in-progress | p2 | M | medium |
+| [T-053](T-053-sky-usage-screens.md) | Sky kullanım kuralları — 5 ekrana uygula (before/after) | done | p2 | M | medium |
+| [T-055](T-055-sky-polish-leftovers.md) | Sky kalıntıları: StatsHeader arama pill'i + BackupBar butonu + kapsam dışı ekran focus'ları | backlog | p3 | S | high |
 | [T-054](T-054-okumo-landing.md) | okumo.dev landing sayfası (handoff, ayrı scope) | backlog | p3 | M | low |
 | [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) — stack DOĞRULANDI | done | p1 | M | medium |
 | [T-046](T-046-auth-better-auth.md) | Auth — better-auth Worker'da (Google-only, same-origin, test-gate'li) | done | p1 | L | medium |

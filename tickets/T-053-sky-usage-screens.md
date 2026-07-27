@@ -1,7 +1,7 @@
 ---
 id: T-053
 title: Sky kullanım kuralları — mevcut ekranlara uygula (before/after)
-status: in-progress
+status: done
 priority: p2
 effort: M
 confidence: medium
