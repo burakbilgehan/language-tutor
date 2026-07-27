@@ -234,7 +234,7 @@ export function StatsHeader({
       <div className="mx-auto max-w-6xl px-4">
         <div className="flex h-14 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <svg viewBox="0 0 128 86" height="28" aria-hidden="true">
+            <svg viewBox="0 0 128 86" height="28" className="shrink-0" aria-hidden="true">
               <g fill="var(--accent)">
                 <circle cx="40" cy="44" r="22" />
                 <circle cx="68" cy="34" r="27" />
