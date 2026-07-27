@@ -372,10 +372,15 @@ export type HttpProviderId = (typeof HTTP_PROVIDER_IDS)[number];
 
 /** baseUrl → provider eşlemesi (Settings formunun preset dropdown'ını stored
  * config'e senkronlamak için; LlmProviderSection'ın bugünkü PRESET_LIST.find
- * mantığının katalog karşılığı). */
+ * mantığının katalog karşılığı). Sondaki "/" göz ardı edilir — http-provider.ts
+ * / anthropic-http-provider.ts / browser-provider.ts hepsi fetch'ten önce
+ * `.replace(/\/$/, "")` yapıyor; burada da aynı normalizasyon olmazsa
+ * "https://api.deepseek.com/v1/" (sondaki / ile) gerçek çağrıda çalışır ama
+ * eşleşme bulunamayıp "custom"a düşer ve model çözümü boşuna hata verir. */
 export function providerForBaseUrl(baseUrl: string | undefined): ProviderId | undefined {
   if (!baseUrl) return undefined;
-  const match = CATALOG_LIST.find((p) => p.baseUrl && p.baseUrl === baseUrl);
+  const normalized = baseUrl.replace(/\/$/, "");
+  const match = CATALOG_LIST.find((p) => p.baseUrl && p.baseUrl === normalized);
   return match?.id;
 }
 
@@ -405,10 +410,27 @@ export interface ResolveModelInput {
 /** tier → model id. Sıra: config.models[tier] → env[tier] → katalogdaki
  * sağlayıcının balanced-profil default'u → hata (literal tier string'i ASLA
  * sızdırma — eski bug buydu). CLI kısa-alias davranışı (haiku/sonnet/opus)
- * `cli` sağlayıcısının defaultModels'ı üzerinden korunur. */
+ * `cli` sağlayıcısının defaultModels'ı üzerinden korunur.
+ *
+ * "bridge" sağlayıcısı için bir istisna: configModels'ta tier anahtarı VAR
+ * ama değeri boş string ise (key present, value empty — LlmSetupWizard'ın
+ * eski codex/copilot/gemini kayıtları, upgrade'den önce yazılmış), katalog
+ * default'una (claude alias'ı) düşmek yerine tier adının kendisini döndürür.
+ * Bu, llm-bridge.mjs'in "model seçilmedi" sentinel'i — key TAMAMEN yoksa
+ * (LlmProviderSection'ın boş formu `models: undefined` gönderir) bu istisna
+ * uygulanmaz, normal katalog default'una düşülür. Ayrım olmasaydı zaten
+ * kaydedilmiş boş üçlüler upgrade sonrası claude alias'ı alır, codex/gemini
+ * CLI'sına bilinmeyen modelle giderdi. */
 export function resolveModelId(input: ResolveModelInput): string {
   const fromConfig = input.configModels?.[input.tier];
   if (fromConfig) return fromConfig;
+  if (
+    input.provider === "bridge" &&
+    input.configModels &&
+    Object.hasOwn(input.configModels, input.tier)
+  ) {
+    return input.tier;
+  }
   const fromEnv = input.envModels?.[input.tier];
   if (fromEnv) return fromEnv;
   const entry = CATALOG[input.provider];

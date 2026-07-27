@@ -104,16 +104,51 @@ test("resolveModelId: bridge sentinel — an explicit tier-name config value (co
   );
 });
 
-test("resolveModelId: bridge with an EMPTY string config falls through to the claude alias default (the regression this catalog must not reintroduce for codex/copilot/gemini)", () => {
-  // Documents the failure mode: an empty string is falsy, so it does NOT win
-  // over the catalog default the way the tier-name sentinel above does. If a
-  // caller ever stores {fast: "", ...} for a non-claude bridge backend again,
-  // this is what breaks — the bridge would receive "haiku" instead of the
-  // undefined it needs to fall back to the backend's own default.
+test("resolveModelId: bridge with a PRESENT-BUT-EMPTY string config also returns the sentinel (upgrade path for configs saved before this fix)", () => {
+  // Before this fix, LlmSetupWizard's codex/copilot/gemini backends stored
+  // {fast: "", balanced: "", deep: ""} — an empty string is falsy, so a naive
+  // fallback would skip config and fall through to the catalog's "bridge"
+  // default (a real claude alias like "haiku"), which those CLIs reject.
+  // resolveModelId() special-cases "bridge" + key-present-but-empty so
+  // already-stored configs keep getting the sentinel after the upgrade,
+  // without a migration step.
   assert.equal(
     resolveModelId({ tier: "fast", provider: "bridge", configModels: { fast: "" } }),
+    "fast"
+  );
+  assert.equal(
+    resolveModelId({ tier: "deep", provider: "bridge", configModels: { fast: "", deep: "" } }),
+    "deep"
+  );
+});
+
+test("resolveModelId: bridge with the key ABSENT (not just empty) falls through to the claude alias default", () => {
+  // The key-present-vs-absent distinction matters: LlmProviderSection's save()
+  // sends `models: undefined` for a fully-blank form, which must still mean
+  // "use the catalog default" (the real claude bridge path relies on this).
+  assert.equal(
+    resolveModelId({ tier: "fast", provider: "bridge" }),
     CATALOG.bridge.defaultModels.fast
   );
+  assert.equal(
+    resolveModelId({ tier: "fast", provider: "bridge", configModels: { balanced: "sonnet" } }),
+    CATALOG.bridge.defaultModels.fast
+  );
+});
+
+test("resolveModelId: the bridge empty-string sentinel does not leak into other providers", () => {
+  // The exception is bridge-specific; deepseek (or any other provider) with a
+  // present-but-empty model string still falls through to its own catalog
+  // default, not to the literal tier name.
+  assert.equal(
+    resolveModelId({ tier: "fast", provider: "deepseek", configModels: { fast: "" } }),
+    CATALOG.deepseek.defaultModels.fast
+  );
+});
+
+test("providerForBaseUrl: ignores a trailing slash (matches how the HTTP providers normalize baseUrl before fetching)", () => {
+  assert.equal(providerForBaseUrl(`${CATALOG.deepseek.baseUrl}/`), "deepseek");
+  assert.equal(providerForBaseUrl(CATALOG.deepseek.baseUrl), "deepseek");
 });
 
 test("catalog: every provider's three quality profiles are non-empty triples (except custom, which is user-filled)", () => {
