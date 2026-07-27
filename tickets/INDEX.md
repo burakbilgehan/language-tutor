@@ -8,7 +8,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
 | [T-056](T-056-llmless-first-content.md) | LLM'siz akış — Faz 1 bug + Faz 2 kütüphane hub'ı + anonim kapı (B ruling'i) | done | p1 | M | high |
-| [T-064](T-064-en-native-seed-gap.md) | İçerik fallback zinciri — LLM → seed → oto-çeviri (rozetli) → dürüst boşluk | backlog | p1 | L | medium |
+| [T-064](T-064-en-native-seed-gap.md) | İçerik fallback zinciri — LLM → seed → oto-çeviri (rozetli) → dürüst boşluk — grammar fazı bitti, rozet metni + tam koşu Burak kararında | done | p1 | L | medium |
 | [T-057](T-057-model-catalog.md) | Model kataloğu tek kaynak — Eko/Denge/En iyi + bayat id temizliği | backlog | p2 | M | high |
 | [T-058](T-058-catalog-freshness.md) | Katalog tazelik mekanizması (Worker doğrulama + staleWarnings) | backlog | p3 | M | medium |
 | [T-059](T-059-bridge-npx-health.md) | Bridge blackbox — npx paketi + /health + opencode kararı | backlog | p2 | M | high |

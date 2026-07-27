@@ -1,13 +1,30 @@
 ---
 id: T-064
 title: İçerik fallback zinciri — LLM override → seed → oto-çeviri (MT) → dürüst boşluk
-status: backlog
+status: done
 priority: p1
 effort: L
 confidence: medium
 depends: []
 created: 2026-07-27
+closed: 2026-07-27
 ---
+**Kapanış (2026-07-27, grammar fazı):** 4 katmanlı zincir merge edildi
+(`c321b36` + review fix `4b3ebcf`). MT motoru: Argos denendi, kanıtla
+reddedildi (uzun cümlede sessiz yan-cümle düşürme) — ticket'taki devirme
+koşulu erken tetiklendi, boru hattı kendi LLM provider'ımıza (fast tier,
+Max sub) döndü; iki motor da `scripts/mt/engine.ts` `TranslateEngine`
+arayüzü arkasında. Commit'li gerçek çıktı: `public/grammar-seed/ja.en.json`
+(7 konu) + `src/lib/grammar-index/titles.{ja,zh,nl}.en.json` (ja 20/20
+gerçek koşu). Kalanlar:
+- **Burak kararı bekliyor:** rozet metni "otomatik çevrildi" — motor LLM
+  olduğu için "LLM ile çevrildi"ye inebilir/kalkabilir; 10-konu spot-check
+  sonrası. Tam seed koşusu (`npx tsx scripts/mt-grammar-seed.ts --all`)
+  spot-check onayından sonra.
+- **İkinci faz (ayrı iş):** kanji/vocab MT — index'leri zaten en gloss
+  taşıyor, muhtemelen yalnız content MT gerekir.
+- **Bilinçli bırakılan:** `seed-strip.ts` MT (en) yarılarını strip'lemiyor
+  (israf byte, veri kaybı değil); tarayıcı/manuel UI testi yapılmadı.
 T-056'da saptanan en-native boşluğunun çözümü, Burak'ın 2026-07-27 ruling'iyle
 katmanlı fallback zincirine genişledi. **Bağlayıcı ilkeler (Burak):**
 - Çeviri içerik YALNIZ gerçek içerik yokken gösterilir; gerçek içerikle asla
