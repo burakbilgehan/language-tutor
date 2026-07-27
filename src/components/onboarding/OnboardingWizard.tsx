@@ -818,6 +818,32 @@ export function OnboardingWizard() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
         <div className="rounded-cozy bg-surface p-5 shadow-cozy sm:p-8">
+          {/* T-056 follow-up: instant language switch, before any door is
+              picked. Sets BOTH ui and native language so the anonymous door
+              and the wizard's step-0 preselection carry the choice. Labels
+              are self-named on purpose — never translate a language's own
+              name. */}
+          <div className="mb-3 flex justify-end gap-2">
+            {(["en", "tr"] as const).map((code) => (
+              <button
+                key={code}
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    uiLanguage: code,
+                    nativeLanguage: code,
+                  }))
+                }
+                className={`cursor-pointer rounded-full border-2 px-3 py-1 text-sm transition-colors ${
+                  draft.uiLanguage === code
+                    ? "border-accent font-semibold"
+                    : "border-surface-2 text-ink-soft hover:border-accent/50"
+                }`}
+              >
+                {code === "en" ? "English" : "Türkçe"}
+              </button>
+            ))}
+          </div>
           <h1 className="text-2xl font-semibold">{t.introTitle}</h1>
           <p className="mt-2 mb-6 text-ink-soft">{t.introSubtitle}</p>
 
