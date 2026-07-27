@@ -55,3 +55,6 @@ public/grammar-seed/*.stub.json
 .claude/
 .wrangler/
 .static-build-aside/
+
+# T-059: npm pack output, never committed (tarball is regenerated on demand)
+packages/*/*.tgz

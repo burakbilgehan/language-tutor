@@ -1,0 +1,32 @@
+{
+  "name": "okumo-bridge",
+  "version": "0.1.0",
+  "description": "Local HTTP bridge that exposes claude/codex/copilot/gemini/opencode CLI subscriptions as an OpenAI-compatible endpoint for the Okumo language tutor (https://okumo.dev). Nothing leaves your machine.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "okumo-bridge": "bin/okumo-bridge.mjs"
+  },
+  "files": [
+    "bin/okumo-bridge.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prepack": "node sync-source.mjs"
+  },
+  "keywords": [
+    "okumo",
+    "llm-bridge",
+    "claude",
+    "openai-compatible"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burakbilgehan/language-tutor.git",
+    "directory": "packages/okumo-bridge"
+  },
+  "homepage": "https://okumo.dev"
+}
