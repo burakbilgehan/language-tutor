@@ -10,8 +10,15 @@ import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { useLocalizeError } from "@/lib/i18n/use-localize-error";
-import { openNodeApi, completeNodeApi, attemptApi, regenerateLesson } from "@/lib/client-api";
+import { useLocalizeError, resolveUiLang } from "@/lib/i18n/use-localize-error";
+import {
+  openNodeApi,
+  completeNodeApi,
+  attemptApi,
+  regenerateLesson,
+  llmConfigGet,
+} from "@/lib/client-api";
+import { diagnoseGenerationFailure } from "@/lib/llm-diagnosis";
 
 const S = {
   tr: {
@@ -174,7 +181,8 @@ export function LessonPlayer({
   const t = useStrings(S);
   const localize = useLocalizeError();
   const router = useRouter();
-  const targetLanguage = useProfileMeta()?.targetLanguage;
+  const profileMeta = useProfileMeta();
+  const targetLanguage = profileMeta?.targetLanguage;
   const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
   const exit = useCallback(() => {
     if (onExit) onExit();
@@ -193,6 +201,38 @@ export function LessonPlayer({
   const [regenFeedback, setRegenFeedback] = useState("");
   const stopped = useRef(false);
 
+  // T-063: reachable in static mode only — generation there runs inline, so
+  // openNodeApi/regenerateLesson throw a real LlmError straight into this
+  // catch. In server mode a bridge-down failure never reaches here: the
+  // lesson job fails async and openNode() (src/core/lesson.ts) reports
+  // needsGeneration again rather than surfacing an error, so the route keeps
+  // returning {status:"generating"} and this component polls forever without
+  // throwing. That gap is in src/core/*/jobs.ts, outside this ticket's fence
+  // (see the report for the disclosure) — this helper only closes the static
+  // half of the gap, plus regenerate()'s failure path in both modes.
+  const diagnose = useCallback(
+    async (e: unknown): Promise<string> => {
+      const generic = localize(e);
+      try {
+        const config = await llmConfigGet();
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const diagnosis = await diagnoseGenerationFailure({
+          err: e,
+          baseUrl: config.baseUrl,
+          uiLang: resolveUiLang(profileMeta?.uiLanguage),
+          isLocalOrigin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin),
+          origin,
+        });
+        return diagnosis.message;
+      } catch {
+        // Diagnosis failing must never hide the already-computed generic
+        // message.
+        return generic;
+      }
+    },
+    [localize, profileMeta?.uiLanguage]
+  );
+
   const open = useCallback(async () => {
     try {
       const body = (await openNodeApi(nodeId)) as OpenResponse;
@@ -202,10 +242,10 @@ export function LessonPlayer({
         setTimeout(open, 3000);
       }
     } catch (e) {
-      if (!stopped.current)
-        setError(localize(e));
+      const message = await diagnose(e);
+      if (!stopped.current) setError(message);
     }
-  }, [nodeId, t]);
+  }, [nodeId, diagnose]);
 
   useEffect(() => {
     stopped.current = false;
@@ -231,11 +271,11 @@ export function LessonPlayer({
         await regenerateLesson(nodeId, feedback);
         open();
       } catch (e) {
-        if (!stopped.current)
-          setError(localize(e));
+        const message = await diagnose(e);
+        if (!stopped.current) setError(message);
       }
     },
-    [nodeId, open, t]
+    [nodeId, open, diagnose]
   );
 
   const finish = useCallback(async () => {
@@ -460,8 +500,19 @@ function ExerciseCard({
     answer: string;
     acceptAlso: string[];
   } | null>(null);
-  const targetLanguage = useProfileMeta()?.targetLanguage;
+  const profileMeta = useProfileMeta();
+  const targetLanguage = profileMeta?.targetLanguage;
   const cjkLang = targetLanguage === "ja" || targetLanguage === "zh" ? targetLanguage : null;
+  // Remounted per exercise (key={exercises[exIdx].id} above) — an in-flight
+  // diagnosis probe from a previous exercise must not setState after this
+  // instance is gone.
+  const stopped = useRef(false);
+  useEffect(() => {
+    stopped.current = false;
+    return () => {
+      stopped.current = true;
+    };
+  }, []);
 
   const submit = async (value: string, selfVerdict?: boolean) => {
     setGrading(true);
@@ -475,9 +526,27 @@ function ExerciseCard({
       setSelfCheck(null);
       setResult(body);
     } catch (e) {
-      setGradeError(localize(e));
+      // Free-response/translate grading is the OTHER synchronous LLM call in
+      // this file (mcq/fill_blank are deterministic, never reach here) — same
+      // bridge-down diagnosis as open()/regenerate() above.
+      let message = localize(e);
+      try {
+        const config = await llmConfigGet();
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const diagnosis = await diagnoseGenerationFailure({
+          err: e,
+          baseUrl: config.baseUrl,
+          uiLang: resolveUiLang(profileMeta?.uiLanguage),
+          isLocalOrigin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin),
+          origin,
+        });
+        message = diagnosis.message;
+      } catch {
+        // keep the generic message computed above
+      }
+      if (!stopped.current) setGradeError(message);
     } finally {
-      setGrading(false);
+      if (!stopped.current) setGrading(false);
     }
   };
 
