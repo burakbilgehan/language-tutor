@@ -1,7 +1,7 @@
 ---
 id: T-063
 title: Bağlantı durumu kartı + "köprün kapalı" hata yönlendirmesi
-status: backlog
+status: done
 priority: p3
 effort: S
 confidence: high

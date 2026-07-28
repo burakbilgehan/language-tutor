@@ -1,7 +1,7 @@
 ---
 id: T-057
 title: Model kataloğu tek kaynak — Eko/Denge/En iyi profilleri + bayat id temizliği
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: high

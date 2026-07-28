@@ -1,7 +1,7 @@
 ---
 id: T-060
 title: LLM sihirbazı IA redesign — 3 kapı, canlı algılama, kalite profili, dürüst copy
-status: backlog
+status: done
 priority: p2
 effort: L
 confidence: medium

@@ -1,7 +1,7 @@
 ---
 id: T-059
 title: Bridge blackbox'lama — npx paketi + /health + opencode kararı
-status: backlog
+status: done
 priority: p2
 effort: M
 confidence: high

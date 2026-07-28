@@ -1,7 +1,7 @@
 ---
 id: T-061
 title: Canlı model listeleri — Ollama tags / OpenRouter models / bridge
-status: backlog
+status: done
 priority: p3
 effort: S
 confidence: high

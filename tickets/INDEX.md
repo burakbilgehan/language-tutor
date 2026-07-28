@@ -9,13 +9,14 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 |---|---|---|---|---|---|
 | [T-056](T-056-llmless-first-content.md) | LLM'siz akış — Faz 1 bug + Faz 2 kütüphane hub'ı + anonim kapı (B ruling'i) | done | p1 | M | high |
 | [T-064](T-064-en-native-seed-gap.md) | İçerik fallback zinciri — LLM → seed → oto-çeviri (rozetli) → dürüst boşluk — grammar fazı bitti, rozet metni + tam koşu Burak kararında | done | p1 | L | medium |
-| [T-057](T-057-model-catalog.md) | Model kataloğu tek kaynak — Eko/Denge/En iyi + bayat id temizliği | backlog | p2 | M | high |
-| [T-058](T-058-catalog-freshness.md) | Katalog tazelik mekanizması (Worker doğrulama + staleWarnings) | backlog | p3 | M | medium |
-| [T-059](T-059-bridge-npx-health.md) | Bridge blackbox — npx paketi + /health + opencode kararı | backlog | p2 | M | high |
-| [T-060](T-060-wizard-ia-redesign.md) | Sihirbaz IA redesign — 3 kapı, canlı algılama, kalite profili, dürüst copy | backlog | p2 | L | medium |
-| [T-061](T-061-live-model-lists.md) | Canlı model listeleri (Ollama tags / OpenRouter / bridge) | backlog | p3 | S | high |
-| [T-062](T-062-openrouter-pkce.md) | OpenRouter PKCE tek-tık — KARAR-GATE (Burak onayı bekler) | backlog | p3 | M | medium |
-| [T-063](T-063-connection-status-card.md) | Bağlantı durumu kartı + köprü-kapalı hata yönlendirmesi | backlog | p3 | S | high |
+| [T-057](T-057-model-catalog.md) | Model kataloğu tek kaynak — Eko/Denge/En iyi + bayat id temizliği | done | p2 | M | high |
+| [T-058](T-058-catalog-freshness.md) | Katalog tazelik mekanizması (Worker doğrulama + staleWarnings) | done | p3 | M | medium |
+| [T-059](T-059-bridge-npx-health.md) | Bridge blackbox — npx paketi + /health + opencode kararı | done | p2 | M | high |
+| [T-060](T-060-wizard-ia-redesign.md) | Sihirbaz IA redesign — 3 kapı, canlı algılama, kalite profili, dürüst copy | done | p2 | L | medium |
+| [T-061](T-061-live-model-lists.md) | Canlı model listeleri (Ollama tags / OpenRouter / bridge) | done | p3 | S | high |
+| [T-062](T-062-openrouter-pkce.md) | OpenRouter PKCE tek-tık — KARAR-GATE (Burak onayı bekler) | in-progress | p3 | M | medium |
+| [T-063](T-063-connection-status-card.md) | Bağlantı durumu kartı + köprü-kapalı hata yönlendirmesi | done | p3 | S | high |
+| [T-066](T-066-llm-config-save-contract.md) | LLM config save-yolu kontratı (key taşınması + concurrency + önce-test) — T-060 review çıktısı | backlog | p2 | S | high |
 | [T-024](T-024-save-job-queue-leak.md) | Save'e job kuyruğu sızması (import token yakıyor) — geçici fix; kalıcı çözüm T-034 | done | p1 | S | high |
 | [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | done | p2 | M | high |
 | [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | done | p1 | L | medium |

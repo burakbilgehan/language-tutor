@@ -1,7 +1,7 @@
 ---
 id: T-058
 title: Katalog tazelik mekanizması — model id'lerini güncel tutan Worker doğrulaması
-status: backlog
+status: done
 priority: p3
 effort: M
 confidence: medium
