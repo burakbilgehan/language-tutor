@@ -66,6 +66,14 @@ export function ChatPanel() {
   const stopped = useRef(false);
 
   useEffect(() => {
+    // StrictMode (Next 15 dev default) runs mount -> cleanup -> mount on the
+    // SAME ref before the first real unmount — without resetting to false
+    // here, stopped.current lands on `true` after that double-invoke and
+    // every send() afterwards silently skips its setState calls (chat gets
+    // stuck on the typing dots forever). LessonPlayer's stopped ref and the
+    // ExerciseCard one added in this same change both reset on mount; this
+    // one didn't, and only breaks in dev — caught in review, not by tsc/tests.
+    stopped.current = false;
     chatHistoryApi()
       .then((d) => {
         setSessionId(d.sessionId);
