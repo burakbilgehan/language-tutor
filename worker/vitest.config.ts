@@ -30,6 +30,14 @@ export default defineConfig({
           GOOGLE_CLIENT_SECRET: "test-google-client-secret",
           // Read by test/helpers/session.ts to create the auth tables.
           TEST_MIGRATIONS: migrations,
+          // T-058: opt-in flag for the one test that hits the REAL
+          // openrouter.ai (test/catalog-route.test.ts). Off by default so the
+          // suite is fully offline/deterministic — a real model rename would
+          // otherwise fail CI in a way that reads as "the feature is broken"
+          // rather than "the catalog needs curating". Flip to "1" locally to
+          // re-run the live proof; `process.env` is not reliably readable
+          // inside workerd, hence a binding rather than an env var.
+          T058_LIVE_CHECK: "",
         },
       },
     }),

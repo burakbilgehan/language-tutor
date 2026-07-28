@@ -1,5 +1,7 @@
 import type { AuthInstance } from "./auth";
 import type { Env } from "./env";
+import { CATALOG_PAYLOAD } from "./catalog-payload";
+import { readStoredReport } from "./catalog-cron";
 
 /**
  * The route table. This file is the COMPLETE inventory of the Worker's API
@@ -83,6 +85,38 @@ export const routes: Route[] = [
     methods: ["GET"],
     auth: "open",
     handler: () => json({ ok: true }),
+  },
+
+  {
+    // T-058: versioned model catalog + freshness watchdog. The app's build
+    // ALWAYS embeds its own catalog (src/lib/llm/catalog.ts) as the working
+    // fallback; this route is purely an optional overlay the client fetches
+    // at runtime to pick up label/price corrections and to learn about ids
+    // the weekly cron found dead on OpenRouter. No user data, no mutation, no
+    // auth — same posture as /api/health.
+    path: "/api/llm-catalog",
+    methods: ["GET"],
+    auth: "open",
+    handler: async ({ env }) => {
+      const stored = await readStoredReport(env);
+      const body = {
+        ...CATALOG_PAYLOAD,
+        staleWarnings: stored?.warnings ?? [],
+        // When the cron has never run (or KV isn't bound yet), lastCheckedAt
+        // is absent rather than a fabricated timestamp — the client/curator
+        // should be able to tell "never checked" apart from "checked, clean".
+        ...(stored ? { lastCheckedAt: stored.checkedAt } : {}),
+      };
+      return json(body, 200, {
+        // Cheap client-side caching: this changes at most weekly (cron) or a
+        // few times a year (catalog edits), so a same-origin GET can be
+        // served from the browser HTTP cache between page loads instead of
+        // re-fetching every load. Not "immutable" — the whole point is that
+        // this DOES change; short max-age keeps it from ever going stale by
+        // more than an hour on a cached client.
+        "cache-control": "public, max-age=3600",
+      });
+    },
   },
 
   {
@@ -295,9 +329,13 @@ export function matchRoute(url: URL, method: string): Route | "method_not_allowe
   return pathMatched ? "method_not_allowed" : null;
 }
 
-export function json(body: unknown, status = 200): Response {
+export function json(
+  body: unknown,
+  status = 200,
+  extraHeaders?: Record<string, string>
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...extraHeaders },
   });
 }

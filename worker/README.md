@@ -1,8 +1,67 @@
-# worker/ — language-tutor backend (T-046, T-047)
+# worker/ — language-tutor backend (T-046, T-047, T-058)
 
 Cloudflare Worker holding **identity** (better-auth, Google-only, sessions in
-D1) and the **per-user save blob** in R2. T-045 was the spike that proved the
-stack; T-046 hardened it; T-047 built real save-sync on top.
+D1), the **per-user save blob** in R2, and (T-058) a **model-catalog
+freshness watchdog** in KV. T-045 was the spike that proved the stack; T-046
+hardened it; T-047 built real save-sync on top.
+
+## Model catalog freshness (T-058)
+
+`GET /api/llm-catalog` — open route, no session, mirrors `/api/health`'s
+posture. Serves a **versioned** copy of the app's LLM model catalog
+(`src/catalog-payload.ts`, a hand-synced mirror of the app's
+`src/lib/llm/catalog.ts` MODEL_REGISTRY — see "Two catalogs, spelled twice"
+below) plus `staleWarnings` from the last cron run and `lastCheckedAt` (both
+omitted/empty until the cron has run once). `Cache-Control: public,
+max-age=3600` so a client re-fetching on every page load costs nothing beyond
+the browser's own HTTP cache.
+
+**The app build's embedded catalog is ALWAYS the working fallback.** This
+route is an optional overlay a client can fetch at runtime to pick up
+label/price corrections and cron-discovered stale ids — never a hard
+dependency. A client that can't reach this route (offline, server mode has no
+such route, this Worker is down) keeps working unchanged.
+
+**Weekly cron** (`triggers.crons`, Monday 04:00 UTC — arbitrary beyond "not
+daily", so a transient blip doesn't spam KV writes and a real rename has a
+week to get noticed and fixed by hand) checks every catalog id marked
+`checkAs` in `src/catalog-data.ts` against OpenRouter's public, key-free `GET
+/models` and writes the result to KV (`src/catalog-cron.ts`). It **never**
+auto-fixes or auto-removes a dead id, and it **never** overwrites a good
+previous report with a failed one — a network blip, a non-200, malformed
+JSON, or a suspiciously short model list (`< 50`, the real list has
+consistently been 300+) all leave KV exactly as it was, logging a
+`fetchError` instead of writing. Without that guard, one flaky fetch could
+report "every model is dead" to every client reading `/api/llm-catalog` until
+the next successful run. Curation stays human — this is the watchdog, not the
+fix.
+
+**Two catalogs, spelled twice, on purpose.** `src/catalog-data.ts` (what to
+check) and `src/catalog-payload.ts` (what to serve) both live in this
+package, separate from the app's `src/lib/llm/catalog.ts` — same reasoning as
+`MAX_UPLOAD_BYTES`/`VERSION_HEADER` in `routes.ts`: this is a standalone npm
+package with its own lockfile and no path into the app's `src/`, and the app
+catalog is explicitly "zero node imports" so it can ship in a browser bundle,
+a constraint this Worker doesn't share and shouldn't import into. A
+`test/catalog-drift.test.ts` guard keeps `catalog-data.ts` and
+`catalog-payload.ts` in sync WITH EACH OTHER; keeping either in sync with the
+app's `src/lib/llm/catalog.ts` is a **manual step** — re-run the sync
+whenever `MODEL_REGISTRY` changes there. Only models with a genuine
+public/key-free listing get a `checkAs` (Anthropic/OpenAI native ids via
+their OpenRouter mirror, OpenRouter slugs directly); CLI aliases, Ollama tags,
+DeepSeek's version-independent native aliases, and the LM Studio placeholder
+get `checkAs: null` and are never flagged — guessing a mapping heuristically
+risked a false "dead" warning, and one false alarm is enough to make the
+mechanism untrusted.
+
+**Live-network discovery**: this vitest-pool-workers config permits real
+outbound `fetch` from the test runtime (no `outboundService` restriction) —
+confirmed empirically while writing the tests, an early version of the
+scheduled-handler test wrongly assumed egress was blocked. The one test that
+exercises this (`test/catalog-route.test.ts`, "LIVE network, real
+OpenRouter") is gated behind `env.T058_LIVE_CHECK` (off by default via
+`vitest.config.ts`) so the suite stays deterministic/offline for normal runs
+and CI; flip the binding to `"1"` locally to re-run the live proof.
 
 ## Save-sync (T-047)
 
@@ -243,7 +302,22 @@ localhost/placeholder — it is what `wrangler dev` and the test suite read.
    root with a plain `npm run build:static`, **without** `NEXT_PUBLIC_BASE_PATH`.
    Nothing sets that variable anymore (the GitHub Pages workflow that did was
    removed 2026-07-27), so a plain local build is already root-relative.
-5. `npx wrangler deploy --env production`. The custom-domain route attaches
+5. **T-058 catalog KV.** Create the namespace and paste the printed id into
+   `env.production`'s `kv_namespaces` block (replacing the all-zeros
+   placeholder):
+   ```sh
+   npx wrangler kv namespace create CATALOG_KV --env production
+   ```
+   Optional in the sense that `GET /api/llm-catalog` still serves fine with
+   the placeholder (empty `staleWarnings`, `readStoredReport` treats a
+   missing/broken binding as "no warnings yet") — but the cron's KV **write**
+   needs the real namespace to persist anything, so do this before relying on
+   the weekly check. No further activation step: `triggers.crons` in
+   `wrangler.jsonc` is picked up on deploy; confirm it took by checking the
+   Worker's "Triggers" tab in the Cloudflare dashboard, or
+   `npx wrangler deployments list --env production` / the scheduled-events log
+   after the first Monday run.
+6. `npx wrangler deploy --env production`. The custom-domain route attaches
    okumo.dev on first deploy (DNS + cert are automatic on the zone).
 
 ## Notes / risks

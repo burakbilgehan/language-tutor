@@ -14,6 +14,10 @@ declare global {
     interface Env extends WorkerEnv {
       /** Injected by vitest.config.ts; read by test/helpers/session.ts. */
       TEST_MIGRATIONS: D1Migration[];
+      /** Injected by vitest.config.ts; read by test/catalog-route.test.ts to
+       * opt in to the one live-network test. "1" to enable, "" (default) to
+       * skip. */
+      T058_LIVE_CHECK: string;
     }
   }
 }
