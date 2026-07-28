@@ -1,7 +1,7 @@
 ---
 id: T-062
 title: OpenRouter PKCE tek-tık bağlantı ("OpenRouter ile bağlan")
-status: in-progress
+status: done
 priority: p3
 effort: M
 confidence: medium
