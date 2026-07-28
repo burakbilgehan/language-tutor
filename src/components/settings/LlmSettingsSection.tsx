@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { llmConfigGet, type LlmConfigDto } from "@/lib/client-api";
 import { CATALOG, providerForBaseUrl, type ProviderId } from "@/lib/llm/catalog";
+import { refreshCatalogFromWorker } from "@/lib/llm/catalog-refresh";
 import { qualityForModels, modelLineFor } from "./llm-setup-logic";
 import { useLocalLlmProbe } from "./useLocalLlmProbe";
 import { LlmSetupWizard, type WizardOutcome } from "./LlmSetupWizard";
@@ -266,6 +267,14 @@ export function LlmSettingsSection() {
 
   useEffect(() => {
     refresh();
+    // T-058 seam (orchestrator wiring): the runtime catalog overlay patches
+    // MODEL_REGISTRY labels/prices in place; a successful fetch re-runs
+    // refresh() so the already-rendered card/wizard labels pick the fresh
+    // values up on the re-render. Failure changes nothing by construction
+    // (embedded catalog stays the fallback) — no error surface needed here.
+    refreshCatalogFromWorker().then((payload) => {
+      if (payload && mounted.current) refresh();
+    });
   }, [refresh]);
 
   const reopen = useCallback(() => {
