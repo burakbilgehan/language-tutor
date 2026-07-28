@@ -50,6 +50,9 @@ const S = {
     // T-062: OpenRouter kalan kredi satırı.
     creditRemaining: (amount: string) => `kalan kredi: ${amount}`,
     creditUnlimited: "kredi sınırı yok",
+    // Ücretsiz katman: limit_remaining null gelir ama bu "sınırsız" DEĞİL —
+    // günlük istek kotası var. "Sınır yok" demek düpedüz yanlış olurdu.
+    creditFree: "ücretsiz katman (günlük istek limiti var)",
   },
   en: {
     title: "AI connection",
@@ -71,6 +74,7 @@ const S = {
     ollamaSearching: "checking Ollama…",
     creditRemaining: (amount: string) => `credit left: ${amount}`,
     creditUnlimited: "no credit cap",
+    creditFree: "free tier (daily request limit)",
   },
 };
 
@@ -204,6 +208,7 @@ function LiveLocalStatus({
 function OpenRouterCreditLine({ t }: { t: (typeof S)["tr"] }) {
   const [credit, setCredit] = useState<{
     limitRemaining: number | null;
+    isFreeTier: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -216,7 +221,9 @@ function OpenRouterCreditLine({ t }: { t: (typeof S)["tr"] }) {
       const key = readBrowserLlmConfig()?.apiKey;
       if (!key) return;
       const c = await fetchKeyCredit(key, fetch, ctrl.signal);
-      if (alive && c) setCredit({ limitRemaining: c.limitRemaining });
+      if (alive && c) {
+        setCredit({ limitRemaining: c.limitRemaining, isFreeTier: c.isFreeTier });
+      }
     })().catch(() => {});
     return () => {
       alive = false;
@@ -225,9 +232,13 @@ function OpenRouterCreditLine({ t }: { t: (typeof S)["tr"] }) {
   }, []);
 
   if (!credit) return null; // bilinmiyor/başarısız → satır hiç çizilmez
-  const text =
-    credit.limitRemaining === null
-      ? // null = üst sınır YOK. "0 kredi kaldı" demek düpedüz yalan olurdu.
+  // Sıra önemli: ücretsiz katmanda limit_remaining de null gelir. Önce
+  // null'a bakıp "sınır yok" demek, kotalı bir anahtarı sınırsız gibi
+  // gösterirdi — kartın tek işi bu tür yalanları söylememek.
+  const text = credit.isFreeTier
+    ? t.creditFree
+    : credit.limitRemaining === null
+      ? // null = anahtarda üst sınır YOK. "0 kredi kaldı" demek yalan olurdu.
         t.creditUnlimited
       : t.creditRemaining(`$${credit.limitRemaining.toFixed(2)}`);
   return <span className="text-xs font-semibold text-ink-soft">{text}</span>;
@@ -306,12 +317,19 @@ export function LlmSettingsSection() {
   // bir sınırı yok. Düz okumanın böyle bir kısıtı yok (aynı gerekçe
   // OnboardingWizard.tsx:341-343'te de yazılı).
   //
-  // Lazy initializer: ilk render'da hazır olmalı, yoksa bir tick boyunca
-  // ConnectedCard görünür ve sihirbaz onun üstüne sıçrardı.
-  const [pkceReturn] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return parseReturnUrl(window.location.href).kind !== "none";
-  });
+  // Okuma RENDER'DA DEĞİL effect'te: /settings prerender ediliyor, sunucuda
+  // `window` yok. Lazy initializer'da okumak sunucuda false, hydration'da
+  // true üretir ve aynı slotta farklı bir ağaç render edilir — hydration
+  // mismatch. Bir "flash" pahasına değil üstelik: config zaten "loading"
+  // ile başlıyor, yani ilk boyada nasılsa boş kabuk görünüyor; bayrağı
+  // effect'te set etmek görünür hiçbir şeyi geciktirmiyor. (T-048 bacağı
+  // da tam bu yüzden useEffect kullanıyor.)
+  const [pkceReturn, setPkceReturn] = useState(false);
+  useEffect(() => {
+    if (parseReturnUrl(window.location.href).kind !== "none") {
+      setPkceReturn(true);
+    }
+  }, []);
   // refresh() is called both from a mount effect (which gets an automatic
   // cleanup) and from handleDone (a plain event-driven call, no cleanup
   // wired up) — a single mounted ref covers both call sites instead of two
@@ -350,6 +368,13 @@ export function LlmSettingsSection() {
 
   const reopen = useCallback(() => {
     setOutcome(null);
+    // PKCE bayrağını DÜŞÜR. Düşürmezsek `setOutcome(null)` aşağıdaki
+    // `pkceReturn && !outcome` dalını yeniden kurar ve "Yeniden aç" sayfa
+    // ömrü boyunca üç-kapı ekranına değil, OpenRouter seçili API-anahtarı
+    // kapısına düşerdi; üstelik sihirbaz yeniden "exchanging" ile mount olup
+    // kullanıcının hiç başlatmadığı bir takas için hayalet mesaj gösterirdi.
+    // Dönüş bacağı tek atımlık: kod URL'den zaten silindi.
+    setPkceReturn(false);
     setWizardOpen(true);
     setInstance((n) => n + 1);
   }, []);
@@ -374,7 +399,12 @@ export function LlmSettingsSection() {
   // Sihirbaz `?code=`i kendisi okur, takas eder ve işaretçiyi URL'den düşürür.
   if (pkceReturn && !outcome) {
     return (
-      <LlmSetupWizard key={`pkce-${instance}`} onDone={handleDone} pkceReturn />
+      <LlmSetupWizard
+        key={`pkce-${instance}`}
+        onDone={handleDone}
+        pkceReturn
+        allowPkce
+      />
     );
   }
 
@@ -414,5 +444,8 @@ export function LlmSettingsSection() {
     );
   }
 
-  return <LlmSetupWizard key={instance} onDone={handleDone} />;
+  // allowPkce: Settings dönüş bacağını kurmuş olan TEK yer (yukarıdaki
+  // pkceReturn tespiti + handleDone). Onboarding aynı komponenti mount
+  // ediyor ama bu bayrağı geçmiyor — orada redirect draft'ı yakardı.
+  return <LlmSetupWizard key={instance} onDone={handleDone} allowPkce />;
 }

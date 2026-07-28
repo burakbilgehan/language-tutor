@@ -590,8 +590,24 @@ export type WizardOutcome = "connected" | "skipped";
 export function LlmSetupWizard({
   onDone,
   pkceReturn = false,
+  allowPkce = false,
 }: {
   onDone: (outcome: WizardOutcome) => void;
+  /** T-062: "OpenRouter ile bağlan" düğmesi gösterilsin mi?
+   *
+   * VARSAYILAN KAPALI ve bu bilinçli. PKCE tam sayfa bir redirect'tir: sihirbaz
+   * kendi state'ini kaybetmeyi göze alabilir (dönüşte sessionStorage'dan
+   * toparlıyor), ama onu SARAN ekranın kaydedilmemiş state'i yanar. Onboarding
+   * sihirbazı tam olarak böyle bir yer: LlmSetupWizard son adımda, henüz
+   * kaydedilmemiş bir `draft`ın (hedef dil, hedefler, ilgi alanları, motivasyon)
+   * içinde mount ediliyor. Orada PKCE'ye basmak kullanıcıyı /onboarding?code=
+   * ile geri getirir, draft yok olur, üstelik o sayfada dönüş bacağı olmadığı
+   * için kod da hiç takas edilmez — iki kayıp, sıfır kazanç.
+   *
+   * Bu yüzden düğme yalnız dönüş bacağını GERÇEKTEN kurmuş çağıran tarafından
+   * açılır (bugün: LlmSettingsSection). Opt-in olması, ileride başka bir yere
+   * mount edildiğinde sessizce bozulmamasını da garantiler. */
+  allowPkce?: boolean;
   /** T-062: bu mount bir OpenRouter PKCE dönüşü mü? İşaretçiyi URL'de GÖREN
    * taraf ebeveyn (LlmSettingsSection) — çünkü bağlı bir kullanıcıda sihirbaz
    * hiç mount edilmez ve kod sessizce yutulurdu. Ebeveyn işaretçiyi görünce
@@ -988,12 +1004,17 @@ export function LlmSetupWizard({
               duruyor (altında, "ya da" ile) — PKCE bir kolaylık, tek yol
               değil: sessionStorage'ı kapalı/üçüncü-parti engelli bir
               tarayıcıda ya da akış patladığında elle yol hâlâ çalışmalı. */}
-          {keyProvider === "openrouter" && (
+          {allowPkce && keyProvider === "openrouter" && (
             <div className="flex flex-col gap-2 rounded-xl bg-indigo-soft/40 px-3 py-3">
               <CozyButton
                 variant="soft"
                 onClick={() => void startOpenRouterConnect()}
-                disabled={pkceBusy !== null || testing}
+                // storedLoaded ŞART: `quality` tıklama anında okunuyor ve
+                // kayıtlı config daha inmemişken herkes için "Denge"ye
+                // çözülür. O hâliyle gitmek, "Özel"i (ya da kayıtlı Eko'yu)
+                // sessizce ezerdi. Dönüş bacağı da aynı bayrağı bekliyor —
+                // kapı iki yönde de aynı.
+                disabled={pkceBusy !== null || testing || !storedLoaded}
               >
                 {pkceBusy === "redirecting"
                   ? t.orRedirecting
@@ -1004,7 +1025,7 @@ export function LlmSetupWizard({
               <p className="text-xs text-ink-soft">{t.orConnectDesc}</p>
             </div>
           )}
-          {keyProvider === "openrouter" && (
+          {allowPkce && keyProvider === "openrouter" && (
             <p className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
               {t.orOr}
             </p>
