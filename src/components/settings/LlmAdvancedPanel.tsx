@@ -6,10 +6,19 @@
 // ve CLI modu (server-mode, sahibin kullanımı) aynen burada.
 //
 // Kasıtlı olarak KENDİ dosyasında ve dar arayüzlü: T-061 (canlı model
-// listeleri) buraya bağlanacak, T-063 (bağlantı durumu kartı) sihirbaz
-// kabuğuna — ikisi birbirine çarpmasın.
+// listeleri) buraya bağlandı, T-063 (bağlantı durumu kartı) sihirbaz
+// kabuğuna — ikisi birbirine çarpmıyor.
+//
+// T-061: canlı model listeleri (live-models.ts). Ollama (/api/tags) ve
+// OpenRouter (/api/v1/models) yalnız preset bu ikisiyken ve mod "openai"
+// iken yoklanır — DeepSeek/OpenAI/custom kullanıcısı hiçbir ek istek
+// görmez. Girdi 400ms debounce'lu: her tuş vuruşunda yeni fetch atmaz.
+// Bridge'de CANLI MODEL LİSTESİ YOK (bkz. live-models.ts başlığı) — onun
+// yerine köprünün GET /v1/models'ı `{data:[{id:BACKEND}]}` döner, o da
+// yalnız "hangi backend ayakta" bilgisini taşır, sağlayıcı seçim kutusu
+// değil.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
@@ -20,7 +29,16 @@ import {
   providerForBaseUrl,
   type HttpProviderId,
 } from "@/lib/llm/catalog";
-import { BRIDGE_SENTINEL_TRIPLE } from "./llm-setup-logic";
+import { BRIDGE_SENTINEL_TRIPLE, ollamaPullCommand } from "./llm-setup-logic";
+import {
+  fetchOllamaTags,
+  fetchOpenRouterModels,
+  formatOpenRouterPrice,
+  ollamaTagIsPulled,
+  type FetchState,
+  type OllamaTag,
+  type OpenRouterModel,
+} from "./live-models";
 
 const S = {
   tr: {
@@ -60,6 +78,29 @@ const S = {
     serverUnreachable: "❌ Sunucuya ulaşılamadı",
     cliHintBefore: "Sorun yaşarsan terminalde",
     cliHintAfter: "çalıştırıp giriş yaptığından emin ol.",
+    // --- T-061 canlı listeler
+    ollamaLoading: "İndirilen modeller yoklanıyor...",
+    ollamaError: "Ollama'ya ulaşılamadı — localhost:11434 çalışıyor mu?",
+    ollamaCount: (n: number) => `${n} model indirilmiş.`,
+    ollamaNotPulled: "İndirilmemiş model(ler) var — önce çalıştır:",
+    openRouterLoading: "OpenRouter kataloğu yoklanıyor...",
+    openRouterError: "OpenRouter'a ulaşılamadı.",
+    openRouterCount: (n: number) => `${n} model (canlı katalog).`,
+    openRouterFreeOnly: "Yalnız :free",
+    openRouterSearch: "Modellerde ara...",
+    openRouterPrice: (label: string, price: string) => `${label}: ${price}`,
+    openRouterFree: "ücretsiz",
+    openRouterUnknownPrice: "fiyat bilinmiyor",
+    openRouterNotListed: (id: string) => `"${id}" canlı listede yok.`,
+    bridgeBackendLoading: "Köprü yoklanıyor...",
+    bridgeBackendError:
+      "Köprüye ulaşılamadı — çalışmıyor olabilir ya da bu origin --origin ile izinli değil.",
+    bridgeBackendFound: (backend: string) => `Aktif backend: ${backend}`,
+    testBlockedTitle: "Test edilmedi",
+    testBlockedOllama: (id: string) =>
+      `"${id}" Ollama'da indirilmemiş görünüyor. Önce indir, sonra tekrar dene.`,
+    testBlockedOpenRouter: (id: string) =>
+      `"${id}" OpenRouter'ın canlı model listesinde yok. Model id'sini kontrol et.`,
   },
   en: {
     desc: "Set the model, address and mode by hand. Your API key stays only on this device — it never enters a save file.",
@@ -97,6 +138,29 @@ const S = {
     serverUnreachable: "❌ Could not reach the server",
     cliHintBefore: "If you run into issues, run",
     cliHintAfter: "in a terminal and make sure you're logged in.",
+    // --- T-061 live lists
+    ollamaLoading: "Checking downloaded models...",
+    ollamaError: "Could not reach Ollama — is localhost:11434 running?",
+    ollamaCount: (n: number) => `${n} model(s) downloaded.`,
+    ollamaNotPulled: "Some model(s) aren't downloaded yet — run:",
+    openRouterLoading: "Checking the OpenRouter catalog...",
+    openRouterError: "Could not reach OpenRouter.",
+    openRouterCount: (n: number) => `${n} models (live catalog).`,
+    openRouterFreeOnly: ":free only",
+    openRouterSearch: "Search models...",
+    openRouterPrice: (label: string, price: string) => `${label}: ${price}`,
+    openRouterFree: "free",
+    openRouterUnknownPrice: "price unknown",
+    openRouterNotListed: (id: string) => `"${id}" isn't in the live list.`,
+    bridgeBackendLoading: "Checking the bridge...",
+    bridgeBackendError:
+      "Could not reach the bridge — it may not be running, or this origin isn't allowed via --origin.",
+    bridgeBackendFound: (backend: string) => `Active backend: ${backend}`,
+    testBlockedTitle: "Not tested",
+    testBlockedOllama: (id: string) =>
+      `"${id}" doesn't look downloaded in Ollama. Pull it first, then try again.`,
+    testBlockedOpenRouter: (id: string) =>
+      `"${id}" isn't in OpenRouter's live model list. Check the model id.`,
   },
 };
 
@@ -193,6 +257,173 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
     if (m === "openai" && !baseUrl) applyPreset(preset);
   };
 
+  // --- T-061 canlı model listeleri --------------------------------------
+  //
+  // Yalnız preset ollama/openrouter/bridge'de ve mod openai'yken çalışır —
+  // DeepSeek/OpenAI/custom kullanıcısı için hiçbir ek istek atılmaz (o
+  // sağlayıcılarda canlı uç ya key ister ya da gürültülü, ticket'ta bilinçli
+  // olarak dışarıda bırakıldı).
+  const [ollamaState, setOllamaState] = useState<FetchState<OllamaTag[]>>({
+    status: "idle",
+  });
+  const [openRouterState, setOpenRouterState] = useState<
+    FetchState<OpenRouterModel[]>
+  >({ status: "idle" });
+  const [bridgeBackend, setBridgeBackend] = useState<FetchState<string>>({
+    status: "idle",
+  });
+  const [openRouterFreeOnly, setOpenRouterFreeOnly] = useState(false);
+  const [openRouterQuery, setOpenRouterQuery] = useState("");
+
+  // baseUrl'i debounce'lu tut: kullanıcı Base URL kutusuna elle yazarken
+  // her tuş vuruşunda yeniden fetch atmasın (useLocalLlmProbe.ts'teki
+  // "yerel sunucu ya hemen yanıtlar ya hiç" dersiyle aynı aile — burada
+  // hedef debounce, probe'daki interval değil).
+  const [debouncedBaseUrl, setDebouncedBaseUrl] = useState(baseUrl);
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedBaseUrl(baseUrl), 400);
+    return () => clearTimeout(id);
+  }, [baseUrl]);
+
+  useEffect(() => {
+    if (mode !== "openai" || preset !== "ollama") {
+      // Idempotent: zaten idle ise aynı state'i yeni bir nesne olarak
+      // yazma (useLocalLlmProbe.ts'teki aynı ders — burada bu dosyanın iki
+      // diğer canlı-liste effect'inde de tekrarlanan bir kalıp).
+      setOllamaState((p) => (p.status === "idle" ? p : { status: "idle" }));
+      return;
+    }
+    const ctrl = new AbortController();
+    setOllamaState({ status: "loading" });
+    fetchOllamaTags(debouncedBaseUrl || CATALOG.ollama.baseUrl, ctrl.signal)
+      .then((tags) => {
+        if (!ctrl.signal.aborted) setOllamaState({ status: "ok", data: tags });
+      })
+      .catch((err: unknown) => {
+        if (!ctrl.signal.aborted) {
+          setOllamaState({
+            status: "error",
+            message: err instanceof Error ? err.message : "fetch failed",
+          });
+        }
+      });
+    return () => ctrl.abort();
+  }, [mode, preset, debouncedBaseUrl]);
+
+  useEffect(() => {
+    if (mode !== "openai" || preset !== "openrouter") {
+      setOpenRouterState((p) => (p.status === "idle" ? p : { status: "idle" }));
+      return;
+    }
+    const ctrl = new AbortController();
+    setOpenRouterState({ status: "loading" });
+    fetchOpenRouterModels(ctrl.signal)
+      .then((list) => {
+        if (!ctrl.signal.aborted) setOpenRouterState({ status: "ok", data: list });
+      })
+      .catch((err: unknown) => {
+        if (!ctrl.signal.aborted) {
+          setOpenRouterState({
+            status: "error",
+            message: err instanceof Error ? err.message : "fetch failed",
+          });
+        }
+      });
+    return () => ctrl.abort();
+    // OpenRouter kataloğu base URL'e bağlı değil (sabit public uç) — yalnız
+    // preset/mod'a bağlı, gereksiz yeniden-fetch olmasın diye baseUrl dep
+    // listesinde YOK.
+  }, [mode, preset]);
+
+  useEffect(() => {
+    if (mode !== "openai" || preset !== "bridge") {
+      setBridgeBackend((p) => (p.status === "idle" ? p : { status: "idle" }));
+      return;
+    }
+    const ctrl = new AbortController();
+    setBridgeBackend({ status: "loading" });
+    (async () => {
+      try {
+        const res = await fetch(
+          `${(debouncedBaseUrl || CATALOG.bridge.baseUrl).replace(/\/v1\/?$/, "")}/v1/models`,
+          { signal: ctrl.signal, cache: "no-store" }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { data?: { id?: string }[] };
+        const backend = body.data?.[0]?.id;
+        if (!ctrl.signal.aborted) {
+          if (backend) setBridgeBackend({ status: "ok", data: backend });
+          else setBridgeBackend({ status: "error", message: "empty" });
+        }
+      } catch (err) {
+        if (!ctrl.signal.aborted) {
+          setBridgeBackend({
+            status: "error",
+            message: err instanceof Error ? err.message : "fetch failed",
+          });
+        }
+      }
+    })();
+    return () => ctrl.abort();
+  }, [mode, preset, debouncedBaseUrl]);
+
+  // Ollama datalist: katalogdaki üç öneri + gerçekten indirilmiş tag'ler,
+  // tekilleştirilmiş — kullanıcı hem "önerilen" hem "elimde olan" arasından
+  // seçebilsin.
+  const ollamaDatalist = useMemo(() => {
+    const pulled = ollamaState.status === "ok" ? ollamaState.data.map((t) => t.name) : [];
+    const suggested = Object.values(CATALOG.ollama.defaultModels);
+    return Array.from(new Set([...pulled, ...suggested])).sort();
+  }, [ollamaState]);
+
+  const openRouterFiltered = useMemo(() => {
+    if (openRouterState.status !== "ok") return [];
+    let list = openRouterState.data;
+    if (openRouterFreeOnly) list = list.filter((m) => m.free);
+    const q = openRouterQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (m) => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+      );
+    }
+    // Kesme (slice) YOK: tam liste ~340 — datalist için önemsiz bir sayı.
+    // Kesilseydi, model kutusuna doğrudan yazan kullanıcı için tarayıcının
+    // native datalist filtresi kesimin ARKASINDAKİ modelleri hiç göremezdi
+    // (arama kutusu ayrıca daraltmadıkça) — keşfedilebilirlik deliği olurdu.
+    return list;
+  }, [openRouterState, openRouterFreeOnly, openRouterQuery]);
+
+  // "Test et"in yakacağı gerçek çağrıdan önce ucuz doğrulama. YALNIZ
+  // POZİTİF YOKLUKTA bloklar: liste başarıyla yüklendi VE model o listede
+  // kesin yok. Yükleniyor/hata/boş liste durumunda testi ASLA engelleme —
+  // useLocalLlmProbe.ts'teki "probe sonucu Test'i asla kilitlemez" kuralının
+  // aynısı: algılama yanılınca kullanıcının önü kapanmamalı.
+  //
+  // Yalnız FAST tier kontrol edilir: llmTest() (client-api.ts + statik
+  // browser-provider ikisi de) canary çağrısını `tier: "fast"` ile atar —
+  // balanced/deep hiç çalışmaz. Üçünü de kontrol etmek, "Ollama" seçilince
+  // varsayılan üçlünün (qwen2.5:7b/14b/32b) HEPSİNİN inmiş olmasını
+  // isterdi; normal kullanıcı yalnız birini indirmişken (genelde 7b) test
+  // düğmesi asla açılmazdı — ticket'ın çözmeye çalıştığı "cryptic patlıyor"
+  // sorunundan beter bir kilit. Balanced/deep için bilgilendirici
+  // "indirilmemiş" notu yine gösterilir (aşağıdaki JSX), sadece testi
+  // bloklamaz.
+  const testBlockReason = useMemo((): string | null => {
+    if (mode !== "openai") return null;
+    const fastId = models.fast;
+    if (!fastId) return null;
+    if (preset === "ollama" && ollamaState.status === "ok") {
+      if (!ollamaTagIsPulled(fastId, ollamaState.data)) {
+        return t.testBlockedOllama(fastId);
+      }
+    }
+    if (preset === "openrouter" && openRouterState.status === "ok") {
+      const known = new Set(openRouterState.data.map((m) => m.id));
+      if (!known.has(fastId)) return t.testBlockedOpenRouter(fastId);
+    }
+    return null;
+  }, [mode, preset, models.fast, ollamaState, openRouterState, t]);
+
   const save = async () => {
     setSaving(true);
     setSaveMsg(null);
@@ -232,6 +463,15 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
   };
 
   const test = async () => {
+    // Ucuz doğrulama önce: seçili model canlı listede kesin yoksa gerçek
+    // LLM çağrısı hiç atılmaz. Not: llmTest() KAYDEDİLMİŞ config'i test
+    // eder, bu kontrol EKRANDAKİ formu okur — ikisi ayrışabilir (henüz
+    // Kaydet'e basılmamış olabilir), o yüzden mesaj "test başarısız olurdu"
+    // değil "ekrandaki model listede yok" der.
+    if (testBlockReason) {
+      setTestMsg(`⚠️ ${t.testBlockedTitle}: ${testBlockReason}`);
+      return;
+    }
     setTesting(true);
     setTestMsg(null);
     try {
@@ -383,6 +623,13 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
                         ? t.modelBalanced
                         : t.modelDeep
                   }
+                  list={
+                    mode === "openai" && preset === "ollama"
+                      ? "t061-ollama-models"
+                      : mode === "openai" && preset === "openrouter"
+                        ? "t061-openrouter-models"
+                        : undefined
+                  }
                   className="w-full rounded-xl border-2 border-surface-2 bg-background px-2 py-2 font-mono text-xs outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
                 />
               ))}
@@ -392,6 +639,128 @@ export function LlmAdvancedPanel({ onSaved }: { onSaved?: () => void }) {
                 ? t.modelsBridgeHint
                 : t.modelsHint}
             </span>
+
+            {/* T-061: canlı model listeleri — yalnız openai modunda ve
+                ilgili preset'te; datalist native tarayıcı typeahead'i
+                verir, elle yazmayı da bozmaz. */}
+            {mode === "openai" && preset === "ollama" && (
+              <>
+                <datalist id="t061-ollama-models">
+                  {ollamaDatalist.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                <div className="mt-2 text-xs text-ink-soft">
+                  {ollamaState.status === "loading" && t.ollamaLoading}
+                  {ollamaState.status === "error" && t.ollamaError}
+                  {ollamaState.status === "ok" && (
+                    <span>{t.ollamaCount(ollamaState.data.length)}</span>
+                  )}
+                </div>
+                {ollamaState.status === "ok" &&
+                  (() => {
+                    // Boş alan "katalog varsayılanına düş" demektir, "boş
+                    // string'i indir" değil — ollamaTagIsPulled("", …)
+                    // false döndüğü için tier boşsa hiç değerlendirme.
+                    const unpulledTier = (id: string) =>
+                      id && !ollamaTagIsPulled(id, ollamaState.data) ? id : "";
+                    const unpulled = {
+                      fast: unpulledTier(models.fast),
+                      balanced: unpulledTier(models.balanced),
+                      deep: unpulledTier(models.deep),
+                    };
+                    if (!unpulled.fast && !unpulled.balanced && !unpulled.deep) {
+                      return null;
+                    }
+                    // ollamaPullCommand (llm-setup-logic.ts) tekilleştirip
+                    // "&&" ile zincirler — üç ayrı paragraf yerine tek
+                    // kopyala-yapıştır komutu.
+                    return (
+                      <p className="mt-1 text-xs text-ink-soft">
+                        {t.ollamaNotPulled}{" "}
+                        <code className="rounded bg-surface-2 px-1.5">
+                          {ollamaPullCommand(unpulled)}
+                        </code>
+                      </p>
+                    );
+                  })()}
+              </>
+            )}
+
+            {mode === "openai" && preset === "openrouter" && (
+              <>
+                <datalist id="t061-openrouter-models">
+                  {openRouterFiltered.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </datalist>
+                <div className="mt-2 flex flex-col gap-1.5 text-xs text-ink-soft">
+                  {openRouterState.status === "loading" && (
+                    <span>{t.openRouterLoading}</span>
+                  )}
+                  {openRouterState.status === "error" && (
+                    <span>{t.openRouterError}</span>
+                  )}
+                  {openRouterState.status === "ok" && (
+                    <>
+                      <span>{t.openRouterCount(openRouterState.data.length)}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          value={openRouterQuery}
+                          onChange={(e) => setOpenRouterQuery(e.target.value)}
+                          placeholder={t.openRouterSearch}
+                          className="rounded-lg border-2 border-surface-2 bg-background px-2 py-1 text-xs outline-none focus:border-indigo"
+                        />
+                        <label className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={openRouterFreeOnly}
+                            onChange={(e) => setOpenRouterFreeOnly(e.target.checked)}
+                            className="accent-[var(--color-indigo)]"
+                          />
+                          {t.openRouterFreeOnly}
+                        </label>
+                      </div>
+                      {(["fast", "balanced", "deep"] as const)
+                        .map((tier) => ({ tier, id: models[tier] }))
+                        .filter((m) => m.id)
+                        .map(({ tier, id }) => {
+                          const found = openRouterState.data.find((m) => m.id === id);
+                          if (!found) {
+                            return (
+                              <p key={tier} className="text-xs text-ink-soft">
+                                {t.openRouterNotListed(id)}
+                              </p>
+                            );
+                          }
+                          const price = formatOpenRouterPrice(found);
+                          return (
+                            <p key={tier} className="text-xs text-ink-soft">
+                              {t.openRouterPrice(
+                                id,
+                                found.free
+                                  ? t.openRouterFree
+                                  : (price ?? t.openRouterUnknownPrice)
+                              )}
+                            </p>
+                          );
+                        })}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+
+            {mode === "openai" && preset === "bridge" && (
+              <div className="mt-2 text-xs text-ink-soft">
+                {bridgeBackend.status === "loading" && t.bridgeBackendLoading}
+                {bridgeBackend.status === "error" && t.bridgeBackendError}
+                {bridgeBackend.status === "ok" &&
+                  t.bridgeBackendFound(bridgeBackend.data)}
+              </div>
+            )}
           </div>
         </div>
       )}
