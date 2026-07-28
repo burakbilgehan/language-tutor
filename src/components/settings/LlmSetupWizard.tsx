@@ -137,6 +137,9 @@ const S = {
     orConnectDesc:
       "Anahtar kopyalamana gerek yok: OpenRouter'a gidip onaylıyorsun, sana ait bir anahtarla geri dönüyorsun. Anahtar yalnız bu tarayıcıda saklanır; openrouter.ai/keys'ten istediğin an iptal edebilirsin.",
     orRedirecting: "OpenRouter'a yönlendiriliyorsun…",
+    // storedLoaded beklenirken: düğme disabled ama sebebi görünsün, yoksa
+    // ölü düğme gibi durur.
+    orPreparing: "Hazırlanıyor…",
     orOr: "ya da anahtarı elle yapıştır",
     orExchanging: "OpenRouter'dan dönüldü, anahtar alınıyor…",
     orDenied: "❌ OpenRouter bağlantısı tamamlanmadı:",
@@ -244,6 +247,7 @@ const S = {
     orConnectDesc:
       "No key to copy: you approve it on OpenRouter and come back with a key of your own. It's stored only in this browser; revoke it any time at openrouter.ai/keys.",
     orRedirecting: "Redirecting you to OpenRouter…",
+    orPreparing: "Getting ready…",
     orOr: "or paste a key by hand",
     orExchanging: "Back from OpenRouter, fetching your key…",
     orDenied: "❌ The OpenRouter connection wasn't completed:",
@@ -606,7 +610,12 @@ export function LlmSetupWizard({
    *
    * Bu yüzden düğme yalnız dönüş bacağını GERÇEKTEN kurmuş çağıran tarafından
    * açılır (bugün: LlmSettingsSection). Opt-in olması, ileride başka bir yere
-   * mount edildiğinde sessizce bozulmamasını da garantiler. */
+   * mount edildiğinde sessizce bozulmamasını da garantiler.
+   *
+   * INVARIANT (konvansiyonla tutuluyor, tipte zorlanmıyor): `pkceReturn`
+   * geçen her çağıran `allowPkce` de geçmeli — dönüş bacağını işletip düğmeyi
+   * gizlemek, kullanıcıya tekrar deneyemeyeceği bir ekran bırakırdı. Tek
+   * çağıran (LlmSettingsSection) ikisini birlikte geçiyor. */
   allowPkce?: boolean;
   /** T-062: bu mount bir OpenRouter PKCE dönüşü mü? İşaretçiyi URL'de GÖREN
    * taraf ebeveyn (LlmSettingsSection) — çünkü bağlı bir kullanıcıda sihirbaz
@@ -1020,7 +1029,11 @@ export function LlmSetupWizard({
                   ? t.orRedirecting
                   : pkceBusy === "exchanging"
                     ? t.orExchanging
-                    : t.orConnect}
+                    : // Kayıtlı config daha inmedi: düğme disabled, sebebi
+                      // yazsın. Bu pencere normalde bir kaç ms.
+                      !storedLoaded
+                      ? t.orPreparing
+                      : t.orConnect}
               </CozyButton>
               <p className="text-xs text-ink-soft">{t.orConnectDesc}</p>
             </div>

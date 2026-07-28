@@ -53,6 +53,10 @@ const S = {
     // Ücretsiz katman: limit_remaining null gelir ama bu "sınırsız" DEĞİL —
     // günlük istek kotası var. "Sınır yok" demek düpedüz yanlış olurdu.
     creditFree: "ücretsiz katman (günlük istek limiti var)",
+    // Ücretsiz katman + gerçek bakiye BİRLİKTE olabilir; ikisi birbirini
+    // dışlamıyor. Bakiyeyi yutmak, fetch edilmiş bir bilgiyi atmak olurdu.
+    creditFreeWith: (amount: string) =>
+      `ücretsiz katman (günlük istek limiti var) · kalan kredi: ${amount}`,
   },
   en: {
     title: "AI connection",
@@ -75,6 +79,8 @@ const S = {
     creditRemaining: (amount: string) => `credit left: ${amount}`,
     creditUnlimited: "no credit cap",
     creditFree: "free tier (daily request limit)",
+    creditFreeWith: (amount: string) =>
+      `free tier (daily request limit) · credit left: ${amount}`,
   },
 };
 
@@ -232,15 +238,23 @@ function OpenRouterCreditLine({ t }: { t: (typeof S)["tr"] }) {
   }, []);
 
   if (!credit) return null; // bilinmiyor/başarısız → satır hiç çizilmez
-  // Sıra önemli: ücretsiz katmanda limit_remaining de null gelir. Önce
-  // null'a bakıp "sınır yok" demek, kotalı bir anahtarı sınırsız gibi
-  // gösterirdi — kartın tek işi bu tür yalanları söylememek.
+  // İki BAĞIMSIZ bilgi var; birini diğerine feda etme:
+  //  - isFreeTier: günlük istek kotası olan bir anahtar. Ücretsiz katmanda
+  //    limit_remaining de null gelebilir, o yüzden önce buna bakılır —
+  //    "kredi sınırı yok" demek kotalı anahtarı sınırsız gösterirdi.
+  //  - limitRemaining: gerçek bakiye. Ücretsiz katmanda DA dolu olabilir
+  //    ({limit_remaining: 3.21, is_free_tier: true} geçerli bir cevap);
+  //    ilk turda bu dal yutuluyordu, fetch edilmiş bilgiyi atmak oluyordu.
+  const amount =
+    credit.limitRemaining === null ? null : `$${credit.limitRemaining.toFixed(2)}`;
   const text = credit.isFreeTier
-    ? t.creditFree
-    : credit.limitRemaining === null
-      ? // null = anahtarda üst sınır YOK. "0 kredi kaldı" demek yalan olurdu.
-        t.creditUnlimited
-      : t.creditRemaining(`$${credit.limitRemaining.toFixed(2)}`);
+    ? amount
+      ? t.creditFreeWith(amount)
+      : t.creditFree
+    : amount
+      ? t.creditRemaining(amount)
+      : // null = anahtarda üst sınır YOK. "0 kredi kaldı" demek yalan olurdu.
+        t.creditUnlimited;
   return <span className="text-xs font-semibold text-ink-soft">{text}</span>;
 }
 
