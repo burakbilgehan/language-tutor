@@ -20,12 +20,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { llmConfigGet, type LlmConfigDto } from "@/lib/client-api";
+import { IS_STATIC, llmConfigGet, type LlmConfigDto } from "@/lib/client-api";
 import { CATALOG, providerForBaseUrl, type ProviderId } from "@/lib/llm/catalog";
 import { refreshCatalogFromWorker } from "@/lib/llm/catalog-refresh";
 import { qualityForModels, modelLineFor } from "./llm-setup-logic";
 import { useLocalLlmProbe } from "./useLocalLlmProbe";
 import { LlmSetupWizard, type WizardOutcome } from "./LlmSetupWizard";
+import { fetchKeyCredit, parseReturnUrl } from "./openrouter-pkce";
 
 const S = {
   tr: {
@@ -46,6 +47,9 @@ const S = {
     ollamaUp: "Ollama ✓ çalışıyor",
     ollamaDown: "Ollama ✗ erişilemiyor",
     ollamaSearching: "Ollama aranıyor…",
+    // T-062: OpenRouter kalan kredi satırı.
+    creditRemaining: (amount: string) => `kalan kredi: ${amount}`,
+    creditUnlimited: "kredi sınırı yok",
   },
   en: {
     title: "AI connection",
@@ -65,6 +69,8 @@ const S = {
     ollamaUp: "Ollama ✓ running",
     ollamaDown: "Ollama ✗ unreachable",
     ollamaSearching: "checking Ollama…",
+    creditRemaining: (amount: string) => `credit left: ${amount}`,
+    creditUnlimited: "no credit cap",
   },
 };
 
@@ -184,6 +190,49 @@ function LiveLocalStatus({
   return null;
 }
 
+/** T-062: OpenRouter'a bağlıyken kalan kredi — TEK satır, bilgi amaçlı.
+ *
+ * Kapsam daraltması (bilinçli, raporda da yazılı): YALNIZ statik mod. Sunucu
+ * modunda ham anahtar `data/llm-config.json`'da yaşar ve tarayıcıya HİÇ
+ * verilmez (llmConfigGet iki modda da yalnız maskeli anahtar döndürür); onu
+ * okumak yeni bir API route'u demekti — bu ticket'ın kapsamı dışı ve auth
+ * allowlist'ine dokunurdu. Kalıcı olarak boş kalacak bir satır çizmektense
+ * sunucu modunda HİÇBİR ŞEY göstermiyoruz.
+ *
+ * Fetch yalnız kart mount'luyken koşar ve unmount'ta iptal edilir — kartın
+ * davranış sözleşmesi (probe yalnız açıkken) bozulmasın. */
+function OpenRouterCreditLine({ t }: { t: (typeof S)["tr"] }) {
+  const [credit, setCredit] = useState<{
+    limitRemaining: number | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let alive = true;
+    (async () => {
+      // Statik modda ham anahtar localStorage'da; client-api.ts ve
+      // llm-status.ts de tam olarak böyle okuyor.
+      const { readBrowserLlmConfig } = await import("@/lib/llm/browser-provider");
+      const key = readBrowserLlmConfig()?.apiKey;
+      if (!key) return;
+      const c = await fetchKeyCredit(key, fetch, ctrl.signal);
+      if (alive && c) setCredit({ limitRemaining: c.limitRemaining });
+    })().catch(() => {});
+    return () => {
+      alive = false;
+      ctrl.abort();
+    };
+  }, []);
+
+  if (!credit) return null; // bilinmiyor/başarısız → satır hiç çizilmez
+  const text =
+    credit.limitRemaining === null
+      ? // null = üst sınır YOK. "0 kredi kaldı" demek düpedüz yalan olurdu.
+        t.creditUnlimited
+      : t.creditRemaining(`$${credit.limitRemaining.toFixed(2)}`);
+  return <span className="text-xs font-semibold text-ink-soft">{text}</span>;
+}
+
 function ConnectedCard({
   t,
   config,
@@ -213,6 +262,7 @@ function ConnectedCard({
       </p>
       <div className="mt-2">
         <LiveLocalStatus t={t} provider={provider} />
+        {IS_STATIC && provider === "openrouter" && <OpenRouterCreditLine t={t} />}
       </div>
     </section>
   );
@@ -241,6 +291,27 @@ export function LlmSettingsSection() {
   // sihirbazın kendi header yorumunun şikâyet ettiği TAM O BUG'ın tekrarı.
   const [wizardOpen, setWizardOpen] = useState(false);
   const [instance, setInstance] = useState(0);
+  // T-062: bu sayfa açılışı bir OpenRouter PKCE dönüşü mü?
+  //
+  // Tespit BURADA, sihirbazda değil: aşağıdaki ConnectedCard dalı, kayıtlı bir
+  // config'i olan kullanıcıda sihirbazı HİÇ mount etmiyor. Bağlantısı olan
+  // biri PKCE'yi başlatıp `?code=…` ile geri döndüğünde sihirbaz açılmaz, kod
+  // hiç takas edilmez ve kullanıcıya sebebi söylenmezdi. İşaretçiyi burada
+  // görüp sihirbazı zorla açıyoruz (OnboardingWizard'ın T-048 dönüş bacağının
+  // "checkingProfiles/showIntro dallarının BİLEREK ÜSTÜNDE" durmasıyla aynı
+  // sınıftan hata).
+  //
+  // useSearchParams DEĞİL, düz window.location okuması: statik export'ta
+  // useSearchParams bir <Suspense> sınırı ister, settings sayfasının böyle
+  // bir sınırı yok. Düz okumanın böyle bir kısıtı yok (aynı gerekçe
+  // OnboardingWizard.tsx:341-343'te de yazılı).
+  //
+  // Lazy initializer: ilk render'da hazır olmalı, yoksa bir tick boyunca
+  // ConnectedCard görünür ve sihirbaz onun üstüne sıçrardı.
+  const [pkceReturn] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return parseReturnUrl(window.location.href).kind !== "none";
+  });
   // refresh() is called both from a mount effect (which gets an automatic
   // cleanup) and from handleDone (a plain event-driven call, no cleanup
   // wired up) — a single mounted ref covers both call sites instead of two
@@ -293,6 +364,19 @@ export function LlmSettingsSection() {
     },
     [refresh]
   );
+
+  // T-062: PKCE dönüşü HER ŞEYİN önünde. Hem "loading" kabuğunun hem
+  // ConnectedCard'ın önüne geçmesi şart:
+  //  - loading: takas sihirbaz mount olunca başlar; llmConfigGet()'i beklemek
+  //    onu gereksizce geciktirir (ve kabuk ekranda "hiçbir şey olmuyor" der).
+  //  - ConnectedCard: kayıtlı config'i olan kullanıcıda sihirbaz hiç mount
+  //    edilmez, kod sessizce yutulurdu — bu bacağın var olma sebebi.
+  // Sihirbaz `?code=`i kendisi okur, takas eder ve işaretçiyi URL'den düşürür.
+  if (pkceReturn && !outcome) {
+    return (
+      <LlmSetupWizard key={`pkce-${instance}`} onDone={handleDone} pkceReturn />
+    );
+  }
 
   if (config === "loading") {
     // Mount anı: ne kart ne sihirbaz — ikisi de yanlış bir "durum" iddia

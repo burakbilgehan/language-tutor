@@ -24,7 +24,7 @@
 // kilitli. Canlı algılama useLocalLlmProbe.ts'te. Gelişmiş form
 // LlmAdvancedPanel.tsx'te.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
@@ -47,6 +47,17 @@ import {
 } from "./llm-setup-logic";
 import { useLocalLlmProbe, type ProbeState } from "./useLocalLlmProbe";
 import { LlmAdvancedPanel } from "./LlmAdvancedPanel";
+import {
+  buildAuthUrl,
+  callbackUrlFor,
+  createCodeChallenge,
+  createCodeVerifier,
+  exchangeCodeForKey,
+  parseReturnUrl,
+  savePkceSession,
+  strippedReturnUrl,
+  takePkceSession,
+} from "./openrouter-pkce";
 
 const S = {
   tr: {
@@ -121,6 +132,17 @@ const S = {
     keyTitle: "Hangi sağlayıcı?",
     keyGet: "Anahtar al:",
     keyPaste: "Anahtarı yapıştır",
+    // --- OpenRouter PKCE (T-062)
+    orConnect: "OpenRouter ile bağlan",
+    orConnectDesc:
+      "Anahtar kopyalamana gerek yok: OpenRouter'a gidip onaylıyorsun, sana ait bir anahtarla geri dönüyorsun. Anahtar yalnız bu tarayıcıda saklanır; openrouter.ai/keys'ten istediğin an iptal edebilirsin.",
+    orRedirecting: "OpenRouter'a yönlendiriliyorsun…",
+    orOr: "ya da anahtarı elle yapıştır",
+    orExchanging: "OpenRouter'dan dönüldü, anahtar alınıyor…",
+    orDenied: "❌ OpenRouter bağlantısı tamamlanmadı:",
+    orNoSession:
+      "❌ Bu bağlantı isteğinin bilgisi bulunamadı (sekme kapanmış olabilir). Baştan dene.",
+    orFailed: "❌ Anahtar alınamadı:",
     // --- kalite profili
     qualityTitle: "Kalite tercihi",
     qualityEco: "Eko",
@@ -218,6 +240,16 @@ const S = {
     keyTitle: "Which provider?",
     keyGet: "Get a key:",
     keyPaste: "Paste your key",
+    orConnect: "Connect with OpenRouter",
+    orConnectDesc:
+      "No key to copy: you approve it on OpenRouter and come back with a key of your own. It's stored only in this browser; revoke it any time at openrouter.ai/keys.",
+    orRedirecting: "Redirecting you to OpenRouter…",
+    orOr: "or paste a key by hand",
+    orExchanging: "Back from OpenRouter, fetching your key…",
+    orDenied: "❌ The OpenRouter connection wasn't completed:",
+    orNoSession:
+      "❌ Couldn't find the details of this connection request (the tab may have been closed). Please start again.",
+    orFailed: "❌ Could not get the key:",
     qualityTitle: "Quality preference",
     qualityEco: "Eco",
     qualityEcoDesc: "Cheapest/fastest; fine for daily practice.",
@@ -557,14 +589,25 @@ export type WizardOutcome = "connected" | "skipped";
 
 export function LlmSetupWizard({
   onDone,
+  pkceReturn = false,
 }: {
   onDone: (outcome: WizardOutcome) => void;
+  /** T-062: bu mount bir OpenRouter PKCE dönüşü mü? İşaretçiyi URL'de GÖREN
+   * taraf ebeveyn (LlmSettingsSection) — çünkü bağlı bir kullanıcıda sihirbaz
+   * hiç mount edilmez ve kod sessizce yutulurdu. Ebeveyn işaretçiyi görünce
+   * sihirbazı zorla açar ve bunu true geçer; takası burada yapıyoruz, çünkü
+   * kaydetme yolu (testAndSave + kalite üçlüsü) burada. */
+  pkceReturn?: boolean;
 }) {
   const t = useStrings(S);
-  const [door, setDoor] = useState<Door>("choose");
+  // Dönüşte kullanıcıyı doğrudan API-anahtarı kapısına, OpenRouter seçili
+  // olarak indir — kapı ekranına düşürmek "ne oldu?" sorusu yaratırdı.
+  const [door, setDoor] = useState<Door>(pkceReturn ? "key" : "choose");
   const [lane, setLane] = useState<Lane | null>(null);
   const [os, setOs] = useState<Os>(detectOs);
-  const [keyProvider, setKeyProvider] = useState<KeyProvider>("deepseek");
+  const [keyProvider, setKeyProvider] = useState<KeyProvider>(
+    pkceReturn ? "openrouter" : "deepseek"
+  );
   const [apiKey, setApiKey] = useState("");
   const [subBackend, setSubBackend] = useState<SubBackend>("claude");
   const [testing, setTesting] = useState(false);
@@ -574,6 +617,12 @@ export function LlmSetupWizard({
   // "Bitti" düğmesi kayboluyordu.
   const [succeeded, setSucceeded] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // T-062: OpenRouter PKCE. "redirecting" = onay sayfasına gidiyoruz,
+  // "exchanging" = döndük, kodu anahtara çeviriyoruz. Testing'den ayrı bir
+  // state: ikisi farklı cümle söyler ve dönüş anında `testing` henüz false.
+  const [pkceBusy, setPkceBusy] = useState<null | "redirecting" | "exchanging">(
+    pkceReturn ? "exchanging" : null
+  );
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
@@ -593,6 +642,12 @@ export function LlmSetupWizard({
   // çeliştiği tam da bu ticket'ın kapatmaya çalıştığı belirsizlik.
   const [storedQuality, setStoredQuality] = useState<StoredQuality | null>(null);
   const [picked, setPicked] = useState<QualityProfileId | null>(null);
+  // llmConfigGet() döndü mü? PKCE dönüşü bunu BEKLEMEK zorunda: kullanıcı
+  // "Özel" (elle seçilmiş modeller) ile bağlandıysa, storedQuality henüz
+  // yüklenmemişken kaydetmek onun üçlüsünü katalog varsayılanıyla ezerdi.
+  // Adlandırılmış profiller (Eko/Denge/En iyi) bu yarıştan etkilenmez —
+  // onlar katalogdan çözülür — ama tek kod yolu iki davranıştan iyidir.
+  const [storedLoaded, setStoredLoaded] = useState(false);
 
   // Kayıtlı config'i oku (mount'ta ve gelişmiş panelden kaydedildiğinde —
   // yoksa kayıtlı üçlü bayatlar ve casual kapı, panelde az önce elle
@@ -602,6 +657,7 @@ export function LlmSetupWizard({
     llmConfigGet()
       .then((d) => {
         if (!alive) return;
+        setStoredLoaded(true);
         if (!d.models) {
           setStoredQuality(null);
           return;
@@ -624,7 +680,11 @@ export function LlmSetupWizard({
           models,
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        // Okunamadı da olsa "artık bekleme" demek gerekiyor: PKCE dönüşü
+        // bu bayrağa bakıyor, aksi hâlde takas sonsuza dek beklerdi.
+        if (alive) setStoredLoaded(true);
+      });
     return () => {
       alive = false;
     };
@@ -718,6 +778,119 @@ export function LlmSetupWizard({
     setSucceeded(false);
   };
 
+  // ------------------------------------------------- T-062: OpenRouter PKCE
+  //
+  // Gidiş: verifier üret → challenge → verifier + SEÇİLİ KALİTE
+  // sessionStorage'a → onay sayfasına git. Kaliteyi taşımak şart: tam sayfa
+  // redirect React state'ini yok eder, dönüşte `picked` null olur ve
+  // resolveQuality() kayıtlı config'e (başka bir sağlayıcıya ait olabilir)
+  // düşerek "En iyi" seçmiş kullanıcıyı sessizce "Denge"ye kaydederdi.
+  const startOpenRouterConnect = async () => {
+    setPkceBusy("redirecting");
+    resetMsg();
+    try {
+      const verifier = createCodeVerifier();
+      const challenge = await createCodeChallenge(verifier);
+      savePkceSession(window.sessionStorage, { verifier, quality });
+      window.location.href = buildAuthUrl(
+        // Sorgusuz callback: OpenRouter'ın zaten sorgusu olan bir URL'e
+        // `?code=` eklerken ne yaptığı dökümante değil. Bağlam zaten
+        // sessionStorage'da.
+        callbackUrlFor(window.location.href),
+        challenge
+      );
+    } catch (err) {
+      setPkceBusy(null);
+      setTestMsg(
+        `${t.orFailed} ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
+  // Dönüş: kodu anahtara çevir, sonra NORMAL kaydetme yolundan geç
+  // (testAndSave → llmConfigPut + llmTest + invalidateLlmStatus). İkinci bir
+  // kaydetme yolu açmak, elle-yapıştırılan anahtarla PKCE anahtarının farklı
+  // davranmasına yol açardı.
+  //
+  // Effect BİR KEZ koşar (deps boş, ref muhafızlı): takas tek atımlıktır,
+  // React StrictMode'un çift mount'u kodu iki kez POST edip ikincisinde
+  // "harcanmış kod" hatası gösterirdi.
+  //
+  // `alive` muhafızı BİLEREK YOK. StrictMode'da (dev varsayılanı) sıra şu
+  // olurdu: mount 1 takası başlatır → cleanup alive=false → mount 2 ref'e
+  // takılıp erken döner → çözülen anahtar hiçbir yere yazılmaz ve ekran
+  // sonsuza dek "anahtar alınıyor…"da kalır. Ref zaten TEK bir takas
+  // garantiliyor; sonucu ayrıca yutmak, iki muhafızın birbirini kilitlemesi
+  // demek. Unmount'tan sonra setState React 18+'ta zaten sessiz no-op.
+  const pkceStarted = useRef(false);
+  useEffect(() => {
+    // storedLoaded'ı BEKLE (yukarıdaki gerekçe): "Özel" üçlüsü henüz
+    // okunmamışken kaydetmek onu ezerdi. Bayrak hata yolunda da true'ya
+    // çekiliyor, yani bu bekleme takılıp kalamaz.
+    if (!pkceReturn || !storedLoaded || pkceStarted.current) return;
+    pkceStarted.current = true;
+
+    const ret = parseReturnUrl(window.location.href);
+    // İşaretçiyi HEMEN düşür: kalırsa her yenileme harcanmış bir kodu
+    // yeniden takas etmeye çalışır ve uydurma bir hata gösterir.
+    window.history.replaceState(
+      null,
+      "",
+      strippedReturnUrl(window.location.href)
+    );
+    const session = takePkceSession(window.sessionStorage);
+
+    (async () => {
+      if (ret.kind === "error") {
+        // Kullanıcı reddetti ya da OpenRouter hata döndürdü.
+        setPkceBusy(null);
+        setTestMsg(`${t.orDenied} ${ret.error}`);
+        return;
+      }
+      if (ret.kind !== "code") {
+        setPkceBusy(null);
+        return;
+      }
+      if (!session) {
+        // Kod var ama verifier yok — takas matematiksel olarak imkânsız.
+        setPkceBusy(null);
+        setTestMsg(t.orNoSession);
+        return;
+      }
+      try {
+        const key = await exchangeCodeForKey(ret.code, session.verifier);
+        // Anahtar input'unu da doldur: kullanıcı ne kaydedildiğini görsün ve
+        // "Test et"e yeniden basabilsin.
+        setApiKey(key);
+        // Gidişteki kalite seçimini geri yükle — tam sayfa redirect React
+        // state'ini yok ettiği için sessionStorage'dan geliyor. null = "Özel":
+        // resolveModels o durumda kullanıcının elle seçtiği üçlüyü AYNEN
+        // korur, katalog varsayılanına yuvarlamaz.
+        const restored = QUALITY_IDS.find((q) => q === session.quality) ?? null;
+        setPicked(restored);
+        const models = resolveModels(restored, storedQuality, "openrouter");
+        setPkceBusy(null);
+        await testAndSave({
+          mode: "openai",
+          baseUrl: CATALOG.openrouter.baseUrl,
+          apiKey: key,
+          models,
+          jsonMode: CATALOG.openrouter.jsonMode,
+        });
+      } catch (err) {
+        setPkceBusy(null);
+        setTestMsg(
+          `${t.orFailed} ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    })();
+    // Yalnız storedLoaded: bayrak false→true olunca takas başlasın diye.
+    // t/storedQuality BİLEREK yok — deps'e girseler dil değişimi ya da
+    // config tazelemesi harcanmış bir kodu yeniden takas etmeye kalkardı
+    // (ref bunu zaten engelliyor, ama deps'i dar tutmak niyeti belgeliyor).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedLoaded]);
+
   const keyNote = KEY_PROVIDERS[keyProvider].note;
   const keyNoteText = keyNote ? (t === S.en ? keyNote.en : keyNote.tr) : null;
 
@@ -810,6 +983,33 @@ export function LlmSetupWizard({
             ))}
           </div>
           {keyNoteText && <p className="text-xs text-ink-soft">{keyNoteText}</p>}
+
+          {/* T-062: OpenRouter'da tek-tık PKCE yolu. Elle yapıştırma AYNEN
+              duruyor (altında, "ya da" ile) — PKCE bir kolaylık, tek yol
+              değil: sessionStorage'ı kapalı/üçüncü-parti engelli bir
+              tarayıcıda ya da akış patladığında elle yol hâlâ çalışmalı. */}
+          {keyProvider === "openrouter" && (
+            <div className="flex flex-col gap-2 rounded-xl bg-indigo-soft/40 px-3 py-3">
+              <CozyButton
+                variant="soft"
+                onClick={() => void startOpenRouterConnect()}
+                disabled={pkceBusy !== null || testing}
+              >
+                {pkceBusy === "redirecting"
+                  ? t.orRedirecting
+                  : pkceBusy === "exchanging"
+                    ? t.orExchanging
+                    : t.orConnect}
+              </CozyButton>
+              <p className="text-xs text-ink-soft">{t.orConnectDesc}</p>
+            </div>
+          )}
+          {keyProvider === "openrouter" && (
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+              {t.orOr}
+            </p>
+          )}
+
           <p className="text-sm">
             {t.keyGet}{" "}
             <a
