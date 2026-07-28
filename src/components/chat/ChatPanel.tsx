@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { useLocalizeError } from "@/lib/i18n/use-localize-error";
+import { useLocalizeError, resolveUiLang } from "@/lib/i18n/use-localize-error";
 import { useLlmStatus } from "@/lib/llm-status";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { NATIVE_LANGUAGES } from "@/lib/profile-options";
-import { chatHistoryApi, chatSend } from "@/lib/client-api";
+import { chatHistoryApi, chatSend, llmConfigGet } from "@/lib/client-api";
+import { diagnoseGenerationFailure } from "@/lib/llm-diagnosis";
 
 const nativeLangDisplay = (code: string) =>
   NATIVE_LANGUAGES.find((l) => l.code === code)?.name ?? code;
@@ -52,20 +53,36 @@ export function ChatPanel() {
   const t = useStrings(S);
   const localize = useLocalizeError();
   const llm = useLlmStatus();
-  const nativeLanguage = useProfileMeta()?.nativeLanguage ?? "tr";
+  const profileMeta = useProfileMeta();
+  const nativeLanguage = profileMeta?.nativeLanguage ?? "tr";
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // send()'s catch does an extra async probe (diagnoseGenerationFailure)
+  // before setState — guard against writing to an unmounted component if the
+  // user navigates away mid-probe (LessonPlayer.tsx has the same pattern).
+  const stopped = useRef(false);
 
   useEffect(() => {
+    // StrictMode (Next 15 dev default) runs mount -> cleanup -> mount on the
+    // SAME ref before the first real unmount — without resetting to false
+    // here, stopped.current lands on `true` after that double-invoke and
+    // every send() afterwards silently skips its setState calls (chat gets
+    // stuck on the typing dots forever). LessonPlayer's stopped ref and the
+    // ExerciseCard one added in this same change both reset on mount; this
+    // one didn't, and only breaks in dev — caught in review, not by tsc/tests.
+    stopped.current = false;
     chatHistoryApi()
       .then((d) => {
         setSessionId(d.sessionId);
         setMessages(d.messages as Msg[] ?? []);
       })
       .catch(() => {});
+    return () => {
+      stopped.current = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -86,15 +103,31 @@ export function ChatPanel() {
         { role: "assistant", content: body.reply, lang: nativeLanguage },
       ]);
     } catch (e) {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          content: `⚠️ ${localize(e)}`,
-        },
-      ]);
+      // T-063: a generic message here can mean "bridge died mid-session" —
+      // localize(e) already collapses that to a useless generic string (see
+      // llm-diagnosis.ts's header for why), so probe the configured local
+      // endpoint once and swap in an actionable message when it's the cause.
+      let content = `⚠️ ${localize(e)}`;
+      try {
+        const config = await llmConfigGet();
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const diagnosis = await diagnoseGenerationFailure({
+          err: e,
+          baseUrl: config.baseUrl,
+          uiLang: resolveUiLang(profileMeta?.uiLanguage),
+          isLocalOrigin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin),
+          origin,
+        });
+        if (!stopped.current) content = `⚠️ ${diagnosis.message}`;
+      } catch {
+        // Diagnosis itself failing (e.g. llmConfigGet network hiccup) must
+        // never replace the already-computed generic message with nothing.
+      }
+      if (!stopped.current) {
+        setMessages((m) => [...m, { role: "assistant", content }]);
+      }
     } finally {
-      setBusy(false);
+      if (!stopped.current) setBusy(false);
     }
   };
 

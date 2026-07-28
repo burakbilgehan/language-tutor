@@ -82,7 +82,11 @@ async function fetchWithTimeout(
   }
 }
 
-async function probeBridge(
+/** Exported for T-063's one-shot error-path diagnosis (llm-diagnosis.ts):
+ * a generation failure against a local endpoint reuses this same probe
+ * instead of re-implementing fetch+timeout+parse. Pure function, no hook
+ * state — safe to call outside the interval loop above. */
+export async function probeBridge(
   baseUrl: string,
   signal: AbortSignal
 ): Promise<BridgeProbe> {
@@ -110,7 +114,8 @@ async function probeBridge(
   }
 }
 
-async function probeOllama(
+/** Same export rationale as probeBridge above. */
+export async function probeOllama(
   baseUrl: string,
   signal: AbortSignal
 ): Promise<OllamaProbe> {
