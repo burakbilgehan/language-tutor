@@ -66,6 +66,29 @@
     }
   ],
 
+  // T-058: weekly catalog-freshness cron writes here; GET /api/llm-catalog
+  // reads it back as `staleWarnings`. Placeholder id — `wrangler dev` and the
+  // test suite use miniflare's local KV simulation and never touch a real
+  // namespace, so this never needs a real id to pass locally. The owner
+  // replaces the id in env.production below with the output of
+  // `wrangler kv namespace create CATALOG_KV --env production` before the
+  // cron is activated (see README "Deploy").
+  "kv_namespaces": [
+    {
+      "binding": "CATALOG_KV",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+
+  // Weekly, Monday 04:00 UTC — low-traffic window, arbitrary otherwise (the
+  // only constraint is "not every day", so a dead id doesn't spam KV writes
+  // and a real rename has time to be noticed and fixed by hand before the
+  // next run). Cron triggers are NOT inherited across environments (like
+  // vars/bindings above), hence repeated in env.production.
+  "triggers": {
+    "crons": ["0 4 * * 1"]
+  },
+
   // PRODUCTION (okumo.dev) — deploy with `wrangler deploy --env production`.
   //
   // A separate environment rather than editing the top-level config in place:
@@ -103,7 +126,24 @@
           "binding": "SAVES",
           "bucket_name": "lt-saves"
         }
-      ]
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "CATALOG_KV",
+          // PLACEHOLDER — mirrors the d1_databases/database_id pattern above.
+          // `wrangler deploy --env production` will fail to bind this (or the
+          // cron will error at runtime) until the owner replaces it with the
+          // id printed by `wrangler kv namespace create CATALOG_KV --env
+          // production`. See README "Deploy" for the full step. The ROUTE
+          // degrades fine either way (readStoredReport treats a KV miss/error
+          // as "no warnings yet"), but the CRON's write needs a real
+          // namespace to actually persist anything.
+          "id": "00000000000000000000000000000000"
+        }
+      ],
+      "triggers": {
+        "crons": ["0 4 * * 1"]
+      }
     }
   }
 }

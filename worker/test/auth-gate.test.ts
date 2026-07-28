@@ -35,6 +35,11 @@ const OPEN_ROUTES: Record<string, string> = {
   "/api/health":
     "Liveness probe. No DB read, no R2 touch, no user data, no mutation — " +
     "returns a constant boolean. Mirrors the Next app's health/llm entry.",
+  "/api/llm-catalog":
+    "T-058: public versioned model catalog + freshness warnings. No user " +
+    "data, no mutation, no session concept involved — the embedded build " +
+    "catalog is always the working fallback, this is an optional overlay " +
+    "fetch. Mirrors /api/health's open posture.",
 };
 
 const ORIGIN = "http://localhost:8787";

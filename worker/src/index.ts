@@ -1,4 +1,5 @@
 import { dispatch } from "./dispatch";
+import { runCronCheck } from "./catalog-cron";
 import type { Env } from "./env";
 
 /**
@@ -29,4 +30,24 @@ export default {
 
     return dispatch(request, env);
   },
-};
+
+  /**
+   * T-058 weekly cron: checks the catalog's OpenRouter-checkable ids against
+   * OpenRouter's live public `/models` listing and writes the result to KV
+   * (`runCronCheck` — see catalog-cron.ts for the "never clobber on a failed
+   * fetch" guarantee). `/api/llm-catalog` reads that KV entry back as
+   * `staleWarnings`. Nothing here auto-edits the catalog or blocks anything —
+   * curation stays human, this is only the watchdog.
+   *
+   * Full 3-arg signature (incl. `ctx`) so this matches the real
+   * `ExportedHandler<Env>["scheduled"]` contract the runtime invokes — tests
+   * call it the same way via `createExecutionContext()`.
+   */
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    _ctx: ExecutionContext
+  ): Promise<void> {
+    await runCronCheck(env);
+  },
+} satisfies ExportedHandler<Env>;
