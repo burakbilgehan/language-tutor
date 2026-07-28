@@ -130,15 +130,11 @@
       "kv_namespaces": [
         {
           "binding": "CATALOG_KV",
-          // PLACEHOLDER — mirrors the d1_databases/database_id pattern above.
-          // `wrangler deploy --env production` will fail to bind this (or the
-          // cron will error at runtime) until the owner replaces it with the
-          // id printed by `wrangler kv namespace create CATALOG_KV --env
-          // production`. See README "Deploy" for the full step. The ROUTE
-          // degrades fine either way (readStoredReport treats a KV miss/error
-          // as "no warnings yet"), but the CRON's write needs a real
-          // namespace to actually persist anything.
-          "id": "00000000000000000000000000000000"
+          // Real namespace, created 2026-07-28 (`wrangler kv namespace create
+          // CATALOG_KV --env production`, title "production-CATALOG_KV"). The
+          // top-level binding above keeps its placeholder on purpose — local
+          // dev/tests run on miniflare's simulation and never touch this.
+          "id": "bc013664e0734d4eb1f97d8b9d3d8e12"
         }
       ],
       "triggers": {
