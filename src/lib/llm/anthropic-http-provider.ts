@@ -14,7 +14,7 @@ import {
   runJsonWithRetry,
   schemaToJsonSchema,
 } from "./shared";
-import { readLlmConfig, modelForTierConfigured } from "./config";
+import { readLlmConfig, modelForTierConfigured, type LlmConfig } from "./config";
 
 // Anthropic-native provider (/v1/messages). Anthropic is NOT OpenAI-compatible
 // — different wire format (x-api-key, content blocks, system as top-level).
@@ -39,10 +39,13 @@ async function messages(opts: {
   tier: ModelTier;
   purpose: string;
   timeoutMs: number;
+  /** T-066: probe an unsaved candidate config instead of the stored one
+   * (used by the "test before save" path). Undefined = stored config. */
+  configOverride?: LlmConfig;
 }): Promise<string> {
-  const config = readLlmConfig();
+  const config = opts.configOverride ?? readLlmConfig();
   const baseUrl = (config?.baseUrl?.replace(/\/$/, "") || DEFAULT_BASE);
-  const model = modelForTierConfigured(opts.tier);
+  const model = modelForTierConfigured(opts.tier, opts.configOverride);
   if (!config?.apiKey) throw new LlmError("Anthropic API anahtarı ayarlı değil");
 
   const body: Record<string, unknown> = {
@@ -124,6 +127,10 @@ async function messages(opts: {
 }
 
 export class AnthropicHttpProvider implements LlmProvider {
+  /** T-066: see HttpProvider's constructor doc — same "test before save"
+   * candidate-probe purpose. */
+  constructor(private readonly configOverride?: LlmConfig) {}
+
   async generateJson<T>(opts: GenerateJsonOptions<T>): Promise<T> {
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const schemaHint = `\n\nÇıktın SADECE şu JSON şemasına uyan geçerli bir JSON olmalı:\n${JSON.stringify(
@@ -139,6 +146,7 @@ export class AnthropicHttpProvider implements LlmProvider {
             tier: opts.tier,
             purpose: isRetry ? `${opts.fixtureKey}-retry` : opts.fixtureKey,
             timeoutMs,
+            configOverride: this.configOverride,
           })
         ),
       { urgent: opts.urgent }
@@ -155,6 +163,7 @@ export class AnthropicHttpProvider implements LlmProvider {
           tier: opts.tier,
           purpose: opts.fixtureKey,
           timeoutMs,
+          configOverride: this.configOverride,
         }),
       { urgent: opts.urgent }
     );

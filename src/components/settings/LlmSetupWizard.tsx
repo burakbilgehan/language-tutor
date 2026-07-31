@@ -777,14 +777,21 @@ export function LlmSetupWizard({
     linux: `OLLAMA_ORIGINS="${origin}" ollama serve`,
   };
 
+  // T-066: test BEFORE save (was save-then-test) — a failed test used to
+  // leave a broken config on disk with llmConfigured() reporting true, even
+  // though the button said "test and save". llmTest(config) probes the
+  // CANDIDATE without persisting anything; only a passing probe reaches
+  // llmConfigPut. Same config object is passed to both calls so the
+  // "empty apiKey = keep stored key" merge in llmConfigPut resolves
+  // identically to what was just tested — nothing writes in between.
   const testAndSave = async (config: Parameters<typeof llmConfigPut>[0]) => {
     setTesting(true);
     setTestMsg(null);
     setSucceeded(false);
     try {
-      await llmConfigPut(config);
-      const r = await llmTest();
+      const r = await llmTest(config);
       if (r.ok) {
+        await llmConfigPut(config);
         setTestMsg(t.testOk);
         setSucceeded(true);
         invalidateLlmStatus();

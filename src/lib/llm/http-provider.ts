@@ -14,7 +14,7 @@ import {
   runJsonWithRetry,
   schemaToJsonSchema,
 } from "./shared";
-import { readLlmConfig, modelForTierConfigured } from "./config";
+import { readLlmConfig, modelForTierConfigured, type LlmConfig } from "./config";
 
 // OpenAI chat-completions provider. Covers DeepSeek, OpenAI, OpenRouter,
 // Ollama, LM Studio and any OpenAI-compatible endpoint — only baseUrl/model
@@ -34,11 +34,14 @@ async function chatCompletion(opts: {
   purpose: string;
   jsonMode: boolean;
   timeoutMs: number;
+  /** T-066: probe an unsaved candidate config instead of the stored one
+   * (used by the "test before save" path). Undefined = stored config. */
+  configOverride?: LlmConfig;
 }): Promise<string> {
-  const config = readLlmConfig();
+  const config = opts.configOverride ?? readLlmConfig();
   const baseUrl = config?.baseUrl?.replace(/\/$/, "");
   if (!baseUrl) throw new LlmError("LLM baseUrl ayarlı değil");
-  const model = modelForTierConfigured(opts.tier);
+  const model = modelForTierConfigured(opts.tier, opts.configOverride);
 
   const messages: Array<{ role: string; content: string }> = [];
   if (opts.system) messages.push({ role: "system", content: opts.system });
@@ -117,9 +120,18 @@ async function chatCompletion(opts: {
 }
 
 export class HttpProvider implements LlmProvider {
+  /** T-066: an explicit candidate config makes this instance probe THAT
+   * config instead of the stored one — used for "test before save" so a
+   * passing test actually predicts the config the user is about to save.
+   * Omitted = stored config (readLlmConfig()), unchanged for every
+   * existing call site. Deliberately bypasses the queue's own config read
+   * for jsonMode/model resolution below, but still goes through enqueue()
+   * so a probe respects the same concurrency limit as real calls. */
+  constructor(private readonly configOverride?: LlmConfig) {}
+
   async generateJson<T>(opts: GenerateJsonOptions<T>): Promise<T> {
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const config = readLlmConfig();
+    const config = this.configOverride ?? readLlmConfig();
     const jsonMode = config?.jsonMode ?? false;
     // Endpoints without json_object mode still need the shape described, so we
     // append the JSON Schema to the prompt as guidance for every provider.
@@ -137,6 +149,7 @@ export class HttpProvider implements LlmProvider {
             purpose: isRetry ? `${opts.fixtureKey}-retry` : opts.fixtureKey,
             jsonMode,
             timeoutMs,
+            configOverride: this.configOverride,
           })
         ),
       { urgent: opts.urgent }
@@ -154,6 +167,7 @@ export class HttpProvider implements LlmProvider {
           purpose: opts.fixtureKey,
           jsonMode: false,
           timeoutMs,
+          configOverride: this.configOverride,
         }),
       { urgent: opts.urgent }
     );
