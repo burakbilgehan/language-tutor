@@ -1,7 +1,7 @@
 ---
 id: T-070
 title: Ders üretim hatası kara deliği — köprü 180s timeout + yutulan hata + iptalsiz/retry'sız "hazırlanıyor"
-status: todo
+status: done
 priority: p1
 effort: M
 confidence: high
