@@ -230,7 +230,17 @@ export function RoadmapView() {
   // drawer state is mirrored into ?lesson=<id> so the browser back button
   // closes the drawer instead of leaving the page.
   const openLesson = useCallback((id: string) => {
-    window.history.pushState(null, "", withBase(`/map?lesson=${id}`));
+    const url = withBase(`/map?lesson=${id}`);
+    // Drawer zaten açıkken başka derse tıklanırsa history'ye YENİ kayıt
+    // eklenmez, mevcut kayıt değiştirilir. Aksi halde her tıklama bir kayıt
+    // yığar; "Kapat" (history.back) haritaya dönmek yerine önceki dersleri
+    // tek tek geri açar ve kullanıcı kaç ders gezdiyse o kadar kapatmak
+    // zorunda kalır. Böylece back/Kapat her zaman tek adımda haritaya döner.
+    if (new URLSearchParams(window.location.search).has("lesson")) {
+      window.history.replaceState(null, "", url);
+    } else {
+      window.history.pushState(null, "", url);
+    }
     setOpenLessonId(id);
   }, []);
   const closeLesson = useCallback(() => {
