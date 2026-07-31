@@ -16,6 +16,14 @@ export interface GenerateJsonOptions<T> {
   timeoutMs?: number;
   /** Interactive call (user is waiting) — jumps ahead of queued background generations. */
   urgent?: boolean;
+  /** Caller-side cancellation (T-070-C: the "preparing" screen's cancel
+   * button). Combined with the provider's own timeout controller, never
+   * replacing it. Providers that ignore it stay correct, just uncancellable. */
+  signal?: AbortSignal;
+  /** Identity for the browser queue, so a call still WAITING in it can later
+   * be promoted to urgent (T-070-D: the user opens a lesson that a prefetch
+   * already queued). Ignored by providers without a queue. */
+  queueKey?: string;
 }
 
 export interface GenerateTextOptions {
@@ -26,6 +34,14 @@ export interface GenerateTextOptions {
   timeoutMs?: number;
   /** Interactive call (user is waiting) — jumps ahead of queued background generations. */
   urgent?: boolean;
+  /** Caller-side cancellation (T-070-C: the "preparing" screen's cancel
+   * button). Combined with the provider's own timeout controller, never
+   * replacing it. Providers that ignore it stay correct, just uncancellable. */
+  signal?: AbortSignal;
+  /** Identity for the browser queue, so a call still WAITING in it can later
+   * be promoted to urgent (T-070-D: the user opens a lesson that a prefetch
+   * already queued). Ignored by providers without a queue. */
+  queueKey?: string;
 }
 
 export interface LlmProvider {
@@ -39,5 +55,12 @@ export class LlmError extends Error {
   }
 }
 export class LlmTimeoutError extends LlmError {}
+/** The caller aborted (T-070-C cancel button). Distinct from a timeout: the
+ * UI must not show a failure screen for something the user chose to stop. */
+export class LlmCancelledError extends LlmError {
+  constructor(message = "Üretim iptal edildi") {
+    super(message);
+  }
+}
 export class LlmAuthError extends LlmError {}
 export class LlmParseError extends LlmError {}

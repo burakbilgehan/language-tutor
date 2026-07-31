@@ -123,6 +123,11 @@ const S = {
     subStep1: (cli: string) => `1. ${cli} kurulu değilse kur:`,
     subStep2: (cli: string) => `2. Bir kez ${cli} çalıştırıp hesabınla giriş yap.`,
     subStep3: "3. Köprüyü başlat (terminali açık bırak):",
+    // T-070-A: komut dosyayı her seferinde yeniden indirir, yani zaman aşımı
+    // varsayılanı (420s) kendiliğinden güncellenir. Not yalnız hâlâ kesilen
+    // uzun üretimler için.
+    subTimeoutHint:
+      "Uzun dersler yarıda kesilirse komutun sonuna `--timeout 600` ekleyebilirsin.",
     subNodeNote: "Köprü için Node.js gerekir:",
     subKeepOpen:
       "Köprü çalıştığı sürece üretim senin aboneliğinden gider. Terminali kapatınca durur.",
@@ -234,6 +239,8 @@ const S = {
     subStep1: (cli: string) => `1. Install ${cli} if you don't have it:`,
     subStep2: (cli: string) => `2. Run ${cli} once and sign in with your account.`,
     subStep3: "3. Start the bridge (keep the terminal open):",
+    subTimeoutHint:
+      "If long lessons get cut off, add `--timeout 600` to the end of the command.",
     subNodeNote: "The bridge needs Node.js:",
     subKeepOpen:
       "While the bridge runs, generation goes through your subscription. Closing the terminal stops it.",
@@ -1287,6 +1294,7 @@ export function LlmSetupWizard({
               <p>{t.subStep2(SUB_BACKENDS[subBackend].cli)}</p>
               <p>{t.subStep3}</p>
               <CmdBlock cmd={bridgeCmd} copyLabel={t.copy} copiedLabel={t.copied} />
+              <p className="text-xs text-ink-soft">{t.subTimeoutHint}</p>
               {/* claude dışındaki backend'lerde model seçimi bizde değil:
                   köprü sentinel'i CLI'nın kendi varsayılanını kullandırır. */}
               {subBackend === "claude" ? (

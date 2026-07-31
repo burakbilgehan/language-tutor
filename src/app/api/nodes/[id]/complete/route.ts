@@ -5,7 +5,7 @@ import { db, tables } from "@/db";
 import { getActiveProfile } from "@/lib/profile";
 import { isCurriculumTail } from "@/lib/roadmap";
 import { completeNodeFlow } from "@/core/lesson";
-import { createJob, ensureLessonJob, runJob, topChapterLevel } from "@/lib/jobs";
+import { createJob, prefetchLessonWindow, runJob, topChapterLevel } from "@/lib/jobs";
 import { nextLevelFor } from "@/lib/curriculum/levels";
 import { llmConfigured } from "@/lib/llm/config";
 import type { NativeLang } from "@/lib/llm/lang-content";
@@ -71,10 +71,15 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Prefetch: generate the just-unlocked lesson(s) in the background so the
-  // learner never stares at a 90s spinner.
+  // T-068 second trigger: the new active lesson is the just-unlocked
+  // successor, so fill the window (n..n+2) from there rather than generating
+  // only the direct successor. Already-ready nodes cost nothing.
   for (const unlockedId of flow.unlockedNodeIds) {
-    ensureLessonJob(unlockedId, (profile.nativeLanguage ?? "tr") as NativeLang);
+    prefetchLessonWindow(
+      unlockedId,
+      2,
+      (profile.nativeLanguage ?? "tr") as NativeLang
+    );
   }
 
   // Auto-extend to the next level when the learner clears the tail.

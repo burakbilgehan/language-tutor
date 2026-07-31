@@ -9,6 +9,7 @@
 
 import type { Rating } from "@/lib/srs";
 import { AppError } from "@/lib/errors";
+import { startLessonGen } from "@/lib/lesson-gen-store";
 
 export const IS_STATIC = process.env.NEXT_PUBLIC_STATIC_BUILD === "1";
 
@@ -154,21 +155,141 @@ async function browserGen() {
   return gen;
 }
 
-/** Statikte ders üretimi tekilleştirme (sunucudaki ensureLessonJob muadili):
- * prefetch + kullanıcının dersi açması aynı anda gelirse tek üretime iner. */
-const lessonGenInFlight = new Map<string, Promise<void>>();
-function ensureLessonGen(nodeId: string): Promise<void> {
-  const existing = lessonGenInFlight.get(nodeId);
-  if (existing) return existing;
-  const p = (async () => {
-    const gen = await browserGen();
-    const { db, persistSoon } = await browserDb();
-    const coreG = await import("@/core/llm-gen");
-    await coreG.generateLessonContent(db, gen, nodeId);
-    persistSoon();
-  })().finally(() => lessonGenInFlight.delete(nodeId));
-  lessonGenInFlight.set(nodeId, p);
-  return p;
+/** Üretim hatasını kullanıcıya gösterilebilir metne çevirir (llm-diagnosis).
+ * Store'a HAM sağlayıcı metni yazılmaz; teşhis başarısız olursa yerelleştirilmiş
+ * genel mesaja düşer. */
+async function diagnoseGenError(err: unknown): Promise<string> {
+  try {
+    const { diagnoseGenerationFailure } = await import("@/lib/llm-diagnosis");
+    const config = await llmConfigGet();
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const uiLang = await activeUiLanguage();
+    const diagnosis = await diagnoseGenerationFailure({
+      err,
+      baseUrl: config.baseUrl,
+      uiLang,
+      isLocalOrigin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin),
+      origin,
+    });
+    return diagnosis.message;
+  } catch {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+/** Aktif profilin UI dili (teşhis metinleri için). Profil yoksa tr. */
+async function activeUiLanguage(): Promise<"tr" | "en"> {
+  try {
+    const data = await profileData();
+    return data.profile?.uiLanguage === "en" ? "en" : "tr";
+  } catch {
+    return "tr";
+  }
+}
+
+/**
+ * Statikte ders üretimi (sunucudaki ensureLessonJob muadili).
+ *
+ * Tekilleştirme + SONUÇ KAYDI artık lesson-gen-store'da (T-070-B): üretimin
+ * sonucu çağıran bileşenin ömründen bağımsız olarak saklanır, böylece
+ * drawer kapatıldıktan sonra biten hata bir yüzeyde görünebilir. Eskiden
+ * burada duran `lessonGenInFlight` haritası oraya taşındı.
+ */
+function ensureLessonGen(nodeId: string, urgent = false): Promise<void> {
+  return startLessonGen(nodeId, {
+    urgent,
+    diagnose: diagnoseGenError,
+    promote: () => {
+      void import("@/lib/llm/browser-queue").then((m) =>
+        m.promoteUrgentCall(`lesson:${nodeId}`)
+      );
+    },
+    run: async (signal) => {
+      const gen = await browserGen();
+      const { db, persistSoon } = await browserDb();
+      const coreG = await import("@/core/llm-gen");
+      try {
+        await coreG.generateLessonContent(db, gen, nodeId, null, {
+          urgent,
+          signal,
+        });
+      } finally {
+        // finally, catch DEĞİL: generateLessonContent hata yolunda satırı
+        // "error" (iptalde "pending") damgalayıp RETHROW ediyor. persistSoon
+        // yalnız başarı yolunda çağrılsaydı o damga IndexedDB'ye hiç inmezdi;
+        // reload sonrası openNode yine needsGeneration görür ve sessiz 3
+        // dakikalık üretim yeniden başlardı, yani kara delik bir refresh'i
+        // atlatırdı. ("Başka bir yazım nasılsa flush eder" savunması da
+        // geçmiyor: köprü zaman aşımı pencerenin TÜM hedeflerini aynı anda
+        // öldürüyor, ortada flush edecek başka yazım kalmıyor.)
+        persistSoon();
+      }
+    },
+  });
+}
+
+/**
+ * T-068 penceresi, statik ayak: `anchor`'dan itibaren n..n+k içeriksiz
+ * dersleri arkaplanda üretir. Hepsi hazırsa SIFIR çağrı. Prefetch'ler
+ * urgent'sız gider; kullanıcının açtığı ders kuyrukta onların önüne geçer.
+ */
+async function runLessonWindow(anchorNodeId: string, k = 2): Promise<void> {
+  const { getBrowserGen } = await import("@/lib/llm/browser-provider");
+  if (!getBrowserGen()) return; // LLM yok → arka plan üretimi sessizce no-op
+  const { db } = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreW = await import("@/core/lesson-window");
+  const nativeLang = (coreP.getActiveProfile(db)?.nativeLanguage ?? "tr") as
+    | "tr"
+    | "en";
+  const { lessonGenState } = await import("@/lib/lesson-gen-store");
+  for (const id of coreW.lessonWindowTargets(db, anchorNodeId, k, nativeLang)) {
+    // Kullanıcının BU OTURUMDA iptal ettiği ders pencere hedefi olmaz. İptal
+    // DB satırını "pending" bırakıyor (doğru: hata değil), ama bu onu pencere
+    // için GARANTİ hedef yapıyordu; tam sayfa /lesson'da "Vazgeç" → /map →
+    // primeLessonWindow zinciri üretimi saniyeler içinde, üstelik iptal
+    // butonu olmadan yeniden başlatıyordu.
+    //
+    // Filtre bilerek OTURUM kapsamlı (store bellekte): reload sonrası pending
+    // satırın yeniden hedef olması doğru davranış, kullanıcı o dersi hiç
+    // istemiyorsa zaten açmaz.
+    if (lessonGenState(id)?.kind === "cancelled") continue;
+    void ensureLessonGen(id).catch((err) =>
+      console.warn("[prefetch] ders üretimi hata:", id, err)
+    );
+  }
+}
+
+/** Uygulama/harita açılışı tetiği (T-068 üçüncü tetik): frontier'dan bir kez.
+ * Statikte sekme kapanınca ölen in-flight üretimi sessizce toparlar; pencere
+ * doluysa no-op. Sunucu modunda harita zaten job kuyruğuna sahip, orada da
+ * aynı invariant çalışsın diye route üstünden tetiklenir. */
+export async function primeLessonWindow(): Promise<void> {
+  if (!IS_STATIC) {
+    // Sunucu ayağı: ince kabuk route'u (çekirdek mantık orada da core'da).
+    // Hata yutulmaz, sadece bloklamaz: auth gate'i açık bir kurulumda süresi
+    // dolmuş cookie 401 döndürür ve tetik sessizce ölürdü.
+    try {
+      const res = await fetch("/api/lessons/window", { method: "POST" });
+      if (!res.ok) {
+        console.warn("[prefetch] pencere tetiklenemedi: HTTP", res.status);
+      }
+    } catch (err) {
+      console.warn("[prefetch] pencere tetiklenemedi:", err);
+    }
+    return;
+  }
+  try {
+    const { db } = await browserDb();
+    const coreP = await import("@/core/profile");
+    const coreW = await import("@/core/lesson-window");
+    const profile = coreP.getActiveProfile(db);
+    if (!profile) return;
+    const frontier = coreW.frontierNodeId(db, profile.id);
+    if (frontier) await runLessonWindow(frontier);
+  } catch (err) {
+    console.warn("[prefetch] pencere tetiklenemedi:", err);
+  }
 }
 
 /** Statik auto-extend (sunucudaki maybeAutoExtend muadili): zincirin kuyruğu
@@ -1018,16 +1139,50 @@ export async function openNodeApi(nodeId: string): Promise<
   const result = core.openNode(db, nodeId, nativeLang);
   if (result.status === "notFound") throw new AppError("not_found");
   if (result.status === "locked") throw new AppError("node_locked");
+  // T-070-B: son üretim denemesi başarısız → sessiz otomatik yeniden üretim
+  // YOK. Çağıran "başarısız, tekrar dene" ekranını gösterir; retry
+  // kullanıcının açık eylemi (retryLessonGen).
+  if (result.status === "error") {
+    // Pencereyi yine de tetikle: bu ders bozuk olsa da ardılları hazırlanabilir.
+    void runLessonWindow(nodeId).catch(() => {});
+    return result;
+  }
   if (result.status === "needsGeneration") {
     // Tarayıcı LLM'iyle inline üret (1-3 dk sürebilir; UI hazırlanıyor
     // ekranını gösterir), sonra cache'ten servis et. Prefetch aynı dersi
-    // üretiyorsa ensureLessonGen aynı promise'i paylaşır.
-    await ensureLessonGen(nodeId);
+    // üretiyorsa ensureLessonGen aynı promise'i paylaşır. urgent: kullanıcı
+    // ekranda BEKLİYOR, kuyrukta prefetch'lerin önüne geçer (T-070-D).
+    await ensureLessonGen(nodeId, true);
+    // Kullanıcı iptal ettiyse hata DEĞİL: "hazırlanıyor" durumunda kal,
+    // çağıran zaten haritaya dönüyor. Aksi halde kendi bastığı "Vazgeç"
+    // kullanıcıya "Ders hazırlanamadı" ekranı olarak geri dönerdi.
+    const { lessonGenState } = await import("@/lib/lesson-gen-store");
+    if (lessonGenState(nodeId)?.kind === "cancelled") {
+      return { status: "generating", jobId: null };
+    }
     const after = core.openNode(db, nodeId, nativeLang);
     if (after.status !== "ready") throw new AppError("lesson_gen_failed");
+    // Açılan ders hazır olur olmaz pencereyi ilerlet (T-068 birinci tetik).
+    void runLessonWindow(nodeId).catch(() => {});
     return after;
   }
+  // Zaten hazır: T-068 birinci tetik (ders açılışı) buradan koşar.
+  void runLessonWindow(nodeId).catch(() => {});
   return result;
+}
+
+/** T-070-B/C: kullanıcının açık "tekrar dene" eylemi. Store'daki hata kaydını
+ * temizler ve üretimi urgent olarak yeniden başlatır. */
+export async function retryLessonGen(nodeId: string): Promise<void> {
+  if (!IS_STATIC) {
+    // Sunucuda retry = yeni job; regenerateLessonJob satırı "generating"e
+    // çevirdiği için açılıştaki error dalı da temizlenmiş olur.
+    await regenerateLesson(nodeId, null);
+    return;
+  }
+  const { clearLessonGen } = await import("@/lib/lesson-gen-store");
+  clearLessonGen(nodeId);
+  await ensureLessonGen(nodeId, true);
 }
 
 export async function completeNodeApi(nodeId: string): Promise<{
@@ -1062,9 +1217,13 @@ export async function completeNodeApi(nodeId: string): Promise<{
   const { getBrowserGen } = await import("@/lib/llm/browser-provider");
   let extendingLevel: string | null = null;
   if (getBrowserGen()) {
+    // T-068 ikinci tetik: yeni aktif ders = açılan ardıl. Pencere ondan
+    // itibaren n..n+2'yi doldurur; zaten hazır olanlar için sıfır çağrı.
+    // (Eskiden yalnız DOĞRUDAN ardıl üretiliyordu, yani tamamla→tıkla arası
+    // 5-10 sn'lik pencereye 1-3 dk'lık üretim sığmıyordu.)
     for (const unlockedId of flow.unlockedNodeIds) {
-      void ensureLessonGen(unlockedId).catch((err) =>
-        console.warn("[prefetch] ders üretimi hata:", unlockedId, err)
+      void runLessonWindow(unlockedId).catch((err) =>
+        console.warn("[prefetch] pencere hata:", unlockedId, err)
       );
     }
     if (!wasCompleted && node?.nodeType === "main") {

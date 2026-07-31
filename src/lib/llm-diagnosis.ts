@@ -32,7 +32,11 @@ import { AppError, isErrorCode } from "@/lib/errors";
 // imported from client components (ChatPanel/LessonPlayer) — importing the
 // server file here pulled node builtins into the static-mode client bundle
 // and broke `npm run build:static` (caught while verifying this ticket).
-import { LlmAuthError } from "@/lib/llm/provider-types";
+import {
+  LlmAuthError,
+  LlmCancelledError,
+  LlmTimeoutError,
+} from "@/lib/llm/provider-types";
 import { CATALOG } from "@/lib/llm/catalog";
 import {
   probeBridge,
@@ -73,7 +77,13 @@ export type GenerationDiagnosis =
   /** Probed and the endpoint is healthy — the failure is something else
    * (bad model id, auth, malformed response); don't invent a diagnosis,
    * fall back to the generic message. */
-  | { kind: "local_up_other_cause"; message: string };
+  | { kind: "local_up_other_cause"; message: string }
+  /** The generation ran too long and was cut off (T-070-A): either the bridge
+   * returned its structured 504 or our own AbortController fired. No probe is
+   * needed: a timeout already proves the endpoint was answering. Its advice
+   * is the opposite of "restart your bridge", so it must not collapse into
+   * the generic message. */
+  | { kind: "timeout"; message: string };
 
 const S = {
   tr: {
@@ -85,6 +95,10 @@ const S = {
       "Köprü çalışıyor ama eski bir sürüm (durum uç noktasını bilmiyor). Yine de üretim başka bir nedenle başarısız oldu.",
     originHint: (flag: string) =>
       ` (ya da bu site şu an izinli değil — komuttaki ${flag} kısmını kontrol et)`,
+    timeoutBridge:
+      "Üretim çok uzun sürdü ve yarıda kesildi. Tekrar deneyebilirsin; sık oluyorsa köprüyü daha uzun süreyle başlat (`node llm-bridge.mjs --timeout 600`) ya da daha hızlı bir model seç.",
+    timeoutGeneric:
+      "Üretim çok uzun sürdü ve yarıda kesildi. Tekrar deneyebilirsin; sık oluyorsa daha hızlı bir model seç.",
   },
   en: {
     downBridge: (originHint: string) =>
@@ -95,6 +109,10 @@ const S = {
       "The bridge is running but on an older version (it doesn't know the status endpoint). Generation failed for another reason.",
     originHint: (flag: string) =>
       ` (or this site isn't currently permitted — check the ${flag} part of the command)`,
+    timeoutBridge:
+      "Generation took too long and was cut off. You can try again; if it keeps happening, start the bridge with a longer limit (`node llm-bridge.mjs --timeout 600`) or pick a faster model.",
+    timeoutGeneric:
+      "Generation took too long and was cut off. You can try again; if it keeps happening, pick a faster model.",
   },
 } as const;
 
@@ -127,8 +145,26 @@ export function classifyGenerationFailure(
   const hasKnownCode =
     err instanceof AppError ||
     (err instanceof Error && isErrorCode(err.message));
-  if (hasKnownCode || err instanceof LlmAuthError) {
+  // LlmCancelledError da buradan geçer: kullanıcının kendi iptali asla
+  // "köprün kapalı" diye yorumlanmamalı. Normal akışta hata yüzeyine hiç
+  // ulaşmaz (store iptalde reject etmiyor), ama teşhis kendi başına doğru
+  // olmalı.
+  if (
+    hasKnownCode ||
+    err instanceof LlmAuthError ||
+    err instanceof LlmCancelledError
+  ) {
     return { kind: "pass_through", message: generic };
+  }
+  // T-070-A: zaman aşımı kendi kendini teşhis eder; uç nokta CEVAP VERDİĞİ
+  // için (yapılandırılmış 504) ya da isteği biz kestiğimiz için oraya
+  // ulaşabildiğimiz kesin. "Köprünü yeniden başlat" tavsiyesinin TERSİ bir
+  // tavsiye gerekir, o yüzden probe'dan önce ve generic'e düşmeden ayrılır.
+  if (err instanceof LlmTimeoutError) {
+    return {
+      kind: "timeout",
+      message: probeTarget === "bridge" ? t.timeoutBridge : t.timeoutGeneric,
+    };
   }
   if (probeTarget === null || probeState === "skipped") {
     return { kind: "pass_through", message: generic };
@@ -184,7 +220,17 @@ export async function diagnoseGenerationFailure(
   // is non-null (localTargetFor returns null for undefined/empty input) —
   // TS can't see across that function boundary, so narrow explicitly instead
   // of asserting with `!` at the call site below.
-  if (hasKnownCode || err instanceof LlmAuthError || probeTarget === null || !baseUrl) {
+  // Timeout: probe'a gerek yok (uç nokta cevap veriyordu, teşhis kesin);
+  // classify zaten LlmTimeoutError'ı probe'dan önce ayırır, burada sadece
+  // gereksiz 1.5s'lik ağ gecikmesini hata ekranından silmiş oluyoruz.
+  if (
+    hasKnownCode ||
+    err instanceof LlmAuthError ||
+    err instanceof LlmCancelledError ||
+    err instanceof LlmTimeoutError ||
+    probeTarget === null ||
+    !baseUrl
+  ) {
     return classifyGenerationFailure({
       err,
       probeTarget,

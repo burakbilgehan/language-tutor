@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { classifyGenerationFailure, localTargetFor } from "./llm-diagnosis";
 import { AppError } from "./errors";
-import { LlmAuthError, LlmError } from "./llm/provider-types";
+import { LlmAuthError, LlmError, LlmTimeoutError } from "./llm/provider-types";
 import { CATALOG } from "./llm/catalog";
 
 // T-063. Two entry points to lock:
@@ -147,4 +147,51 @@ test("classifyGenerationFailure: probe found -> local_up_other_cause, generic me
   });
   assert.equal(result.kind, "local_up_other_cause");
   assert.doesNotMatch(result.message, /cryptic transport detail/);
+});
+
+// ------------------------------------------------------- classify: timeout
+// T-070-A. A timeout is self-diagnosing: the endpoint answered (the bridge's
+// structured 504) or we cut the request ourselves, so "your bridge is down"
+// would be actively wrong. It must not collapse into the generic message
+// either: its advice (raise --timeout / pick a faster model) is the only
+// actionable thing the user has.
+test("classifyGenerationFailure: LlmTimeoutError -> timeout kind even when the probe found the bridge up", () => {
+  const err = new LlmTimeoutError("raw provider timeout text");
+  const result = classifyGenerationFailure({
+    err,
+    probeTarget: "bridge",
+    probeState: "found",
+    uiLang: "en",
+    isLocalOrigin: true,
+    origin: "http://localhost:3000",
+  });
+  assert.equal(result.kind, "timeout");
+  assert.match(result.message, /--timeout/);
+  assert.doesNotMatch(result.message, /raw provider timeout text/);
+});
+
+test("classifyGenerationFailure: LlmTimeoutError wins over an 'absent' probe: never 'restart your bridge'", () => {
+  const result = classifyGenerationFailure({
+    err: new LlmTimeoutError("timed out"),
+    probeTarget: "bridge",
+    probeState: "absent",
+    uiLang: "tr",
+    isLocalOrigin: true,
+    origin: "http://localhost:3000",
+  });
+  assert.equal(result.kind, "timeout");
+  assert.doesNotMatch(result.message, /kapalı görünüyor/);
+});
+
+test("classifyGenerationFailure: timeout against a remote API (no local target) still gets timeout copy, without the bridge flag hint", () => {
+  const result = classifyGenerationFailure({
+    err: new LlmTimeoutError("timed out"),
+    probeTarget: null,
+    probeState: "skipped",
+    uiLang: "en",
+    isLocalOrigin: false,
+    origin: "https://okumo.dev",
+  });
+  assert.equal(result.kind, "timeout");
+  assert.doesNotMatch(result.message, /llm-bridge/);
 });

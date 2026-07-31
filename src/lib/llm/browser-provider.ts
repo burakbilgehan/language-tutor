@@ -13,6 +13,7 @@ import {
   LlmError,
   LlmAuthError,
   LlmTimeoutError,
+  LlmCancelledError,
 } from "./provider-types";
 import {
   DEFAULT_TIMEOUT_MS,
@@ -20,9 +21,22 @@ import {
   schemaToJsonSchema,
 } from "./shared-pure";
 import { resolveModelId, providerForBaseUrl, type ProviderId } from "./catalog";
+import { enqueueLlmCall } from "./browser-queue";
 import type { Gen } from "@/core/llm-gen";
 
 const LS_KEY = "llm-browser-config";
+
+/** Köprünün kendi CLI süresi istemcininkinden bu kadar kısa tutulur: köprü
+ * önce düşsün ki yapılandırılmış 504 (type:"timeout") istemciye ULAŞSIN.
+ * Aksi halde AbortController yarışı kazanır ve elimizde teşhissiz bir abort
+ * kalır. */
+const BRIDGE_TIMEOUT_MARGIN_MS = 15_000;
+
+/** Bu eşiğin ALTINDAKİ çağrılara köprü zaman aşımı GÖNDERİLMEZ: kısa
+ * çağrılar (translate 30s, grading 60s) köprünün kendi tavanının altında
+ * zaten bitiyor; onlara tavan göndermek yalnızca daraltır. Eşik, tek uzun
+ * üretim yolu olan ders/müfredat (300s) ile arasındaki boşluğa oturur. */
+const BRIDGE_TIMEOUT_MIN_REQUEST_MS = 120_000;
 
 export interface BrowserLlmConfig {
   mode: "openai" | "anthropic" | "none";
@@ -63,24 +77,9 @@ function modelFor(c: BrowserLlmConfig, tier: ModelTier): string {
   return resolveModelId({ tier, configModels: c.models, provider: providerId });
 }
 
-// Aynı anda tek LLM çağrısı (köprü/abonelik limitleri; urgent öne geçer).
-let active = 0;
-const waiters: Array<{ resolve: () => void; urgent: boolean }> = [];
-async function enqueue<T>(fn: () => Promise<T>, urgent?: boolean): Promise<T> {
-  if (active >= 1) {
-    await new Promise<void>((resolve) =>
-      waiters.push({ resolve, urgent: urgent ?? false })
-    );
-  }
-  active++;
-  try {
-    return await fn();
-  } finally {
-    active--;
-    const i = waiters.findIndex((w) => w.urgent);
-    (i >= 0 ? waiters.splice(i, 1)[0] : waiters.shift())?.resolve();
-  }
-}
+// Aynı anda tek LLM çağrısı: kuyruk browser-queue.ts'te (saf + test edilebilir,
+// bu dosya "use client"/localStorage bağımlı olduğu için oradan ayrıldı).
+const enqueue = enqueueLlmCall;
 
 async function recordBrowserCall(row: {
   purpose: string;
@@ -103,6 +102,37 @@ async function recordBrowserCall(row: {
   }
 }
 
+/** Çağıranın iptal sinyalini sağlayıcının timeout controller'ına bağlar ve
+ * sökme fonksiyonunu döner. AYRI bir controller kurulmaz: fetch tek signal
+ * alır, ikisini birleştirmenin yolu budur. Dinleyici her çıkışta sökülür,
+ * yoksa uzun ömürlü bir signal'e (aynı derste birden çok çağrı) dinleyici
+ * birikirdi. */
+function attachCallerSignal(
+  controller: AbortController,
+  caller: AbortSignal | undefined
+): () => void {
+  if (!caller) return () => {};
+  if (caller.aborted) {
+    controller.abort();
+    return () => {};
+  }
+  const onAbort = () => controller.abort();
+  caller.addEventListener("abort", onAbort, { once: true });
+  return () => caller.removeEventListener("abort", onAbort);
+}
+
+/** 504 gövdesi köprünün zaman aşımı zarfı mı? Yalnız yapılandırılmış alan
+ * (`error.type === "timeout"`) sayılır; başka bir vekil/proxy'nin düz 504'ü
+ * bu yola girmez. */
+function bridgeTimeoutBody(text: string): boolean {
+  try {
+    const parsed = JSON.parse(text) as { error?: { type?: string } };
+    return parsed?.error?.type === "timeout";
+  } catch {
+    return false;
+  }
+}
+
 async function callOpenAiCompat(
   c: BrowserLlmConfig,
   opts: {
@@ -112,6 +142,7 @@ async function callOpenAiCompat(
     purpose: string;
     jsonMode: boolean;
     timeoutMs: number;
+    signal?: AbortSignal;
   }
 ): Promise<string> {
   const baseUrl = c.baseUrl?.replace(/\/$/, "");
@@ -124,6 +155,27 @@ async function callOpenAiCompat(
 
   const body: Record<string, unknown> = { model, messages };
   if (opts.jsonMode) body.response_format = { type: "json_object" };
+  // T-070-A: yerel köprüye istek başına CLI zaman aşımı geçir. Köprünün eski
+  // 180s varsayılanı ders üretiminin süre dağılımının içindeydi (her ~5
+  // dersten biri SIGKILL). Neden GÖVDE, başlık değil: özel bir başlık
+  // cross-origin preflight'ta eski köprülerin allow-headers listesinde
+  // olmadığı için isteği tarayıcıda tamamen öldürürdü; bilinmeyen gövde alanı
+  // ise sessizce yok sayılır (iki sürümle de doğrulandı). Yalnız köprü
+  // baseUrl'ine: gerçek OpenAI uçları katı şema doğrulamasında 400 verebilir.
+  // Köprü tarafı bizim istediğimizden ÖNCE düşmeli, yoksa istemcinin
+  // AbortController'ı yarışı kazanır ve yapılandırılmış 504 hiç görünmez.
+  // YALNIZ uzun üretimler için: kısa çağrılar (translate 30s, grading 60s)
+  // köprünün kendi --timeout tavanının altında zaten rahatça bitiyordu.
+  // Onlara da bir tavan göndermek, köprünün CLI'sını uygulamanın 30s'inden
+  // 15s'e indirir; üstelik bunun sonucu olan zaman aşımı mesajı kullanıcıya
+  // "--timeout 600 ile başlat" der ve bu HİÇBİR ŞEYİ değiştirmez (sınırı biz
+  // koymuş oluruz). Yavaş yerel modellerde net bir davranış gerilemesi.
+  if (
+    providerForBaseUrl(baseUrl) === "bridge" &&
+    opts.timeoutMs > BRIDGE_TIMEOUT_MIN_REQUEST_MS
+  ) {
+    body.bridge_timeout_ms = opts.timeoutMs - BRIDGE_TIMEOUT_MARGIN_MS;
+  }
 
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (c.apiKey) headers.authorization = `Bearer ${c.apiKey}`;
@@ -131,6 +183,11 @@ async function callOpenAiCompat(
   const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  // T-070-C: kullanıcının iptali sağlayıcının kendi timeout controller'ını
+  // DEĞİŞTİRMEZ, ona bağlanır. Abort sebebi ayırt edilir: iptalde
+  // LlmTimeoutError atmak, kullanıcının durdurduğu üretimi "çok uzun sürdü"
+  // diye raporlamak olurdu.
+  const detachCaller = attachCallerSignal(controller, opts.signal);
   let res: Response;
   try {
     res = await fetch(`${baseUrl}/chat/completions`, {
@@ -141,7 +198,9 @@ async function callOpenAiCompat(
     });
   } catch (err) {
     clearTimeout(timer);
+    detachCaller();
     if (err instanceof Error && err.name === "AbortError") {
+      if (opts.signal?.aborted) throw new LlmCancelledError();
       throw new LlmTimeoutError(`LLM çağrısı ${opts.timeoutMs / 1000}s içinde bitmedi`);
     }
     throw new LlmError(
@@ -149,10 +208,21 @@ async function callOpenAiCompat(
     );
   }
   clearTimeout(timer);
+  detachCaller();
 
   const text = await res.text();
   if (res.status === 401 || res.status === 403) {
     throw new LlmAuthError("LLM sağlayıcısı kimliği reddetti — API anahtarını kontrol et.", text);
+  }
+  // T-070-A: köprünün "CLI'yı ben öldürdüm" yanıtı. Yapılandırılmış tip
+  // okunur, mesaj metni AYIKLANMAZ (llm-diagnosis.ts'in kuralı: sağlayıcı
+  // metnine göre karar verme, sessizce kayar). Eski köprü bunu asla
+  // göndermez; orada davranış eskisi gibi generic LlmError kalır.
+  if (res.status === 504 && bridgeTimeoutBody(text)) {
+    throw new LlmTimeoutError(
+      `Üretim çok uzun sürdüğü için köprü tarafından durduruldu. Daha küçük/hızlı bir model deneyebilir ya da köprüyü daha uzun süreyle başlatabilirsin: node llm-bridge.mjs --timeout 600`,
+      text
+    );
   }
   if (!res.ok) throw new LlmError(`LLM sunucusu hata verdi (HTTP ${res.status})`, text);
 
@@ -192,6 +262,7 @@ async function callAnthropic(
     tier: ModelTier;
     purpose: string;
     timeoutMs: number;
+    signal?: AbortSignal;
   }
 ): Promise<string> {
   const baseUrl = c.baseUrl?.replace(/\/$/, "") || "https://api.anthropic.com/v1";
@@ -208,6 +279,7 @@ async function callAnthropic(
   const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  const detachCaller = attachCallerSignal(controller, opts.signal);
   let res: Response;
   try {
     res = await fetch(`${baseUrl}/messages`, {
@@ -224,7 +296,9 @@ async function callAnthropic(
     });
   } catch (err) {
     clearTimeout(timer);
+    detachCaller();
     if (err instanceof Error && err.name === "AbortError") {
+      if (opts.signal?.aborted) throw new LlmCancelledError();
       throw new LlmTimeoutError(`LLM çağrısı ${opts.timeoutMs / 1000}s içinde bitmedi`);
     }
     throw new LlmError(
@@ -232,6 +306,7 @@ async function callAnthropic(
     );
   }
   clearTimeout(timer);
+  detachCaller();
 
   const text = await res.text();
   if (res.status === 401 || res.status === 403) {
@@ -279,6 +354,7 @@ function callOnce(
     purpose: string;
     jsonMode: boolean;
     timeoutMs: number;
+    signal?: AbortSignal;
   }
 ): Promise<string> {
   return c.mode === "anthropic" ? callAnthropic(c, opts) : callOpenAiCompat(c, opts);
@@ -304,9 +380,11 @@ export function getBrowserGen(): Gen | null {
               purpose: isRetry ? `${opts.fixtureKey}-retry` : opts.fixtureKey,
               jsonMode: c.jsonMode ?? false,
               timeoutMs,
+              signal: opts.signal,
             })
           ),
-        opts.urgent
+        opts.urgent,
+        { signal: opts.signal, key: opts.queueKey }
       );
     },
     async generateText(opts: GenerateTextOptions): Promise<string> {
@@ -321,8 +399,10 @@ export function getBrowserGen(): Gen | null {
             purpose: opts.fixtureKey,
             jsonMode: false,
             timeoutMs,
+            signal: opts.signal,
           }),
-        opts.urgent
+        opts.urgent,
+        { signal: opts.signal, key: opts.queueKey }
       );
     },
   };

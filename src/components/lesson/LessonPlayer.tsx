@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { JpMarkdown } from "@/components/shared/JpMarkdown";
@@ -16,9 +22,16 @@ import {
   completeNodeApi,
   attemptApi,
   regenerateLesson,
+  retryLessonGen,
   llmConfigGet,
 } from "@/lib/client-api";
 import { diagnoseGenerationFailure } from "@/lib/llm-diagnosis";
+import {
+  subscribeLessonGen,
+  lessonGenState,
+  cancelLessonGen,
+  clearLessonGen,
+} from "@/lib/lesson-gen-store";
 
 const S = {
   tr: {
@@ -32,6 +45,13 @@ const S = {
       "Kumo bu dersi sana özel yazıyor — ilk açılışta biraz sürer, sonra hep hazır olacak.",
     closeGenInBg: "Kapat (üretim arkada sürer)",
     backGenInBg: "← Derslere dön (üretim arkada sürer)",
+    elapsed: (s: number) =>
+      s < 60 ? `${s} sn geçti` : `${Math.floor(s / 60)} dk ${s % 60} sn geçti`,
+    cancelGeneration: "Vazgeç",
+    genFailedTitle: "Ders hazırlanamadı",
+    genFailedBody:
+      "Son deneme başarısız oldu. Tekrar deneyebilirsin; sorun sürerse Ayarlar'dan bağlantını kontrol et.",
+    retryGeneration: "Tekrar dene",
     lessonDone: "Ders tamamlandı!",
     newCards: (n: number) => `🔁 ${n} yeni kart`,
     exercisesScore: (c: number, n: number) => `Alıştırmalar: ${c}/${n} doğru`,
@@ -79,6 +99,13 @@ const S = {
       "Kumo is writing this lesson just for you — the first open takes a while, then it's always ready.",
     closeGenInBg: "Close (generation continues in the background)",
     backGenInBg: "← Back to lessons (generation continues in the background)",
+    elapsed: (s: number) =>
+      s < 60 ? `${s}s elapsed` : `${Math.floor(s / 60)}m ${s % 60}s elapsed`,
+    cancelGeneration: "Cancel",
+    genFailedTitle: "The lesson could not be prepared",
+    genFailedBody:
+      "The last attempt failed. You can try again; if it keeps happening, check your connection in Settings.",
+    retryGeneration: "Try again",
     lessonDone: "Lesson complete!",
     newCards: (n: number) => `🔁 ${n} new cards`,
     exercisesScore: (c: number, n: number) => `Exercises: ${c}/${n} correct`,
@@ -139,7 +166,9 @@ interface LessonDto {
 }
 
 interface OpenResponse {
-  status: "ready" | "generating";
+  /** "error" = the last generation attempt failed (T-070-B). Terminates the
+   * 3s poll and renders the retry screen instead of an eternal "preparing". */
+  status: "ready" | "generating" | "error";
   jobId?: string;
   node?: {
     id: string;
@@ -255,6 +284,56 @@ export function LessonPlayer({
     };
   }, [open]);
 
+  // T-070-B: the generation's outcome lives in a module-level store, not in
+  // this component. That is the whole point: the user can close the drawer
+  // ("generation continues in the background"), this component unmounts, and
+  // the failure that lands two minutes later still has somewhere to go. On
+  // (re)mount we read the last known state, so a lesson that failed while the
+  // drawer was closed shows its error screen instead of "preparing" forever.
+  const genState = useSyncExternalStore(
+    subscribeLessonGen,
+    () => lessonGenState(nodeId),
+    () => null
+  );
+
+  // Elapsed seconds on the preparing screen (T-070-C): a 2-3 minute wait with
+  // no moving number reads as "stuck".
+  const [elapsed, setElapsed] = useState(0);
+  const genStartedAt = genState?.kind === "running" ? genState.startedAt : null;
+  useEffect(() => {
+    if (genStartedAt == null) {
+      setElapsed(0);
+      return;
+    }
+    const tick = () =>
+      setElapsed(Math.max(0, Math.floor((Date.now() - genStartedAt) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [genStartedAt]);
+
+  const cancelGeneration = useCallback(() => {
+    cancelLessonGen(nodeId);
+    exit();
+  }, [nodeId, exit]);
+
+  const retryGeneration = useCallback(async () => {
+    setError(null);
+    setData(null);
+    clearLessonGen(nodeId);
+    try {
+      await retryLessonGen(nodeId);
+      if (!stopped.current) open();
+    } catch (e) {
+      // Statikte store zaten teşhis edip mesajı yazdı; ikinci kez teşhis
+      // etmek gereksiz bir probe round-trip'i daha demek. Store'da mesaj
+      // varsa render onu genState üstünden alır, burada setError'a gerek yok.
+      if (lessonGenState(nodeId)?.kind === "error") return;
+      const message = await diagnose(e);
+      if (!stopped.current) setError(message);
+    }
+  }, [nodeId, open, diagnose]);
+
   // Throw the cached lesson away and rebuild it under the current prompt
   // (better exercises). Resets local progress; the node's status is kept.
   // `feedback` (optional) tells the LLM what was wrong with the previous
@@ -285,40 +364,81 @@ export function LessonPlayer({
     onCompleted?.();
   }, [nodeId, onCompleted]);
 
-  if (error) {
+  // Üretim başarısız oldu. Üç kaynak aynı ekrana çıkar: açılışta atılan hata
+  // (error state), openNode'un ayrı "error" statüsü (T-070-B) ve drawer
+  // kapalıyken biten üretimin store'a yazdığı hata. Hepsinde de sessiz
+  // otomatik yeniden üretim YOK; "tekrar dene" kullanıcının eylemi.
+  // Ders HAZIR ise store'daki eski bir hata kaydı ekranı asla ele geçiremez:
+  // hazır içeriği bir yan-durum yüzünden gizlemek render kararı olurdu, oysa
+  // bu bir veri kararı. (Bugün ulaşılabilir bir yol yok; tek bir yeni çağrı
+  // yeri onu ulaşılabilir kılardı.)
+  const genFailedMessage =
+    data?.status === "ready"
+      ? null
+      : (error ??
+        (data?.status === "error" && genState?.kind !== "error"
+          ? t.genFailedBody
+          : genState?.kind === "error"
+            ? genState.message
+            : null));
+
+  if (genFailedMessage) {
     return (
       <Centered embedded={embedded}>
         <div className="text-4xl">🍂</div>
-        <p className="text-ink-soft">{error}</p>
-        <CozyButton onClick={exit}>
-          {embedded ? t.close : t.backToLessons}
-        </CozyButton>
+        <h1 className="text-lg font-semibold">{t.genFailedTitle}</h1>
+        <p className="max-w-md text-sm text-ink-soft">{genFailedMessage}</p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <CozyButton onClick={retryGeneration}>{t.retryGeneration}</CozyButton>
+          <button
+            onClick={exit}
+            className="rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+          >
+            {embedded ? t.close : t.backToLessons}
+          </button>
+        </div>
       </Centered>
     );
   }
 
   if (!data || data.status === "generating") {
+    const canCancel = genState?.kind === "running";
     return (
       <Centered embedded={embedded}>
         <div className="animate-float-slow text-5xl">🖌️</div>
         <h1 className="text-xl font-semibold">{t.preparingTitle}</h1>
         <p className="text-sm text-ink-soft">{t.preparingHint}</p>
         <Dots />
-        {embedded ? (
-          <button
-            onClick={exit}
-            className="mt-2 rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
-          >
-            {t.closeGenInBg}
-          </button>
-        ) : (
-          <Link
-            href="/map"
-            className="mt-2 rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors"
-          >
-            {t.backGenInBg}
-          </Link>
+        {canCancel && (
+          <p className="text-xs tabular-nums text-ink-soft">
+            {t.elapsed(elapsed)}
+          </p>
         )}
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+          {embedded ? (
+            <button
+              onClick={exit}
+              className="rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors cursor-pointer"
+            >
+              {t.closeGenInBg}
+            </button>
+          ) : (
+            <Link
+              href="/map"
+              className="rounded-full bg-surface-2 px-4 py-2 text-sm hover:bg-accent-soft transition-colors"
+            >
+              {t.backGenInBg}
+            </Link>
+          )}
+          {canCancel && (
+            <button
+              onClick={cancelGeneration}
+              className="rounded-full px-4 py-2 text-sm text-ink-soft underline underline-offset-4 hover:text-ink transition-colors cursor-pointer"
+            >
+              {t.cancelGeneration}
+            </button>
+          )}
+        </div>
       </Centered>
     );
   }

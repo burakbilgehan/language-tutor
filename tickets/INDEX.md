@@ -7,8 +7,9 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
-| [T-068](T-068-lesson-window-prefetch.md) | Ders prefetch penceresi — "aktif n ise n+2'ye kadar hazır" invariant'ı (iki mod) | todo | p1 | M | high |
 | [T-069](T-069-kill-server-static-duality.md) | Server/static ikiliğini kaldır — tek runtime olarak static'e yakınsama | todo | p1 | XL | medium |
+| [T-070](T-070-lesson-gen-failure-ux.md) | Ders üretim hatası kara deliği: köprü timeout + yutulan hata + iptal/retry | done | p1 | M | high |
+| [T-068](T-068-lesson-window-prefetch.md) | Ders prefetch penceresi — "aktif n ise n+2'ye kadar hazır" invariant'ı (iki mod) | done | p1 | M | high |
 | [T-056](T-056-llmless-first-content.md) | LLM'siz akış — Faz 1 bug + Faz 2 kütüphane hub'ı + anonim kapı (B ruling'i) | done | p1 | M | high |
 | [T-064](T-064-en-native-seed-gap.md) | İçerik fallback zinciri — LLM → seed → oto-çeviri (rozetli) → dürüst boşluk — grammar fazı bitti, rozet metni + tam koşu Burak kararında | done | p1 | L | medium |
 | [T-057](T-057-model-catalog.md) | Model kataloğu tek kaynak — Eko/Denge/En iyi + bayat id temizliği | done | p2 | M | high |

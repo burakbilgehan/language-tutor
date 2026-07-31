@@ -1,7 +1,7 @@
 ---
 id: T-068
 title: Ders prefetch penceresi — "aktif ders n ise n+2'ye kadar hazır" invariant'ı (her iki mod)
-status: todo
+status: done
 priority: p1
 effort: M
 confidence: high
