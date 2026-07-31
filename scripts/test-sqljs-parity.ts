@@ -352,6 +352,105 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   check("cancelAllJobs temizler", leftover === 0, `→ ${leftover} kaldı`);
 }
 
+// T-068/T-070: ders penceresi + openNode'un hata statüsü. Pencere fonksiyonu
+// iki modun ORTAK karar noktası, o yüzden sql.js sürücüsünde de doğrulanır
+// (query-builder kuralı dahil).
+{
+  const { lessonWindowTargets, frontierNodeId } = await import("@/core/lesson-window");
+  const { openNode } = await import("@/core/lesson");
+  const schema = await import("@/db/schema");
+  const { eq, and, asc } = await import("drizzle-orm");
+
+  const frontier = frontierNodeId(db as never, profile!.id);
+  check("frontierNodeId", frontier !== null, `→ ${frontier}`);
+
+  // Frontier sıralaması ile prereq zinciri AYNI node'u vermeli: pencere zinciri
+  // yürüyor, üçüncü tetik frontier'ı kullanıyor. İkisi ayrışsaydı tetik yanlış
+  // node'a çıpalanırdı.
+  const cur = db.select().from(schema.curricula)
+    .where(eq(schema.curricula.profileId, profile!.id)).limit(1).get();
+  const unitIdsOrdered = db.select().from(schema.units)
+    .where(eq(schema.units.curriculumId, cur!.id))
+    .orderBy(asc(schema.units.position)).all();
+  const mains = unitIdsOrdered.flatMap((u) =>
+    db.select().from(schema.nodes).where(eq(schema.nodes.unitId, u.id))
+      .orderBy(asc(schema.nodes.position)).all()
+  ).filter((n) => n.nodeType === "main");
+  const mainIds = new Set(mains.map((m) => m.id));
+  const heads = mains.filter((m) => !m.prereqNodeId || !mainIds.has(m.prereqNodeId));
+  const succ = new Map<string, string>();
+  for (const m of mains) if (m.prereqNodeId && mainIds.has(m.prereqNodeId)) succ.set(m.prereqNodeId, m.id);
+  let walk: string | null = heads[0]?.id ?? null;
+  let chainFrontier: string | null = null;
+  const byId = new Map(mains.map((m) => [m.id, m]));
+  const seenWalk = new Set<string>();
+  while (walk && !seenWalk.has(walk)) {
+    seenWalk.add(walk);
+    if (!chainFrontier && byId.get(walk)!.status !== "completed") chainFrontier = walk;
+    walk = succ.get(walk) ?? null;
+  }
+  check("frontier: pozisyon sırası == zincir yürüyüşü", frontier === chainFrontier,
+    `→ pos=${frontier} chain=${chainFrontier}`);
+
+  // Hazır bir dersin node'undan k=0 pencere: hedef yok (sıfır LLM çağrısı).
+  const ready = db.select().from(schema.lessons)
+    .where(eq(schema.lessons.status, "ready")).limit(1).get();
+  if (ready) {
+    const zero = lessonWindowTargets(db as never, ready.nodeId, 0);
+    check("pencere: içeriği hazır çıpa hedef değil", zero.length === 0, `→ ${zero.length} hedef`);
+  } else check("ready ders yok", false);
+
+  // İçeriği OLMAYAN çıpa kendisi hedeftir (üçüncü tetiğin kurtarma iddiası).
+  const pendingNode = mains.find((n) => {
+    const l = db.select().from(schema.lessons)
+      .where(eq(schema.lessons.nodeId, n.id)).limit(1).get();
+    return !l || l.status === "pending";
+  });
+  if (pendingNode) {
+    const w = lessonWindowTargets(db as never, pendingNode.id, 0);
+    check("pencere: içeriksiz çıpanın KENDİSİ hedef", w[0] === pendingNode.id, `→ ${w.join(",")}`);
+  } else check("içeriksiz node yok (atlandı)", true, "→ n/a");
+
+  // error statüsü hem pencereden DIŞLANIR hem openNode'da ayrı raporlanır.
+  const victim = mains.find((n) => n.id !== ready?.nodeId);
+  if (victim) {
+    const existing = db.select().from(schema.lessons)
+      .where(eq(schema.lessons.nodeId, victim.id)).limit(1).get();
+    const prevStatus = existing?.status;
+    if (existing) {
+      db.update(schema.lessons).set({ status: "error" })
+        .where(eq(schema.lessons.id, existing.id)).run();
+    } else {
+      db.insert(schema.lessons)
+        .values({ id: "parity-window-err", nodeId: victim.id, status: "error" }).run();
+    }
+    const w = lessonWindowTargets(db as never, victim.id, 0);
+    check("pencere: error statüsü hedef DEĞİL (otomatik retry yok)", w.length === 0, `→ ${w.join(",")}`);
+    const opened = openNode(db as never, victim.id);
+    check("openNode error'u needsGeneration'dan ayırır",
+      opened.status === "error" || opened.status === "locked",
+      `→ ${opened.status}`);
+    // eski hale döndür
+    if (existing) {
+      db.update(schema.lessons).set({ status: prevStatus! })
+        .where(eq(schema.lessons.id, existing.id)).run();
+    } else {
+      db.delete(schema.lessons).where(eq(schema.lessons.id, "parity-window-err")).run();
+    }
+  }
+
+  // Pencere uzunluğu: k=2 → en fazla 3 hedef, hepsi main.
+  if (frontier) {
+    const w = lessonWindowTargets(db as never, frontier, 2);
+    const allMain = w.every((id) =>
+      db.select().from(schema.nodes)
+        .where(and(eq(schema.nodes.id, id), eq(schema.nodes.nodeType, "main")))
+        .limit(1).get() !== undefined
+    );
+    check("pencere k=2 en fazla 3 hedef, hepsi main", w.length <= 3 && allMain, `→ ${w.length} hedef`);
+  }
+}
+
 console.log(fail === 0 ? "ALL PASS" : `${fail} FAILURES`);
 process.exit(fail ? 1 : 0);
 

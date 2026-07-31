@@ -11,6 +11,13 @@
 //   node scripts/llm-bridge.mjs --backend claude --port 9000
 //   node scripts/llm-bridge.mjs --origin https://kullanici.github.io
 //   node scripts/llm-bridge.mjs --token gizli   # ek: bearer token zorunlu
+//   node scripts/llm-bridge.mjs --timeout 600   # CLI tavan süresi (sn, vars. 420)
+//
+// Zaman aşımı: tavan `--timeout` (varsayılan 420s; ders üretimi 180s'i sık
+// aşıyordu). Uygulama istek gövdesinde `bridge_timeout_ms` ile daha kısa bir
+// süre isteyebilir; tavanı geçemez. Aşıldığında yanıt 500 değil
+// **504 + {error:{type:"timeout"}}** olur, uygulama da bunu gerçek CLI
+// hatasından ayırt eder.
 //
 // Birincil kurulum: bu dosya sitede servis edilir (out/llm-bridge.mjs),
 // kullanıcı curl/iwr ile indirip node ile çalıştırır. `npx okumo-bridge`
@@ -59,7 +66,13 @@ function argsOf(name) {
 
 const BACKEND = argOf("backend", "claude");
 const PORT = Number(argOf("port", "8484"));
-const TIMEOUT_MS = Number(argOf("timeout", "180")) * 1000;
+// Varsayılan 420s. Eski 180s ders üretiminin süre dağılımının İÇİNDEYDİ
+// (sahibin llm_calls verisi: balanced ders üretimlerinin ~%20'si 180s'i
+// aşıyor, gözlenen max 255s), yani her 5 dersten biri SIGKILL yiyordu.
+// Uygulama ayrıca istek gövdesinde `bridge_timeout_ms` geçebilir (aşağı bak);
+// bu bayrak o alan yokken geçerli olan tabandır ve tavanı da o alan için
+// belirler.
+const TIMEOUT_MS = Number(argOf("timeout", "420")) * 1000;
 const EXTRA_ORIGINS = argsOf("origin");
 // İsteğe bağlı bearer token. Varsayılan kapalı: açıldığında kullanıcının
 // token'ı uygulamanın "API anahtarı" alanına yapıştırması gerekir.
@@ -185,8 +198,20 @@ function checkCliFound() {
   return found;
 }
 
+/** Zaman aşımını çağıran taraftan ayırt edilebilir kılan hata tipi:
+ * sunucu bunu 504 + {error:{type:"timeout"}} olarak yanıtlar, uygulama da
+ * LlmTimeoutError'a çevirip "üretim çok uzun sürdü" mesajını basar. Düz 500
+ * ise gerçek CLI hatası demek. */
+class BridgeTimeoutError extends Error {
+  constructor(cmd, ms) {
+    super(`${cmd} zaman aşımı (${ms / 1000}s)`);
+    this.type = "timeout";
+    this.timeoutMs = ms;
+  }
+}
+
 // ------------------------------------------------------------------- yardımcı
-function runCli({ cmd, args, stdin, env }) {
+function runCli({ cmd, args, stdin, env }, timeoutMs = TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd: WORKDIR, env: env ?? process.env });
     let stdout = "";
@@ -195,7 +220,7 @@ function runCli({ cmd, args, stdin, env }) {
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
-    }, TIMEOUT_MS);
+    }, timeoutMs);
 
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
@@ -205,7 +230,7 @@ function runCli({ cmd, args, stdin, env }) {
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (timedOut) return reject(new Error(`${cmd} zaman aşımı (${TIMEOUT_MS / 1000}s)`));
+      if (timedOut) return reject(new BridgeTimeoutError(cmd, timeoutMs));
       if (code !== 0)
         return reject(new Error(`${cmd} hata verdi (exit ${code}): ${stderr.slice(0, 500)}`));
       resolve(stdout);
@@ -214,6 +239,21 @@ function runCli({ cmd, args, stdin, env }) {
     if (stdin) child.stdin.write(stdin);
     child.stdin.end();
   });
+}
+
+/**
+ * İstek başına CLI zaman aşımı. Uygulama uzun üretimler (ders/müfredat) için
+ * gövdede `bridge_timeout_ms` geçer; BAŞLIK kullanılmaz, çünkü özel bir başlık
+ * cross-origin preflight'ta eski köprülerin `access-control-allow-headers`
+ * listesinde olmadığı için isteği tarayıcıda TAMAMEN öldürürdü (geriye uyum).
+ * Bilinmeyen gövde alanı ise eski köprü tarafından sessizce yok sayılır.
+ * Tavan `--timeout`: kullanıcının makinesinde ne kadar süreceğine son sözü
+ * köprüyü çalıştıran kişi söyler.
+ */
+function timeoutForRequest(parsed) {
+  const raw = Number(parsed?.bridge_timeout_ms);
+  if (!Number.isFinite(raw) || raw <= 0) return TIMEOUT_MS;
+  return Math.min(raw, TIMEOUT_MS);
 }
 
 // Aynı anda tek CLI süreci (abonelik limitleri + makine yükü).
@@ -348,7 +388,8 @@ const server = http.createServer(async (req, res) => {
           ? undefined
           : parsed.model;
         const spec = adapter.build(prompt, system, model);
-        const stdout = await serialize(() => runCli(spec));
+        const timeoutMs = timeoutForRequest(parsed);
+        const stdout = await serialize(() => runCli(spec, timeoutMs));
         const { text, usage } = adapter.parse(stdout);
         const secs = ((Date.now() - started) / 1000).toFixed(1);
         console.log(
@@ -373,8 +414,21 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[bridge] HATA: ${message}`);
-        res.writeHead(500, { ...cors, "content-type": "application/json" });
-        res.end(JSON.stringify({ error: { message } }));
+        // Zaman aşımı ayrı statü + tip: uygulama bunu LlmTimeoutError'a
+        // çevirip "üretim çok uzun sürdü, tekrar dene" diyebilsin. Diğer her
+        // şey 500 olarak kalır (davranış değişmedi).
+        const isTimeout = err instanceof BridgeTimeoutError;
+        res.writeHead(isTimeout ? 504 : 500, {
+          ...cors,
+          "content-type": "application/json",
+        });
+        res.end(
+          JSON.stringify({
+            error: isTimeout
+              ? { message, type: "timeout", timeout_ms: err.timeoutMs }
+              : { message },
+          })
+        );
       }
     });
     return;
@@ -388,6 +442,7 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`llm-bridge hazır → http://localhost:${PORT}/v1`);
   console.log(`  backend : ${BACKEND} (${Object.keys(ADAPTERS).join(" | ")})`);
   console.log(`  origins : localhost + ${EXTRA_ORIGINS.join(", ") || "(ek yok)"}`);
+  console.log(`  timeout : ${TIMEOUT_MS / 1000}s (tavan; uygulama daha kısa isteyebilir)`);
   console.log(`  token   : ${TOKEN ? "gerekli (--token)" : "kapalı"}`);
   if (TOKEN) {
     console.log(`            Uygulamada "API anahtarı" alanına yapıştır: ${TOKEN}`);

@@ -14,6 +14,7 @@ import {
   ensureChaptersBackfilled as coreEnsureChaptersBackfilled,
   topChapterLevel as coreTopChapterLevel,
 } from "@/core/curriculum-gen";
+import { lessonWindowTargets, frontierNodeId } from "@/core/lesson-window";
 import {
   listJobs as coreListJobs,
   cancelJob as coreCancelJob,
@@ -265,44 +266,47 @@ export function regenerateLessonJob(nodeId: string, feedback?: string | null): s
 }
 
 /**
- * Fire lesson generation for the successor chain of `nodeId`, `depth` links
- * deep (default 3). Called when a lesson is OPENED: with a single-successor
- * lookahead the learner could finish a lesson faster than the next one
- * generates, so a 2-3 lesson buffer stays warm ahead of the unlock frontier
- * (open 20 → 21, 22, 23 queued). No extra LLM spend: these lessons would be
- * generated anyway; this only moves them earlier. Errored lessons are
- * skipped — retries stay user-driven (opening the node itself), not
- * poll-driven.
+ * T-068 lesson-window executor, server half. The decision of WHICH nodes need
+ * generating lives in `src/core/lesson-window.ts` (pure, shared with the
+ * static branch, covered by the parity harness); this is the one-line shell
+ * that turns those ids into jobs.
+ *
+ * Called when a lesson is opened and when one is completed: with a
+ * single-successor lookahead the learner finishes a lesson faster than the
+ * next one generates, so the n..n+k window stays warm ahead of the unlock
+ * frontier. No extra LLM spend — these lessons would be generated anyway;
+ * this only moves them earlier. Nodes whose lesson already exists in this
+ * native language, and nodes whose last attempt errored, are excluded by the
+ * core function (retries stay user-driven, never poll-driven).
  */
-export function prefetchSuccessorLessons(
+export function prefetchLessonWindow(
   nodeId: string,
-  depth = 3,
+  k = 2,
   nativeLanguage: NativeLang = "tr"
 ) {
   if (!llmConfigured()) return; // no LLM → no background error-job spam
-  let frontier = [nodeId];
-  for (let d = 0; d < depth && frontier.length > 0; d++) {
-    const next: string[] = [];
-    for (const id of frontier) {
-      const successors = db.query.nodes
-        .findMany({
-          where: and(
-            eq(tables.nodes.prereqNodeId, id),
-            eq(tables.nodes.nodeType, "main")
-          ),
-          columns: { id: true },
-        })
-        .sync();
-      for (const s of successors) {
-        const lesson = db.query.lessons
-          .findFirst({ where: eq(tables.lessons.nodeId, s.id) })
-          .sync();
-        if (lesson?.status !== "error") ensureLessonJob(s.id, nativeLanguage);
-        next.push(s.id);
-      }
-    }
-    frontier = next;
+  for (const id of lessonWindowTargets(db, nodeId, k, nativeLanguage)) {
+    ensureLessonJob(id, nativeLanguage);
   }
+}
+
+/**
+ * T-068 third trigger, server half: fill the window from the frontier (first
+ * uncompleted main node) once per app/map open. Recovers a generation that
+ * died with the process; a no-op when the window is already full, so the
+ * "don't regenerate on revisit" rule is preserved.
+ */
+export function primeLessonWindowForProfile(
+  profileId: string,
+  nativeLanguage: NativeLang = "tr",
+  k = 2
+): number {
+  if (!llmConfigured()) return 0;
+  const frontier = frontierNodeId(db, profileId);
+  if (!frontier) return 0;
+  const targets = lessonWindowTargets(db, frontier, k, nativeLanguage);
+  for (const id of targets) ensureLessonJob(id, nativeLanguage);
+  return targets.length;
 }
 
 /**

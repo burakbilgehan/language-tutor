@@ -34,6 +34,12 @@ export type OpenNodeResult =
   | { status: "notFound" }
   | { status: "locked" }
   | { status: "needsGeneration" }
+  /** Son üretim denemesi başarısız oldu (lessons.status === "error") ve bu
+   * dilde içerik yok. needsGeneration'dan AYRI (T-070-B): eskiden ikisi de
+   * needsGeneration'dı, yani her açılış sessizce yeni bir 3 dakikalık üretim
+   * başlatıyordu ve kullanıcı sonsuz "hazırlanıyor" görüyordu. Çağıran
+   * otomatik üretmez; kullanıcıya "başarısız oldu, tekrar dene" der. */
+  | { status: "error" }
   | {
       status: "ready";
       node: {
@@ -89,6 +95,17 @@ export function openNode(
       ? readLangContent<LessonContent>(lesson.content, nativeLang)
       : null;
   if (!lesson || !content) {
+    // Son üretim denemesi başarısız oldu → ayrı statü, sessiz otomatik retry
+    // YOK (T-070-B: eskiden "error" da needsGeneration'a düşüyordu, her
+    // açılışta yeni bir 3 dakikalık üretim başlıyordu ve kullanıcı sonsuz
+    // "hazırlanıyor" görüyordu). Retry artık kullanıcının açık eylemi.
+    //
+    // Not: `status` sütunu dil-başına değil. Bu dilde içerik varken satır
+    // başka bir dilin başarısız denemesi yüzünden "error" damgalıysa,
+    // içerik yine de gösterilemez; bu, error statüsünün T-031 öncesinden
+    // gelen mevcut davranışı ("generating" damgası da aynısını yapar) ve bu
+    // ticket'ın kapsamı dışında; burada yalnız hata AYRIŞTIRILIYOR.
+    if (lesson?.status === "error") return { status: "error" };
     return { status: "needsGeneration" };
   }
 

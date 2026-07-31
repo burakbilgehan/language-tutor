@@ -1,6 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useRouter } from "next/navigation";
 import { StatsHeader, visibleNavItems } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
@@ -21,7 +26,14 @@ import {
   curriculumExtend,
   curriculumGenerate,
   curriculumRetranslate,
+  primeLessonWindow,
 } from "@/lib/client-api";
+import {
+  subscribeLessonGen,
+  lessonGenState,
+  lessonGenVersion,
+  type LessonGenState,
+} from "@/lib/lesson-gen-store";
 import { withBase } from "@/lib/base-path";
 
 const S = {
@@ -39,6 +51,8 @@ const S = {
     allDone: (lvl: string) =>
       `Tüm seviyeler (${lvl}'e kadar) tamamlandı. Sözlük + gramer artık senin.`,
     review: "Tekrar",
+    genPreparing: "Bu ders arkada hazırlanıyor",
+    genFailed: "Ders hazırlanamadı; açıp tekrar deneyebilirsin",
     langMismatchTitle: "Müfredat başka bir dilde hazırlanmış",
     langMismatchBody:
       "Bu müfredatın başlıkları farklı bir dilde. İlerlemen korunur — yalnızca görünen başlıklar bu dile çevrilir.",
@@ -101,6 +115,8 @@ const S = {
     allDone: (lvl: string) =>
       `All levels (up to ${lvl}) completed. The dictionary + grammar are yours now.`,
     review: "Review",
+    genPreparing: "This lesson is being prepared in the background",
+    genFailed: "The lesson could not be prepared; open it to try again",
     langMismatchTitle: "Curriculum is in another language",
     langMismatchBody:
       "This curriculum's titles are in a different language. Your progress is kept — only the visible titles are translated into this language.",
@@ -291,7 +307,20 @@ export function RoadmapView() {
     profileData()
       .then((d) => d?.profile?.id && setProfileId(d.profile.id))
       .catch(() => {});
+    // T-068 üçüncü tetik: harita açılışında pencereyi frontier'dan bir kez
+    // doldur. Pencere doluysa sıfır çağrı ("revisit'te çekme" korunur);
+    // statikte sekme kapanınca ölen üretimi de bu toparlar.
+    void primeLessonWindow();
   }, []);
+
+  // T-070-B: üretim durumu modül-level store'da yaşıyor (bileşen ömründen
+  // bağımsız). Harita ona abone olur, böylece drawer kapalıyken biten hata
+  // düğümün üstünde rozet olarak GÖRÜNÜR.
+  useSyncExternalStore(
+    subscribeLessonGen,
+    () => lessonGenVersion(),
+    () => 0
+  );
 
   // Poll while a chapter is generating (either auto-triggered or manual).
   const generating = extendJobId != null || data?.isGenerating != null;
@@ -544,6 +573,11 @@ export function RoadmapView() {
                   onClick={() =>
                     node.status !== "locked" && openLesson(node.id)
                   }
+                  genState={lessonGenState(node.id)}
+                  genLabels={{
+                    preparing: t.genPreparing,
+                    failed: t.genFailed,
+                  }}
                 />
               ))}
             </div>
@@ -673,14 +707,23 @@ function NodeBubble({
   node,
   offsetFactor,
   onClick,
+  genState,
+  genLabels,
 }: {
   node: NodeDto;
   offsetFactor: number;
   onClick: () => void;
+  /** T-070-B: bu node için arka planda süren/biten üretimin durumu. Drawer
+   * kapalıyken biten hata haritada BURADA görünür; eskiden hiçbir yüzeye
+   * çıkmıyordu. */
+  genState: LessonGenState | null;
+  genLabels: { preparing: string; failed: string };
 }) {
   const locked = node.status === "locked";
   const completed = node.status === "completed";
   const available = node.status === "available";
+  const generating = genState?.kind === "running";
+  const genFailed = genState?.kind === "error";
 
   return (
     <button
@@ -703,6 +746,18 @@ function NodeBubble({
       >
         {locked ? "🔒" : completed ? "✓" : TYPE_ICON[node.lessonType]}
       </div>
+      {/* Üretim rozeti: hazırlanıyor (indigo = durum) / başarısız (vermilion
+          = eylem gerektiriyor, tıklayınca "tekrar dene" ekranı açılır). */}
+      {!completed && (generating || genFailed) && (
+        <span
+          title={genFailed ? genLabels.failed : genLabels.preparing}
+          className={`absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] leading-none shadow-cozy ${
+            genFailed ? "bg-accent text-surface" : "bg-indigo text-surface"
+          }`}
+        >
+          {genFailed ? "!" : "⋯"}
+        </span>
+      )}
       <div
         className={`mt-1.5 max-w-36 text-center text-xs font-semibold leading-tight ${
           locked ? "text-ink-soft/60" : "text-ink"

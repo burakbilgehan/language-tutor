@@ -39,7 +39,11 @@ export async function generateLessonContent(
   gen: Gen,
   nodeId: string,
   /** User-entered complaint about the previous generation, from the "regenerate" flow. */
-  regenerationFeedback?: string | null
+  regenerationFeedback?: string | null,
+  /** T-070-C/D. `urgent`: the user is sitting on the "preparing" screen, so
+   * this call jumps ahead of background prefetches in the concurrency-1
+   * queue. `signal`: user cancellation, threaded into the provider's fetch. */
+  opts?: { urgent?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   const node = db
     .select()
@@ -147,6 +151,8 @@ export async function generateLessonContent(
       fixtureKey: "lesson",
       tier: "balanced",
       timeoutMs: 300_000,
+      urgent: opts?.urgent,
+      signal: opts?.signal,
     });
 
     db.transaction((tx) => {
@@ -213,8 +219,13 @@ export async function generateLessonContent(
       });
     });
   } catch (err) {
+    // T-070-C: kullanıcının İPTALİ hata değildir. "error" damgalansaydı
+    // T-068 penceresi o node'u kalıcı olarak atlar (otomatik retry yok
+    // kuralı) ve harita kullanıcının kendi durdurduğu şey için "başarısız"
+    // rozeti basardı. İptalde satır "pending"e döner: pencere onu yeniden
+    // hedef alabilir, kullanıcı da dersi açtığında normal üretim görür.
     db.update(tables.lessons)
-      .set({ status: "error" })
+      .set({ status: opts?.signal?.aborted ? "pending" : "error" })
       .where(eq(tables.lessons.id, lessonId))
       .run();
     throw err;
