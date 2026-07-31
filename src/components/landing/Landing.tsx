@@ -26,6 +26,7 @@ const S: LocalizedStrings<{
   resume: string;
   resumeChecking: string;
   resumeEmpty: string;
+  resumeFailed: string;
   featuresTitle: string;
   f1t: string;
   f1b: string;
@@ -58,6 +59,8 @@ const S: LocalizedStrings<{
     resume: "Kayıtlı ilerlemeni sürdür",
     resumeChecking: "Kayıt aranıyor…",
     resumeEmpty: "Bu tarayıcıda kayıtlı ilerleme bulunamadı.",
+    resumeFailed:
+      "Kayıtlarına şu an bakılamadı (bağlantı ya da tarayıcı depolaması). Tekrar dene.",
     featuresTitle: "Ne yapar",
     f1t: "Sana göre müfredat",
     f1b:
@@ -96,6 +99,8 @@ const S: LocalizedStrings<{
     resume: "Continue saved progress",
     resumeChecking: "Looking for a save…",
     resumeEmpty: "No saved progress found in this browser.",
+    resumeFailed:
+      "Could not check your saved progress right now (connection or browser storage). Try again.",
     featuresTitle: "What it does",
     f1t: "A curriculum for you",
     f1b:
@@ -152,9 +157,14 @@ export function Landing() {
   // "Kayıtlı ilerlemeni sürdür": YAVAŞ yol bilerek TIKLAMAYA bağlı. Mount'ta
   // profileData() çağırmak sql.js boot'unu (ve browserDb()'nin /api/save/export
   // fetch'ini) her pazarlama ziyaretçisine ödetirdi — gate'in amacını bozar.
-  const [resumeState, setResumeState] = useState<"idle" | "busy" | "empty">(
-    "idle"
-  );
+  // "empty" (baktım, yok) ile "failed" (BAKAMADIM) ayrı durumlar olmak
+  // ZORUNDA. profileData() statik modda ~645KB wasm fetch + IndexedDB açılışı
+  // demek; çevrimdışı, private mode ya da storage erişimi reddinde reject
+  // eder. İkisini tek "empty"de birleştirmek, verisi duran kullanıcıya
+  // "kayıt bulunamadı" diye YALAN söylerdi.
+  const [resumeState, setResumeState] = useState<
+    "idle" | "busy" | "empty" | "failed"
+  >("idle");
   const onResume = async () => {
     setResumeState("busy");
     try {
@@ -167,7 +177,7 @@ export function Landing() {
       }
       setResumeState("empty");
     } catch {
-      setResumeState("empty");
+      setResumeState("failed");
     }
   };
 
@@ -199,18 +209,23 @@ export function Landing() {
             {t.cta}
           </a>
 
-          {/* Bayrağı olmayan ama verisi olan kullanıcının çıkış yolu. */}
-          <div className="mt-4 min-h-6 text-sm">
-            {resumeState === "empty" ? (
+          {/* Bayrağı olmayan ama verisi olan kullanıcının çıkış yolu.
+              Buton hiçbir durumda EKRANDAN KALKMAZ: "bulunamadı" da "bakamadım"
+              da yeniden denenebilir olmalı, yoksa kullanıcı tam sayfa yenileme
+              olmadan kilitleniyordu. */}
+          <div className="mt-4 flex min-h-6 flex-col items-center gap-1 text-sm">
+            <button
+              onClick={() => void onResume()}
+              disabled={resumeState === "busy"}
+              className="cursor-pointer text-indigo underline underline-offset-4 hover:text-indigo-deep disabled:opacity-60"
+            >
+              {resumeState === "busy" ? t.resumeChecking : t.resume}
+            </button>
+            {resumeState === "empty" && (
               <span className="text-ink-soft">{t.resumeEmpty}</span>
-            ) : (
-              <button
-                onClick={() => void onResume()}
-                disabled={resumeState === "busy"}
-                className="cursor-pointer text-indigo underline underline-offset-4 hover:text-indigo-deep disabled:opacity-60"
-              >
-                {resumeState === "busy" ? t.resumeChecking : t.resume}
-              </button>
+            )}
+            {resumeState === "failed" && (
+              <span className="text-danger">{t.resumeFailed}</span>
             )}
           </div>
         </header>
