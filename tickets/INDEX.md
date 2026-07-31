@@ -30,7 +30,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-053](T-053-yuyake-usage-screens.md) | Yūyake kullanım kuralları — 5 ekrana uygula (vermilyon=aksiyon, indigo=bilgi/durum, amber=ödül) | done | p2 | M | medium |
 | [T-065](T-065-yuyake-out-of-scope-leftovers.md) | Yūyake kalıntıları — kapsam dışı ekranlarda focus/selected/token temizliği (T-053 raporundan) | done | p3 | S | high |
 | [T-055](T-055-sky-polish-leftovers.md) | Sky kalıntıları (revert edilen implementasyona bağlıydı) | wontfix | p3 | S | high |
-| [T-054](T-054-okumo-landing.md) | okumo.dev landing sayfası (handoff, ayrı scope) | backlog | p3 | M | low |
+| [T-054](T-054-okumo-landing.md) | okumo.dev landing sayfası — `/` kökünde, bayrak + pre-paint gate + AppChrome | done | p3 | M | low |
 | [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) — stack DOĞRULANDI | done | p1 | M | medium |
 | [T-046](T-046-auth-better-auth.md) | Auth — better-auth Worker'da (Google-only, same-origin, test-gate'li) | done | p1 | L | medium |
 | [T-047](T-047-cloud-save-sync.md) | Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull) | done | p1 | L | medium |

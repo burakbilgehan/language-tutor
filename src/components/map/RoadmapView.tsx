@@ -10,6 +10,7 @@ import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useProfileMeta } from "@/lib/use-profile-meta";
+import { clearVisited } from "@/lib/visited-flag";
 import { useLlmStatus } from "@/lib/llm-status";
 import { languageLabel } from "@/lib/profile-options";
 import { levelDisplay } from "@/lib/curriculum/levels";
@@ -273,6 +274,14 @@ export function RoadmapView() {
         if (e instanceof AppError && e.code === "curriculum_not_ready") {
           setNotReady(true);
         } else {
+          // T-054: profil YOK ama landing bayrağı duruyorsa bayrak bayat
+          // (kullanıcı IndexedDB'yi temizledi, ya da tarayıcı depolamayı
+          // tahliye etti). Bayrağı temizle: yoksa `/` her seferinde buraya
+          // geri fırlatır ve kullanıcı tek yönlü kapana kısılır — landing'e
+          // dönüp "yeni başla"ya basamaz.
+          if (e instanceof AppError && e.code === "profile_missing") {
+            clearVisited();
+          }
           setError(localize(e));
         }
       });

@@ -1,39 +1,35 @@
-"use client";
+import type { Metadata } from "next";
+import { Landing } from "@/components/landing/Landing";
+import { ReturningUserGate } from "@/components/landing/ReturningUserGate";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { profileData, roadmap } from "@/lib/client-api";
-import { AppError } from "@/lib/errors";
+// T-054: `/` artık pazarlama yüzeyi (landing), eski yönlendirme kapısı değil.
+//
+// Neden server component: `export const metadata` "use client" altında mümkün
+// değil, ve landing'in bütün varlık sebebi taranabilir/unfurl edilebilir bir
+// kök sayfa olması. Statik export bunu out/index.html'e prerender eder.
+//
+// Dönen kullanıcı: <ReturningUserGate/> boyama öncesi inline script'tir —
+// localStorage bayrağı varsa landing hiç görünmeden /map'e gider. Eski
+// profileData() tabanlı kapı kaldırıldı: statik modda sql.js WASM + IndexedDB
+// boot'u demekti ve pazarlama ziyaretçisine bedelini ödetiyordu.
+export const metadata: Metadata = {
+  title: "okumo — dil yolculuğun",
+  description:
+    "Kendi hızında, kendi ilgi alanlarınla dil öğren. Sana göre müfredat, zamanında tekrar, hazır dilbilgisi ve kelime kütüphanesi. Hesap yok — ilerlemen tarayıcında kalır.",
+  openGraph: {
+    title: "okumo — dil yolculuğun",
+    description:
+      "Kendi hızında, kendi ilgi alanlarınla dil öğren. Hesap yok, abonelik yok — ilerlemen tarayıcında kalır.",
+    type: "website",
+    siteName: "okumo",
+  },
+};
 
-// Giriş kapısı: profil + hazır müfredat varsa haritaya, yoksa onboarding'e.
-// İstemci tarafında karar verir — sunuculu ve statik modda aynı davranış.
 export default function Home() {
-  const router = useRouter();
-  useEffect(() => {
-    (async () => {
-      try {
-        const d = await profileData();
-        if (!d.profile) return router.replace("/onboarding");
-        try {
-          await roadmap(); // müfredat hazır değilse throw
-        } catch (e) {
-          // T-056: profil var ama müfredat yok (LLM'siz onboarding, ya da
-          // üretim hâlâ sürüyor). Onboarding'e düşürmek kullanıcıyı sihirbaz
-          // döngüsüne kilitler — /map kendi "müfredat yok" durumunu gösterir.
-          if (e instanceof AppError && e.code === "curriculum_not_ready") {
-            return router.replace("/map");
-          }
-          return router.replace("/onboarding");
-        }
-        router.replace("/map");
-      } catch {
-        router.replace("/onboarding");
-      }
-    })();
-  }, [router]);
   return (
-    <div className="flex min-h-dvh items-center justify-center text-ink-soft">
-      <div className="animate-float-slow text-5xl">🌸</div>
-    </div>
+    <>
+      <ReturningUserGate />
+      <Landing />
+    </>
   );
 }
