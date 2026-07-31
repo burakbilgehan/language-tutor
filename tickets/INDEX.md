@@ -16,7 +16,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-061](T-061-live-model-lists.md) | Canlı model listeleri (Ollama tags / OpenRouter / bridge) | done | p3 | S | high |
 | [T-062](T-062-openrouter-pkce.md) | OpenRouter PKCE tek-tık bağlantı (gate 2026-07-28 talimatıyla çözüldü) | done | p3 | M | medium |
 | [T-063](T-063-connection-status-card.md) | Bağlantı durumu kartı + köprü-kapalı hata yönlendirmesi | done | p3 | S | high |
-| [T-066](T-066-llm-config-save-contract.md) | LLM config save-yolu kontratı (key taşınması + concurrency + önce-test) — T-060 review çıktısı | backlog | p2 | S | high |
+| [T-066](T-066-llm-config-save-contract.md) | LLM config save-yolu kontratı (key taşınması + concurrency + önce-test) — T-060 review çıktısı | done | p2 | S | high |
 | [T-024](T-024-save-job-queue-leak.md) | Save'e job kuyruğu sızması (import token yakıyor) — geçici fix; kalıcı çözüm T-034 | done | p1 | S | high |
 | [T-025](T-025-onboarding-load-or-new.md) | Onboarding "Kayıt yükle / Yeni başla" ekranı | done | p2 | M | high |
 | [T-026](T-026-security-review.md) | Kapsamlı security review (batch sonrası koşar) | done | p1 | L | medium |

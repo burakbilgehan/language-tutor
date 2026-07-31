@@ -1,12 +1,13 @@
 ---
 id: T-066
 title: LLM config save-yolu kontratı — key taşınması + concurrency düşmesi + önce-test-sonra-kaydet
-status: backlog
+status: done
 priority: p2
 effort: S
 confidence: high
 depends: []
 created: 2026-07-28
+closed: 2026-07-31
 ---
 T-060 kör review'ının (2026-07-28 gece dalgası) fence dışı kalan üç bulgusu.
 Hepsi `PUT /api/llm-config` + statik eşleniği (client-api/core) kontratına ait
@@ -34,3 +35,23 @@ için bilinçli ayrı ticket (T-060 merge fix'ine sıkıştırılmadı).
 
 Fence notu: route + `client-api.ts` + statik core yolu birlikte değişmeli;
 T-062 (OpenRouter PKCE) key yazma noktasına dokunuyorsa önce o merge edilsin.
+
+## Çözüm (2026-07-31)
+1. Key taşınması: `needsKey===false` yerine "aynı (mode, baseUrl normalize)
+   hedefe kaydediyorsan koru" kuralı seçildi — `needsKey` dalı DeepSeek→OpenAI
+   gibi iki `needsKey:true` sağlayıcı arasındaki sızıntıyı kapatmaz ve
+   `custom` (needsKey:false) kullanıcısının anahtarını her kayıtta silerdi.
+   Pure helper: `src/lib/llm/config-merge.ts` (`mergeLlmConfig`), hem route hem
+   statik `client-api.ts` kullanıyor. cli/none'da endpoint yok — key oradan
+   geçişte korunuyor (aç/kapa round-trip).
+2. concurrency: aynı helper, `input.concurrency ?? existing?.concurrency`.
+3. testAndSave sırası ters çevrildi: `llmTest(candidate)` artık kaydedilmemiş
+   config'i doğrudan prob'luyor (HttpProvider/AnthropicHttpProvider'a opsiyonel
+   config override; `/api/health/llm` POST opsiyonel candidate body kabul
+   ediyor, `getProvider()` singleton'ını asla kirletmiyor). Statik ayna:
+   `probeBrowserConfig()`. Sadece test geçerse kaydediliyor.
+
+Doğrulama: `npx tsc --noEmit` temiz, `npm test` (yeni 12 config-merge testi
+dahil 187/188 geçti — tek fail `db-reset.test.ts`, worktree baseline'ında da
+zaten kırık, bu iş öncesi mevcut). `npm run build` ve `npm run build:static`
+ikisi de geçti.
