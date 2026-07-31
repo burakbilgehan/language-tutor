@@ -13,13 +13,13 @@ import { ReturningUserGate } from "@/components/landing/ReturningUserGate";
 // profileData() tabanlı kapı kaldırıldı: statik modda sql.js WASM + IndexedDB
 // boot'u demekti ve pazarlama ziyaretçisine bedelini ödetiyordu.
 export const metadata: Metadata = {
-  title: "okumo — dil yolculuğun",
+  title: "okumo: dil yolculuğun",
   description:
-    "Kendi hızında, kendi ilgi alanlarınla dil öğren. Sana göre müfredat, zamanında tekrar, hazır dilbilgisi ve kelime kütüphanesi. Hesap yok — ilerlemen tarayıcında kalır.",
+    "Kendi hızında, kendi ilgi alanlarınla dil öğren. Sana göre müfredat, zamanında tekrar, hazır dilbilgisi ve kelime kütüphanesi. Hesap yok; ilerlemen tarayıcında kalır.",
   openGraph: {
-    title: "okumo — dil yolculuğun",
+    title: "okumo: dil yolculuğun",
     description:
-      "Kendi hızında, kendi ilgi alanlarınla dil öğren. Hesap yok, abonelik yok — ilerlemen tarayıcında kalır.",
+      "Kendi hızında, kendi ilgi alanlarınla dil öğren. Hesap yok, abonelik yok; ilerlemen tarayıcında kalır.",
     type: "website",
     siteName: "okumo",
   },

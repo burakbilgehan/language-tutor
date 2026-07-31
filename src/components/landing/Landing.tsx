@@ -46,6 +46,7 @@ const S: LocalizedStrings<{
   nodeLocked: string;
   langTitle: string;
   langBody: string;
+  langMore: string;
   closingTitle: string;
   closingBody: string;
   sources: string;
@@ -54,7 +55,7 @@ const S: LocalizedStrings<{
     tagline: "dil yolculuğun",
     heroTitle: "Kendi hızında, kendi ilgi alanlarınla dil öğren.",
     heroLede:
-      "okumo sana bir müfredat çıkarır, dersleri sen ilerledikçe üretir ve unutmaya başladığın şeyi tam zamanında geri getirir. Hesap yok, abonelik yok — ilerlemen kendi tarayıcında kalır.",
+      "okumo sana bir müfredat çıkarır, dersleri sen ilerledikçe üretir ve unutmaya başladığın şeyi tam zamanında geri getirir. Hesap yok, abonelik yok; ilerlemen kendi tarayıcında kalır.",
     cta: "Başla",
     resume: "Kayıtlı ilerlemeni sürdür",
     resumeChecking: "Kayıt aranıyor…",
@@ -70,13 +71,13 @@ const S: LocalizedStrings<{
       "Aralıklı tekrar (SM-2) ile ne zaman zorlandığını takip eder; zorlandığın konu sonraki derse geri gelir.",
     f3t: "Hazır başvuru kütüphanesi",
     f3b:
-      "Dilbilgisi, kanji ve kelime kütüphaneleri paketle birlikte gelir — ilk günden, tek bir LLM çağrısı olmadan açılır.",
+      "Dilbilgisi, kanji ve kelime kütüphaneleri paketle birlikte gelir; ilk günden, tek bir LLM çağrısı olmadan açılır.",
     ownTitle: "Veriler sende kalır",
     ownBody:
       "okumo yerel-öncelikli çalışır. İlerlemen tarayıcındaki bir veritabanında durur; istersen tek dosya olarak dışa aktarırsın. Yapay zekâ tarafını da sen seçersin:",
-    own1: "Kendi bilgisayarında Ollama",
-    own2: "Mevcut aboneliğin için yerel köprü",
-    own3: "Ya da kendi API anahtarın",
+    own1: "Kendi bilgisayarında çalışan bir modelle",
+    own2: "Zaten sahip olduğun bir abonelikle",
+    own3: "Ya da kendi API anahtarınla",
     previewTitle: "Yol haritan böyle görünür",
     previewLede:
       "Her düğüm bir ders. Bitirdiklerin işaretlenir, sıradaki açılır, gerisi kilitli bekler.",
@@ -85,7 +86,8 @@ const S: LocalizedStrings<{
     nodeLocked: "kilitli",
     langTitle: "Diller",
     langBody:
-      "Japonca (JLPT N5→N1), Çince (HSK 1→6) ve Felemenkçe (A1→B1) için hazır içerik; diğer diller CEFR seviyeleriyle açılır.",
+      "Japonca (JLPT N5→N1), Çince (HSK 1→6) ve Felemenkçe (A1→B1) için hazır içerik; başka bir dil seçersen okumo onu da standart seviyelerle açar.",
+    langMore: "+ diğer diller",
     closingTitle: "Bir dil seç, ilk dersin hazır olsun.",
     closingBody: "Kurulum yok, kayıt yok. Tarayıcında açılır.",
     sources: "Kaynaklar & lisanslar",
@@ -94,7 +96,7 @@ const S: LocalizedStrings<{
     tagline: "your language journey",
     heroTitle: "Learn a language at your own pace, around your own interests.",
     heroLede:
-      "okumo builds you a curriculum, generates lessons as you go, and brings things back right as you start to forget them. No account, no subscription — your progress stays in your own browser.",
+      "okumo builds you a curriculum, generates lessons as you go, and brings things back right as you start to forget them. No account, no subscription; your progress stays in your own browser.",
     cta: "Get started",
     resume: "Continue saved progress",
     resumeChecking: "Looking for a save…",
@@ -110,13 +112,13 @@ const S: LocalizedStrings<{
       "Spaced repetition (SM-2) tracks what you struggle with, and the topics you find hard come back in later lessons.",
     f3t: "A reference library, included",
     f3b:
-      "Grammar, kanji and vocabulary libraries ship with the app — open from day one, without a single LLM call.",
+      "Grammar, kanji and vocabulary libraries ship with the app; open from day one, without a single LLM call.",
     ownTitle: "Your data stays yours",
     ownBody:
       "okumo is local-first. Your progress lives in a database inside your browser, and you can export it as a single file whenever you want. You pick the AI side too:",
-    own1: "Ollama on your own machine",
-    own2: "A local bridge for a subscription you already have",
-    own3: "Or your own API key",
+    own1: "With a model running on your own machine",
+    own2: "With a subscription you already have",
+    own3: "Or with your own API key",
     previewTitle: "What your roadmap looks like",
     previewLede:
       "Each node is a lesson. Finished ones get marked, the next one opens, the rest wait locked.",
@@ -125,7 +127,8 @@ const S: LocalizedStrings<{
     nodeLocked: "locked",
     langTitle: "Languages",
     langBody:
-      "Ready-made content for Japanese (JLPT N5→N1), Chinese (HSK 1→6) and Dutch (A1→B1); any other language opens with CEFR levels.",
+      "Ready-made content for Japanese (JLPT N5→N1), Chinese (HSK 1→6) and Dutch (A1→B1); pick any other language and okumo opens it with standard levels.",
+    langMore: "+ other languages",
     closingTitle: "Pick a language and have your first lesson ready.",
     closingBody: "No install, no sign-up. It opens in your browser.",
     sources: "Sources & licenses",
@@ -305,7 +308,7 @@ export function Landing() {
           <h2 className="font-display text-2xl font-bold">{t.langTitle}</h2>
           <p className="mt-3 text-ink-soft">{t.langBody}</p>
           <div className="mt-5 flex flex-wrap gap-2">
-            {["日本語", "中文", "Nederlands", "CEFR"].map((l) => (
+            {["日本語", "中文", "Nederlands", t.langMore].map((l) => (
               <span
                 key={l}
                 className="rounded-full bg-surface px-4 py-2 text-sm font-semibold shadow-cozy"
