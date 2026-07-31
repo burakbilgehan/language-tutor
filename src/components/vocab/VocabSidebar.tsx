@@ -203,10 +203,10 @@ export function VocabSidebar() {
       id={`vocab-row-${v.word}`}
       href={`/vocab?word=${encodeURIComponent(v.word)}`}
       className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
-        flashWord === v.word ? "ring-2 ring-accent " : ""
+        flashWord === v.word ? "ring-2 ring-indigo " : ""
       }${
         activeWord === v.word
-          ? "bg-accent-soft font-semibold text-ink"
+          ? "bg-indigo-soft font-semibold text-ink"
           : "bg-surface text-ink hover:bg-surface-2"
       }`}
     >
@@ -246,7 +246,7 @@ export function VocabSidebar() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={s.searchPlaceholder}
-          className="rounded-xl bg-surface px-3 py-2 text-sm shadow-cozy outline-none focus:ring-2 focus:ring-accent-soft"
+          className="rounded-xl border-2 border-transparent bg-surface px-3 py-2 text-sm shadow-cozy outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
         />
         <div className="flex flex-col gap-1">
           {matches.slice(0, SEARCH_CAP).map(row)}
@@ -288,7 +288,7 @@ export function VocabSidebar() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={s.searchPlaceholder}
-        className="rounded-xl bg-surface px-3 py-2 text-sm shadow-cozy outline-none focus:ring-2 focus:ring-accent-soft"
+        className="rounded-xl border-2 border-transparent bg-surface px-3 py-2 text-sm shadow-cozy outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
       />
       {levelOrder.map((lvl) => {
         const all = byLevel.get(lvl)!;

@@ -142,7 +142,7 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
               onClick={() => applyPreset(p)}
               className={`rounded-full px-2.5 py-1 text-sm transition-colors ${
                 rawInput === p.surface
-                  ? "bg-accent text-white"
+                  ? "bg-accent text-surface"
                   : "bg-background hover:bg-accent/10"
               }`}
               lang="ja"
@@ -163,7 +163,7 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
               value={rawInput}
               onChange={(e) => onInputChange(e.target.value)}
               placeholder={t.inputPlaceholder}
-              className="rounded-xl border border-ink/10 bg-background px-3 py-2 font-display text-lg outline-none focus:border-accent"
+              className="rounded-xl border border-ink/10 bg-background px-3 py-2 font-display text-lg outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
               lang="ja"
             />
           </label>
@@ -179,7 +179,7 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
                   setReadingTouched(true);
                 }}
                 placeholder={t.readingPlaceholder}
-                className="rounded-xl border border-ink/10 bg-background px-3 py-2 font-display text-lg outline-none focus:border-accent"
+                className="rounded-xl border border-ink/10 bg-background px-3 py-2 font-display text-lg outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
                 lang="ja"
               />
             </label>

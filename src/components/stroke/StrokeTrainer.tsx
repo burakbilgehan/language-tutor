@@ -319,7 +319,7 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
               onClick={() => switchTab(t)}
               className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
                 tab === t
-                  ? "bg-accent text-white"
+                  ? "bg-accent text-surface"
                   : "bg-surface text-ink-soft shadow-cozy hover:bg-surface-2"
               }`}
             >
@@ -366,7 +366,7 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
                                 title={cell.romaji}
                                 className={`flex w-full flex-col items-center rounded-lg py-0.5 leading-tight transition-colors ${
                                   selected === ch
-                                    ? "bg-accent-soft font-semibold"
+                                    ? "bg-indigo-soft font-semibold"
                                     : "bg-background hover:bg-surface-2"
                                 }`}
                               >
@@ -434,10 +434,10 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
                       onClick={() => pick("kanji", k.char)}
                       title={k.meaningsEn.join(", ")}
                       className={`aspect-square rounded-xl text-lg transition-colors ${
-                        flashChar === k.char ? "ring-2 ring-accent " : ""
+                        flashChar === k.char ? "ring-2 ring-indigo " : ""
                       }${
                         selected === k.char
-                          ? "bg-accent-soft font-semibold"
+                          ? "bg-indigo-soft font-semibold ring-2 ring-indigo"
                           : k.status === "ready"
                             ? "bg-indigo-soft shadow-cozy hover:bg-surface-2"
                             : "bg-surface shadow-cozy hover:bg-surface-2"

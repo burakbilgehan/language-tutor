@@ -56,7 +56,7 @@ export function NlConjugatorView() {
               onClick={() => setInput(p.infinitive)}
               className={`rounded-full px-2.5 py-1 text-sm transition-colors ${
                 input === p.infinitive
-                  ? "bg-accent text-white"
+                  ? "bg-accent text-surface"
                   : "bg-background hover:bg-accent/10"
               }`}
               lang="nl"
@@ -76,7 +76,7 @@ export function NlConjugatorView() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.inputPlaceholder}
-            className="rounded-xl border border-ink/10 bg-background px-3 py-2 font-display text-lg outline-none focus:border-accent"
+            className="rounded-xl border border-ink/10 bg-background px-3 py-2 font-display text-lg outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15"
             lang="nl"
           />
         </label>

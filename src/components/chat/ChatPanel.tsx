@@ -199,7 +199,7 @@ export function ChatPanel() {
             onChange={(e) => setInput(e.target.value)}
             placeholder={t.placeholder}
             disabled={!llm.configured}
-            className="flex-1 rounded-full border-2 border-surface-2 bg-surface px-5 py-3 shadow-cozy outline-none focus:border-accent disabled:opacity-60"
+            className="flex-1 rounded-full border-2 border-surface-2 bg-surface px-5 py-3 shadow-cozy outline-none focus:border-indigo focus:ring-4 focus:ring-indigo/15 disabled:opacity-60"
           />
           <CozyButton
             type="submit"

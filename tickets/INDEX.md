@@ -28,7 +28,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-051](T-051-rebrand-okumo.md) | Rebranding — isim okumo + marka copy/tone (görsel → T-052/53) | done | p2 | M | medium |
 | [T-052](T-052-yuyake-palette.md) | Yūyake palet göçü (v2 handoff) — globals drop-in + moss/gold→indigo/amber + info variant + Kumo mark | done | p2 | S | high |
 | [T-053](T-053-yuyake-usage-screens.md) | Yūyake kullanım kuralları — 5 ekrana uygula (vermilyon=aksiyon, indigo=bilgi/durum, amber=ödül) | done | p2 | M | medium |
-| [T-065](T-065-yuyake-out-of-scope-leftovers.md) | Yūyake kalıntıları — kapsam dışı ekranlarda focus/selected/token temizliği (T-053 raporundan) | backlog | p3 | S | high |
+| [T-065](T-065-yuyake-out-of-scope-leftovers.md) | Yūyake kalıntıları — kapsam dışı ekranlarda focus/selected/token temizliği (T-053 raporundan) | done | p3 | S | high |
 | [T-055](T-055-sky-polish-leftovers.md) | Sky kalıntıları (revert edilen implementasyona bağlıydı) | wontfix | p3 | S | high |
 | [T-054](T-054-okumo-landing.md) | okumo.dev landing sayfası (handoff, ayrı scope) | backlog | p3 | M | low |
 | [T-045](T-045-backend-spike-skeleton.md) | Backend spike + iskelet (CF Worker+R2+D1+auth uçtan uca) — stack DOĞRULANDI | done | p1 | M | medium |

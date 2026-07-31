@@ -1,7 +1,7 @@
 ---
 id: T-065
 title: Yūyake kalıntıları — T-053 fence'i dışındaki ekranlarda focus/selected/token temizliği
-status: backlog
+status: done
 priority: p3
 effort: S
 confidence: high
