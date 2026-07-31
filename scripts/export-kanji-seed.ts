@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { KanjiContentSchema } from "@/lib/llm/schemas";
+import { readLangContent } from "@/lib/llm/lang-content";
 
 const DB_PATH = "data/app.db";
 const OUT_DIR = "public/kanji-seed";
@@ -28,7 +29,10 @@ const rows = db
 const byLang = new Map<string, Record<string, unknown>>();
 let skipped = 0;
 for (const r of rows) {
-  const parsed = KanjiContentSchema.safeParse(JSON.parse(r.content));
+  // T-031 sonrası content kolonu {tr:...,en:...} dil-anahtarlı; seed düz tr taşır.
+  const parsed = KanjiContentSchema.safeParse(
+    readLangContent(JSON.parse(r.content), "tr")
+  );
   if (!parsed.success) {
     skipped++;
     console.warn(`ATLA ${r.lang}/${r.char}: şemaya uymuyor`);
