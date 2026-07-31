@@ -117,6 +117,20 @@ test("iptal edilen üretim hata ile bitse bile hata ekranı için error yazılma
   assert.equal(lessonGenState("n5")?.kind, "cancelled");
 });
 
+test("iptalin reddi ÇAĞIRANA yayılmaz (kendi 'Vazgeç'i hata ekranı olarak dönmesin)", async () => {
+  __resetLessonGenStore();
+  const d = deferred();
+  const p = startLessonGen("n6", { urgent: true, run: () => d.promise, diagnose });
+  cancelLessonGen("n6");
+  // Sağlayıcı abort'u LlmCancelledError olarak reddeder. Bu reddin çağırana
+  // ulaşması, drawer kapanma animasyonu boyunca hâlâ mount olan LessonPlayer'a
+  // (ve tam sayfa modunda route değişene kadar) "Ders hazırlanamadı" ekranı
+  // bastırırdı.
+  d.reject(new Error("Üretim iptal edildi"));
+  await p; // reject ETMEMELİ
+  assert.equal(lessonGenState("n6")?.kind, "cancelled");
+});
+
 test("runningLessonGens yalnız çalışanları listeler; clearLessonGen çalışana dokunmaz", async () => {
   __resetLessonGenStore();
   const a = deferred();

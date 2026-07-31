@@ -240,7 +240,16 @@ async function runLessonWindow(anchorNodeId: string, k = 2): Promise<void> {
 export async function primeLessonWindow(): Promise<void> {
   if (!IS_STATIC) {
     // Sunucu ayağı: ince kabuk route'u (çekirdek mantık orada da core'da).
-    await fetch("/api/lessons/window", { method: "POST" }).catch(() => {});
+    // Hata yutulmaz, sadece bloklamaz: auth gate'i açık bir kurulumda süresi
+    // dolmuş cookie 401 döndürür ve tetik sessizce ölürdü.
+    try {
+      const res = await fetch("/api/lessons/window", { method: "POST" });
+      if (!res.ok) {
+        console.warn("[prefetch] pencere tetiklenemedi: HTTP", res.status);
+      }
+    } catch (err) {
+      console.warn("[prefetch] pencere tetiklenemedi:", err);
+    }
     return;
   }
   try {
@@ -1117,6 +1126,13 @@ export async function openNodeApi(nodeId: string): Promise<
     // üretiyorsa ensureLessonGen aynı promise'i paylaşır. urgent: kullanıcı
     // ekranda BEKLİYOR, kuyrukta prefetch'lerin önüne geçer (T-070-D).
     await ensureLessonGen(nodeId, true);
+    // Kullanıcı iptal ettiyse hata DEĞİL: "hazırlanıyor" durumunda kal,
+    // çağıran zaten haritaya dönüyor. Aksi halde kendi bastığı "Vazgeç"
+    // kullanıcıya "Ders hazırlanamadı" ekranı olarak geri dönerdi.
+    const { lessonGenState } = await import("@/lib/lesson-gen-store");
+    if (lessonGenState(nodeId)?.kind === "cancelled") {
+      return { status: "generating", jobId: null };
+    }
     const after = core.openNode(db, nodeId, nativeLang);
     if (after.status !== "ready") throw new AppError("lesson_gen_failed");
     // Açılan ders hazır olur olmaz pencereyi ilerlet (T-068 birinci tetik).

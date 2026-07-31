@@ -4,7 +4,7 @@ import type { LessonContent } from "@/lib/llm/schemas";
 import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
 import type { AppDb } from "./db-types";
 
-// T-068 — ders prefetch penceresi. Tek invariant, iki mod:
+// T-068: ders prefetch penceresi. Tek invariant, iki mod:
 // "aktif ders n ise n..n+k içerikli olmalı" (k=2).
 //
 // Buradaki her şey SAF okuma: hangi node'ların üretilmesi gerektiğini döner,
@@ -19,7 +19,7 @@ import type { AppDb } from "./db-types";
 const MAX_WALK = 64;
 
 /** Bu node'un dersi, bu ana dilde, KULLANILABİLİR mi?
- * "ready" statüsü tek başına yetmez — içerik dil-anahtarlı bir map ve başka
+ * "ready" statüsü tek başına yetmez: içerik dil-anahtarlı bir map ve başka
  * bir ana dilde üretilmiş içerik bu dil için YOK sayılır (T-031). openNode()
  * ile aynı okuma; aksi halde pencere "dolu" derken openNode hâlâ
  * needsGeneration derdi. */
@@ -54,7 +54,7 @@ function isErrored(db: AppDb, nodeId: string): boolean {
   return lesson?.status === "error";
 }
 
-/** `nodeId`'yi prereq olarak gösteren ilk main node (zincir tek parça —
+/** `nodeId`'yi prereq olarak gösteren ilk main node (zincir tek parça;
  * curriculum-gen tek bir prereqNodeId zinciri kurar). */
 function successorOf(db: AppDb, nodeId: string): string | null {
   const row = db
@@ -73,7 +73,7 @@ function successorOf(db: AppDb, nodeId: string): string | null {
 }
 
 /**
- * Pencereyi doldurmak için üretilmesi gereken node id'leri — zincir sırasında,
+ * Pencereyi doldurmak için üretilmesi gereken node id’leri, zincir sırasında
  * yakından uzağa.
  *
  * Kapsam: `activeNodeId`'nin KENDİSİ + k ardılı (varsayılan k=2 → n, n+1, n+2).
@@ -83,11 +83,11 @@ function successorOf(db: AppDb, nodeId: string): string | null {
  * kendi varlık nedenini karşılamaz. Zaten hazır olan anchor sıfır maliyetle
  * elenir, in-flight olan da executor'ın dedup'ında.
  *
- * Dışlanan: içeriği bu dilde HAZIR olanlar (sıfır LLM çağrısı — "her şey
+ * Dışlanan: içeriği bu dilde HAZIR olanlar (sıfır LLM çağrısı: "her şey
  * hazırsa boş liste"), ve statüsü `error` olanlar (otomatik retry yok).
  * Zincir biterse pencere kısalır; auto-extend davranışı değişmez.
  *
- * Saf okuma — hiçbir şey yazmaz, hiçbir üretim başlatmaz.
+ * Saf okuma: hiçbir şey yazmaz, hiçbir üretim başlatmaz.
  */
 export function lessonWindowTargets(
   db: AppDb,
@@ -120,7 +120,7 @@ export function lessonWindowTargets(
 
 /**
  * Pencerenin üçüncü tetiği için çıpa: ilk TAMAMLANMAMIŞ main node (frontier).
- * Kullanıcının aktif dersi budur — "revisit'te çekme" kuralı böyle korunur:
+ * Kullanıcının aktif dersi budur; "revisit’te çekme" kuralı böyle korunur:
  * eski bir dersi tekrar açmak pencereyi geri sarmaz.
  *
  * Zincir yürüyüşü değil sıralama okuması: üniteler position'a, node'lar

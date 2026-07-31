@@ -32,6 +32,12 @@ const LS_KEY = "llm-browser-config";
  * kalır. */
 const BRIDGE_TIMEOUT_MARGIN_MS = 15_000;
 
+/** Bu eşiğin ALTINDAKİ çağrılara köprü zaman aşımı GÖNDERİLMEZ: kısa
+ * çağrılar (translate 30s, grading 60s) köprünün kendi tavanının altında
+ * zaten bitiyor; onlara tavan göndermek yalnızca daraltır. Eşik, tek uzun
+ * üretim yolu olan ders/müfredat (300s) ile arasındaki boşluğa oturur. */
+const BRIDGE_TIMEOUT_MIN_REQUEST_MS = 120_000;
+
 export interface BrowserLlmConfig {
   mode: "openai" | "anthropic" | "none";
   baseUrl?: string;
@@ -158,11 +164,17 @@ async function callOpenAiCompat(
   // baseUrl'ine: gerçek OpenAI uçları katı şema doğrulamasında 400 verebilir.
   // Köprü tarafı bizim istediğimizden ÖNCE düşmeli, yoksa istemcinin
   // AbortController'ı yarışı kazanır ve yapılandırılmış 504 hiç görünmez.
-  if (providerForBaseUrl(baseUrl) === "bridge") {
-    body.bridge_timeout_ms = Math.max(
-      15_000,
-      opts.timeoutMs - BRIDGE_TIMEOUT_MARGIN_MS
-    );
+  // YALNIZ uzun üretimler için: kısa çağrılar (translate 30s, grading 60s)
+  // köprünün kendi --timeout tavanının altında zaten rahatça bitiyordu.
+  // Onlara da bir tavan göndermek, köprünün CLI'sını uygulamanın 30s'inden
+  // 15s'e indirir; üstelik bunun sonucu olan zaman aşımı mesajı kullanıcıya
+  // "--timeout 600 ile başlat" der ve bu HİÇBİR ŞEYİ değiştirmez (sınırı biz
+  // koymuş oluruz). Yavaş yerel modellerde net bir davranış gerilemesi.
+  if (
+    providerForBaseUrl(baseUrl) === "bridge" &&
+    opts.timeoutMs > BRIDGE_TIMEOUT_MIN_REQUEST_MS
+  ) {
+    body.bridge_timeout_ms = opts.timeoutMs - BRIDGE_TIMEOUT_MARGIN_MS;
   }
 
   const headers: Record<string, string> = { "content-type": "application/json" };

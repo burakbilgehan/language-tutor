@@ -364,15 +364,19 @@ export function LessonPlayer({
   // (error state), openNode'un ayrı "error" statüsü (T-070-B) ve drawer
   // kapalıyken biten üretimin store'a yazdığı hata. Hepsinde de sessiz
   // otomatik yeniden üretim YOK; "tekrar dene" kullanıcının eylemi.
+  // Ders HAZIR ise store'daki eski bir hata kaydı ekranı asla ele geçiremez:
+  // hazır içeriği bir yan-durum yüzünden gizlemek render kararı olurdu, oysa
+  // bu bir veri kararı. (Bugün ulaşılabilir bir yol yok; tek bir yeni çağrı
+  // yeri onu ulaşılabilir kılardı.)
   const genFailedMessage =
-    error ??
-    (data?.status === "error"
-      ? genState?.kind === "error"
-        ? genState.message
-        : t.genFailedBody
-      : genState?.kind === "error"
-        ? genState.message
-        : null);
+    data?.status === "ready"
+      ? null
+      : (error ??
+        (data?.status === "error" && genState?.kind !== "error"
+          ? t.genFailedBody
+          : genState?.kind === "error"
+            ? genState.message
+            : null));
 
   if (genFailedMessage) {
     return (

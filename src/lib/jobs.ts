@@ -274,7 +274,7 @@ export function regenerateLessonJob(nodeId: string, feedback?: string | null): s
  * Called when a lesson is opened and when one is completed: with a
  * single-successor lookahead the learner finishes a lesson faster than the
  * next one generates, so the n..n+k window stays warm ahead of the unlock
- * frontier. No extra LLM spend — these lessons would be generated anyway;
+ * frontier. No extra LLM spend: these lessons would be generated anyway;
  * this only moves them earlier. Nodes whose lesson already exists in this
  * native language, and nodes whose last attempt errored, are excluded by the
  * core function (retries stay user-driven, never poll-driven).

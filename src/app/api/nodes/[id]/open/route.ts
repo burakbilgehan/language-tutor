@@ -37,7 +37,7 @@ export async function POST(
   }
   const nativeLang = (profile?.nativeLanguage ?? "tr") as NativeLang;
   if (result.status === "ready") {
-    // The learner is about to spend minutes here — fill the lesson window
+    // The learner is about to spend minutes here, so fill the lesson window
     // (n..n+2) in the background now, not at completion time. T-068 pulled
     // the old depth-3 successor sweep onto the k=2 window invariant, which is
     // also what the static branch runs.

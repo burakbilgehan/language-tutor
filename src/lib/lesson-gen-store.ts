@@ -105,8 +105,9 @@ export function cancelLessonGen(nodeId: string): void {
  * `diagnose` hatayı kullanıcıya gösterilebilir metne çevirir (llm-diagnosis);
  * store'a HAM sağlayıcı metni yazılmaz.
  *
- * Döndürdüğü promise, üretim hata ile biterse REJECT eder; çağıranın (dersi
- * o an açık olan kullanıcı) akışı bozulmasın diye yutulmaz.
+ * Döndürdüğü promise gerçek hatalarda REJECT eder (çağıranın akışı sessizce
+ * "başarılı" sanmasın), ama İPTALDE reject ETMEZ: iptal kullanıcının kendi
+ * eylemi ve hata yüzeyine çıkmamalı.
  */
 export function startLessonGen(
   nodeId: string,
@@ -157,7 +158,13 @@ export function startLessonGen(
       entries.set(nodeId, { state: { kind: "ready", finishedAt: Date.now() } });
       emit();
     } catch (err) {
-      if (entries.get(nodeId)?.state.kind === "cancelled") throw err;
+      // İPTAL edilen üretimin reddi çağırana YAYILMAZ. Yayılsaydı
+      // openNodeApi'nin await'i üstünden LessonPlayer'ın catch'ine düşer ve
+      // kullanıcının kendi durdurduğu şey için "Ders hazırlanamadı" ekranı
+      // basılırdı (drawer kapanma animasyonu boyunca bileşen hâlâ mount, tam
+      // sayfa modunda ise route değişene kadar). Store zaten "cancelled"
+      // olduğu için durum kaybolmuyor; sadece hata yüzeyine çıkmıyor.
+      if (entries.get(nodeId)?.state.kind === "cancelled") return;
       const message = await opts.diagnose(err);
       entries.set(nodeId, {
         state: { kind: "error", finishedAt: Date.now(), message },
