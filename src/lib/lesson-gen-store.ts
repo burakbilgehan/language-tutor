@@ -115,6 +115,10 @@ export function startLessonGen(
     urgent: boolean;
     run: (signal: AbortSignal) => Promise<void>;
     diagnose: (err: unknown) => Promise<string>;
+    /** Zaten koşan bir üretim urgent'a yükseltilirken çağrılır: kuyrukta
+     * BEKLEYEN çağrıyı gerçekten öne alır. Store ortam-bağımsız kalsın diye
+     * kuyruk modülü buraya callback olarak geçirilir, import edilmez. */
+    promote?: () => void;
   }
 ): Promise<void> {
   const existing = entries.get(nodeId);
@@ -125,14 +129,17 @@ export function startLessonGen(
   // AYNI senkron blokta yazılıyor, araya await girmiyor. Yine de tip
   // güvenliği için boş promise'e düşülüyor.)
   if (existing?.state.kind === "running") {
-    // Zaten üretimde. Kullanıcı açtıysa (urgent) kaydı yükselt: kuyruk
-    // önceliği çağrı anında belirlendiği için geçmişi değiştiremeyiz, ama
-    // görünürlük yüzeyi doğru şeyi göstersin.
+    // Zaten üretimde. Kullanıcı açtıysa (urgent) kaydı yükselt.
     if (opts.urgent && !existing.state.urgent) {
       entries.set(nodeId, {
         ...existing,
         state: { ...existing.state, urgent: true },
       });
+      // Görünürlük yetmez: üretim kuyrukta BEKLİYORSA gerçekten öne
+      // alınmalı, yoksa kullanıcı önündeki tüm prefetch'lerin bitmesini
+      // bekler (T-068 pencere enqueue'larıyla bu artık yaygın senaryo).
+      // Çalışmaya başlamış çağrı için no-op.
+      opts.promote?.();
       emit();
     }
     return existing.promise ?? Promise.resolve();
@@ -149,12 +156,27 @@ export function startLessonGen(
   });
   emit();
 
+  /**
+   * Sonucu yazmaya HÂLÂ yetkili miyiz?
+   *
+   * Yalnız "iptal edildi mi" bakmak yetmez: iptal edilen 1. üretimin geç gelen
+   * sonucu, aynı node için o arada başlamış 2. CANLI üretimin kaydını ezerdi.
+   * Sonuç: badge yanlış hata gösterir, canlı üretim görünmez ve iptal edilemez
+   * olur, "Tekrar dene" üçüncü bir paralel üretim başlatır. Kimlik kontrolü
+   * controller referansı üstünden: kayıt hâlâ BİZİM başlattığımız çalışan
+   * kayıtsa yazarız, değilse sessizce çekiliriz.
+   */
+  const stillOurs = () => {
+    const e = entries.get(nodeId);
+    return e?.state.kind === "running" && e.controller === controller;
+  };
+
   const promise = (async () => {
     try {
       await opts.run(controller.signal);
-      // İptal yarışı: kullanıcı iptal ettikten sonra gelen "başarılı" sonuç
-      // kaydı geri diriltmesin.
-      if (entries.get(nodeId)?.state.kind === "cancelled") return;
+      // İptal yarışı + sahiplik: kullanıcı iptal ettikten sonra gelen
+      // "başarılı" sonuç kaydı geri diriltmesin, devralan üretimi de ezmesin.
+      if (!stillOurs()) return;
       entries.set(nodeId, { state: { kind: "ready", finishedAt: Date.now() } });
       emit();
     } catch (err) {
@@ -164,8 +186,12 @@ export function startLessonGen(
       // basılırdı (drawer kapanma animasyonu boyunca bileşen hâlâ mount, tam
       // sayfa modunda ise route değişene kadar). Store zaten "cancelled"
       // olduğu için durum kaybolmuyor; sadece hata yüzeyine çıkmıyor.
-      if (entries.get(nodeId)?.state.kind === "cancelled") return;
+      // Aynı guard devralan üretimi de korur (bkz. stillOurs).
+      if (!stillOurs()) return;
       const message = await opts.diagnose(err);
+      // diagnose await'i sırasında kayıt el değiştirmiş olabilir: yazmadan
+      // hemen önce tekrar doğrula.
+      if (!stillOurs()) return;
       entries.set(nodeId, {
         state: { kind: "error", finishedAt: Date.now(), message },
       });

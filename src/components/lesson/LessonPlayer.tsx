@@ -325,6 +325,10 @@ export function LessonPlayer({
       await retryLessonGen(nodeId);
       if (!stopped.current) open();
     } catch (e) {
+      // Statikte store zaten teşhis edip mesajı yazdı; ikinci kez teşhis
+      // etmek gereksiz bir probe round-trip'i daha demek. Store'da mesaj
+      // varsa render onu genState üstünden alır, burada setError'a gerek yok.
+      if (lessonGenState(nodeId)?.kind === "error") return;
       const message = await diagnose(e);
       if (!stopped.current) setError(message);
     }

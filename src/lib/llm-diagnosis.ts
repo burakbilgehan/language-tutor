@@ -32,7 +32,11 @@ import { AppError, isErrorCode } from "@/lib/errors";
 // imported from client components (ChatPanel/LessonPlayer) — importing the
 // server file here pulled node builtins into the static-mode client bundle
 // and broke `npm run build:static` (caught while verifying this ticket).
-import { LlmAuthError, LlmTimeoutError } from "@/lib/llm/provider-types";
+import {
+  LlmAuthError,
+  LlmCancelledError,
+  LlmTimeoutError,
+} from "@/lib/llm/provider-types";
 import { CATALOG } from "@/lib/llm/catalog";
 import {
   probeBridge,
@@ -141,7 +145,15 @@ export function classifyGenerationFailure(
   const hasKnownCode =
     err instanceof AppError ||
     (err instanceof Error && isErrorCode(err.message));
-  if (hasKnownCode || err instanceof LlmAuthError) {
+  // LlmCancelledError da buradan geçer: kullanıcının kendi iptali asla
+  // "köprün kapalı" diye yorumlanmamalı. Normal akışta hata yüzeyine hiç
+  // ulaşmaz (store iptalde reject etmiyor), ama teşhis kendi başına doğru
+  // olmalı.
+  if (
+    hasKnownCode ||
+    err instanceof LlmAuthError ||
+    err instanceof LlmCancelledError
+  ) {
     return { kind: "pass_through", message: generic };
   }
   // T-070-A: zaman aşımı kendi kendini teşhis eder; uç nokta CEVAP VERDİĞİ
@@ -214,6 +226,7 @@ export async function diagnoseGenerationFailure(
   if (
     hasKnownCode ||
     err instanceof LlmAuthError ||
+    err instanceof LlmCancelledError ||
     err instanceof LlmTimeoutError ||
     probeTarget === null ||
     !baseUrl

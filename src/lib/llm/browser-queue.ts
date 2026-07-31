@@ -7,8 +7,48 @@
 // zamanlamaya duyarlı olduğu için (T-070-D'deki slot devri yarışı) test
 // edilebilir olması şart.
 
+interface Waiter {
+  resolve: () => void;
+  /** Abort edilmiş waiter'ı slotu tutmadan düşürmek için. */
+  reject: (err: unknown) => void;
+  urgent: boolean;
+  /** Kuyruktayken iptal edilirse anında düşer (bkz. dropAborted). */
+  signal?: AbortSignal;
+  /** Sonradan urgent'a yükseltmek için kimlik (promoteUrgentCall). */
+  key?: string;
+}
+
 let active = 0;
-const waiters: Array<{ resolve: () => void; urgent: boolean }> = [];
+const waiters: Waiter[] = [];
+
+/** Kuyruktan çıkarılacak sıradaki waiter: önce urgent, sonra FIFO. */
+function takeNext(): Waiter | undefined {
+  const i = waiters.findIndex((w) => w.urgent);
+  return i >= 0 ? waiters.splice(i, 1)[0] : waiters.shift();
+}
+
+/**
+ * Slotu devret. Abort edilmiş waiter'lar ATLANIR: iptal edilen bir üretim
+ * kuyrukta sırasını beklerken slotu devralırsa, hemen abort'a düşene kadar
+ * geçen sürede arkasındaki gerçek üretimler bekler. Kötü senaryoda iptal
+ * edilmiş bir zincir kuyruğu dakikalarca rehin alır.
+ */
+function handOffSlot(): void {
+  for (;;) {
+    const next = takeNext();
+    if (!next) {
+      active--;
+      return;
+    }
+    if (next.signal?.aborted) {
+      // Slotu tutmadan düş: bir sonraki adaya geç.
+      next.reject(next.signal.reason ?? new Error("aborted"));
+      continue;
+    }
+    next.resolve();
+    return;
+  }
+}
 
 /**
  * `fn`'i kuyruk sırası gelince çalıştırır.
@@ -23,12 +63,31 @@ const waiters: Array<{ resolve: () => void; urgent: boolean }> = [];
  */
 export async function enqueueLlmCall<T>(
   fn: () => Promise<T>,
-  urgent?: boolean
+  urgent?: boolean,
+  opts?: { signal?: AbortSignal; key?: string }
 ): Promise<T> {
   if (active >= 1) {
-    await new Promise<void>((resolve) =>
-      waiters.push({ resolve, urgent: urgent ?? false })
-    );
+    // Zaten iptal edilmiş bir çağrı kuyruğa hiç girmesin.
+    if (opts?.signal?.aborted) {
+      throw opts.signal.reason ?? new Error("aborted");
+    }
+    let waiter!: Waiter;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        waiter = {
+          resolve,
+          reject,
+          urgent: urgent ?? false,
+          signal: opts?.signal,
+          key: opts?.key,
+        };
+        waiters.push(waiter);
+      });
+    } catch (err) {
+      // Kuyrukta iptal edildik: slot bize DEVREDİLMEDİ, bu yüzden serbest
+      // bırakılacak bir şey yok.
+      throw err;
+    }
     // Slot bize devredildi: `active` zaten bizim adımıza ayrılmış, tekrar
     // artırılmaz.
   } else {
@@ -37,11 +96,29 @@ export async function enqueueLlmCall<T>(
   try {
     return await fn();
   } finally {
-    const i = waiters.findIndex((w) => w.urgent);
-    const next = i >= 0 ? waiters.splice(i, 1)[0] : waiters.shift();
-    if (next) next.resolve();
-    else active--;
+    handOffSlot();
   }
+}
+
+/**
+ * Kuyrukta BEKLEYEN bir çağrıyı urgent'a yükselt (T-070-D).
+ *
+ * Kullanıcı, arka planda prefetch olarak kuyruğa girmiş bir dersi açtığında
+ * gerekiyor: öncelik çağrı anında belirlendiği için o kayıt aksi halde
+ * önündeki tüm prefetch'leri bekler. Zaten çalışan çağrı için anlamsızdır
+ * (geri alınamaz), o yüzden yalnız bekleyenleri etkiler.
+ *
+ * Döner: yükseltilen waiter var mıydı.
+ */
+export function promoteUrgentCall(key: string): boolean {
+  let promoted = false;
+  for (const w of waiters) {
+    if (w.key === key && !w.urgent) {
+      w.urgent = true;
+      promoted = true;
+    }
+  }
+  return promoted;
 }
 
 /** Görünürlük yüzeyi (T-070-E): kuyrukta bekleyen çağrı sayısı. */

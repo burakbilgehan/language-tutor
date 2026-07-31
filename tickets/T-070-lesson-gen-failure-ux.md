@@ -76,6 +76,22 @@ kuyrukta da görünmüyor. Köprü restart'ları da durumu değiştirmedi.
   üretimleri (lessonGenInFlight + kuyruk) küçük bir yüzeyde listelenir;
   T-069 kalıcı job kaydını getirene kadar bellek-içi yeter.
 
+## Ne shipped edildi (2026-08-01)
+
+- A/B/C/D tam; E **kısmen**: görünürlük, ayrı bir "üretim paneli" yerine
+  harita düğümü başına rozet olarak çıktı (hazırlanıyor / başarısız).
+  `runningLessonGens()` ve `llmQueueDepth()` export edildi ama şu an
+  TÜKETİCİSİZ; toplu liste isteyen bir yüzey (T-034'ün static ayağı)
+  gelirse hazır duruyorlar.
+- Store'a bağlı yüzeyler (iptal butonu, geçen süre, rozetler) ve `urgent`
+  yalnız **static** modda: `startLessonGen` tüm çağrı yerlerinde `IS_STATIC`
+  dalının arkasında, sunucudaki `generateLessonContent` çağrısı opts bag'siz.
+  Sunucu modu error statüsü ayrımını + retry ekranını alıyor (sonsuz poll
+  biter).
+- İptal DB satırını "error" değil "pending" damgalar; pencere prefetch'i
+  iptal edileni OTURUM boyunca atlar (store bellekte), reload sonrası
+  yeniden hedef olur.
+
 ## Kapsam dışı
 
 - Static'te kalıcı job/resume (T-069).

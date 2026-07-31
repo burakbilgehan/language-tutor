@@ -131,6 +131,75 @@ test("iptalin reddi ÇAĞIRANA yayılmaz (kendi 'Vazgeç'i hata ekranı olarak d
   assert.equal(lessonGenState("n6")?.kind, "cancelled");
 });
 
+test("iptal edilenin GEÇ gelen hatası, devralan CANLI üretimin üstüne yazmaz", async () => {
+  __resetLessonGenStore();
+  const first = deferred();
+  const second = deferred();
+
+  const p1 = startLessonGen("n7", { urgent: true, run: () => first.promise, diagnose });
+  p1.catch(() => {});
+  cancelLessonGen("n7");
+  clearLessonGen("n7"); // kullanıcı "Tekrar dene" dedi
+
+  // 2. üretim başladı ve KOŞUYOR.
+  const p2 = startLessonGen("n7", { urgent: true, run: () => second.promise, diagnose });
+  p2.catch(() => {});
+  assert.equal(lessonGenState("n7")?.kind, "running");
+
+  // 1. üretimin geç gelen reddi. Sahiplik guard'ı olmasaydı burada "error"
+  // yazılır, canlı üretim görünmez/iptal edilemez olur ve badge yanlış hata
+  // gösterirdi.
+  first.reject(new Error("iptal edilenin geç hatası"));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(lessonGenState("n7")?.kind, "running", "canlı üretim ezilmemeli");
+
+  // 2. üretim kendi sonucunu yazabilmeli.
+  second.resolve();
+  await p2;
+  assert.equal(lessonGenState("n7")?.kind, "ready");
+});
+
+test("iptal edilenin GEÇ gelen BAŞARISI da devralan üretimi ezmez", async () => {
+  __resetLessonGenStore();
+  const first = deferred();
+  const second = deferred();
+  const p1 = startLessonGen("n8", { urgent: true, run: () => first.promise, diagnose });
+  p1.catch(() => {});
+  cancelLessonGen("n8");
+  clearLessonGen("n8");
+  const p2 = startLessonGen("n8", { urgent: true, run: () => second.promise, diagnose });
+  p2.catch(() => {});
+
+  first.resolve();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(lessonGenState("n8")?.kind, "running", "eski başarı ready yazmamalı");
+  second.resolve();
+  await p2;
+});
+
+test("koşan üretim urgent'a yükseltilince promote çağrılır (kuyrukta öne alma)", async () => {
+  __resetLessonGenStore();
+  const d = deferred();
+  let promoted = 0;
+  const p = startLessonGen("n9", {
+    urgent: false,
+    run: () => d.promise,
+    diagnose,
+    promote: () => promoted++,
+  });
+  assert.equal(promoted, 0);
+  // Kullanıcı prefetch olarak kuyruğa girmiş dersi açtı.
+  startLessonGen("n9", {
+    urgent: true,
+    run: () => d.promise,
+    diagnose,
+    promote: () => promoted++,
+  });
+  assert.equal(promoted, 1, "bekleyen çağrı gerçekten öne alınmalı");
+  d.resolve();
+  await p;
+});
+
 test("runningLessonGens yalnız çalışanları listeler; clearLessonGen çalışana dokunmaz", async () => {
   __resetLessonGenStore();
   const a = deferred();

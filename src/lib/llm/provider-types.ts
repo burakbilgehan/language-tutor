@@ -20,6 +20,10 @@ export interface GenerateJsonOptions<T> {
    * button). Combined with the provider's own timeout controller, never
    * replacing it. Providers that ignore it stay correct, just uncancellable. */
   signal?: AbortSignal;
+  /** Identity for the browser queue, so a call still WAITING in it can later
+   * be promoted to urgent (T-070-D: the user opens a lesson that a prefetch
+   * already queued). Ignored by providers without a queue. */
+  queueKey?: string;
 }
 
 export interface GenerateTextOptions {
@@ -34,6 +38,10 @@ export interface GenerateTextOptions {
    * button). Combined with the provider's own timeout controller, never
    * replacing it. Providers that ignore it stay correct, just uncancellable. */
   signal?: AbortSignal;
+  /** Identity for the browser queue, so a call still WAITING in it can later
+   * be promoted to urgent (T-070-D: the user opens a lesson that a prefetch
+   * already queued). Ignored by providers without a queue. */
+  queueKey?: string;
 }
 
 export interface LlmProvider {

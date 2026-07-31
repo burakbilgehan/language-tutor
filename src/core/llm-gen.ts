@@ -153,6 +153,10 @@ export async function generateLessonContent(
       timeoutMs: 300_000,
       urgent: opts?.urgent,
       signal: opts?.signal,
+      // Kuyrukta beklerken sonradan urgent'a yükseltilebilmesi için kimlik
+      // (T-070-D): prefetch olarak sıraya girmiş bir ders kullanıcı onu
+      // açtığında öne alınabilsin.
+      queueKey: `lesson:${nodeId}`,
     });
 
     db.transaction((tx) => {

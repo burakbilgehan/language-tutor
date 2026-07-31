@@ -199,15 +199,31 @@ function ensureLessonGen(nodeId: string, urgent = false): Promise<void> {
   return startLessonGen(nodeId, {
     urgent,
     diagnose: diagnoseGenError,
+    promote: () => {
+      void import("@/lib/llm/browser-queue").then((m) =>
+        m.promoteUrgentCall(`lesson:${nodeId}`)
+      );
+    },
     run: async (signal) => {
       const gen = await browserGen();
       const { db, persistSoon } = await browserDb();
       const coreG = await import("@/core/llm-gen");
-      await coreG.generateLessonContent(db, gen, nodeId, null, {
-        urgent,
-        signal,
-      });
-      persistSoon();
+      try {
+        await coreG.generateLessonContent(db, gen, nodeId, null, {
+          urgent,
+          signal,
+        });
+      } finally {
+        // finally, catch DEĞİL: generateLessonContent hata yolunda satırı
+        // "error" (iptalde "pending") damgalayıp RETHROW ediyor. persistSoon
+        // yalnız başarı yolunda çağrılsaydı o damga IndexedDB'ye hiç inmezdi;
+        // reload sonrası openNode yine needsGeneration görür ve sessiz 3
+        // dakikalık üretim yeniden başlardı, yani kara delik bir refresh'i
+        // atlatırdı. ("Başka bir yazım nasılsa flush eder" savunması da
+        // geçmiyor: köprü zaman aşımı pencerenin TÜM hedeflerini aynı anda
+        // öldürüyor, ortada flush edecek başka yazım kalmıyor.)
+        persistSoon();
+      }
     },
   });
 }
@@ -226,7 +242,18 @@ async function runLessonWindow(anchorNodeId: string, k = 2): Promise<void> {
   const nativeLang = (coreP.getActiveProfile(db)?.nativeLanguage ?? "tr") as
     | "tr"
     | "en";
+  const { lessonGenState } = await import("@/lib/lesson-gen-store");
   for (const id of coreW.lessonWindowTargets(db, anchorNodeId, k, nativeLang)) {
+    // Kullanıcının BU OTURUMDA iptal ettiği ders pencere hedefi olmaz. İptal
+    // DB satırını "pending" bırakıyor (doğru: hata değil), ama bu onu pencere
+    // için GARANTİ hedef yapıyordu; tam sayfa /lesson'da "Vazgeç" → /map →
+    // primeLessonWindow zinciri üretimi saniyeler içinde, üstelik iptal
+    // butonu olmadan yeniden başlatıyordu.
+    //
+    // Filtre bilerek OTURUM kapsamlı (store bellekte): reload sonrası pending
+    // satırın yeniden hedef olması doğru davranış, kullanıcı o dersi hiç
+    // istemiyorsa zaten açmaz.
+    if (lessonGenState(id)?.kind === "cancelled") continue;
     void ensureLessonGen(id).catch((err) =>
       console.warn("[prefetch] ders üretimi hata:", id, err)
     );

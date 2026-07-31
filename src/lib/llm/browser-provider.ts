@@ -383,7 +383,8 @@ export function getBrowserGen(): Gen | null {
               signal: opts.signal,
             })
           ),
-        opts.urgent
+        opts.urgent,
+        { signal: opts.signal, key: opts.queueKey }
       );
     },
     async generateText(opts: GenerateTextOptions): Promise<string> {
@@ -400,7 +401,8 @@ export function getBrowserGen(): Gen | null {
             timeoutMs,
             signal: opts.signal,
           }),
-        opts.urgent
+        opts.urgent,
+        { signal: opts.signal, key: opts.queueKey }
       );
     },
   };
