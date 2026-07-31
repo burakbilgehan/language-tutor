@@ -38,6 +38,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-049](T-049-login-cloud-ux.md) | Login/cloud UX düzeltmeleri (return-leg + import→push + signed-in intro) | done | p1 | M | high |
 | [T-050](T-050-remove-drive-backup.md) | Google Drive yedeklemeyi kaldır (cloud-sync yerini aldı) | done | p1 | M | high |
 | [T-044](T-044-mcq-bracket-grading.md) | mcq'da doğru şık "yanlış" sayılıyor (bracket strip asimetrisi) | done | p1 | S | high |
+| [T-067](T-067-lesson-drawer-residual-jank.md) | Ders drawer'ında kalan scroll jank'i — raster maliyeti (rounded clip / shadow şüphesi) | backlog | p2 | S | medium |
 | [T-027](T-027-routing-hardening.md) | Routing hardening (dil değişimi + .txt navigasyonu) | done | p1 | M | medium |
 | [T-028](T-028-settings-affordance.md) | Ayarlar çipi — köşede ama belirgin | done | p3 | S | high |
 | [T-029](T-029-vocab-index-multiform.md) | Vocab index çok-form birleştirme (马 "horse") | done | p2 | S | high |
