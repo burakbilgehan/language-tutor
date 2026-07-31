@@ -13,6 +13,7 @@ import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { useTheme } from "@/lib/use-theme";
 import { AppError } from "@/lib/errors";
 import { stats, saveExportApi, saveImportApi, cloudPush } from "@/lib/client-api";
+import { markVisited } from "@/lib/visited-flag";
 import { fetchAuthStatus } from "@/lib/auth-status";
 import { describeCloudError } from "@/lib/cloud-error";
 import { withBase } from "@/lib/base-path";
@@ -164,6 +165,7 @@ export default function SettingsPage() {
     setPushOffer(null);
     try {
       await saveImportApi(file);
+      markVisited(); // T-054: bu tarayıcıda artık veri var
       // Signed in → offer to push the freshly-imported save before leaving the
       // page; the cloud still holds the OLD save and nothing else would tell
       // the user that. Signed-out / no backend behaves exactly as before.

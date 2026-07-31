@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { CloudWarnings } from "@/components/shared/CloudWarnings";
 import { IS_STATIC, cloudInfo, cloudPull, cloudPush } from "@/lib/client-api";
+import { markVisited } from "@/lib/visited-flag";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { describeCloudError, type CloudErrorKind } from "@/lib/cloud-error";
@@ -236,6 +237,7 @@ export function CloudAccountSection() {
     setWarnings([]);
     try {
       const r = await cloudPull();
+      markVisited(); // T-054: buluttan veri indi
       setMsg(t.pullDone);
       // Kept in section state until dismissed — NOT navigated away from, so
       // seed-drift losses stay readable.

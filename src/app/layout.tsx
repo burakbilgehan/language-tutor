@@ -1,11 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Nunito_Sans } from "next/font/google";
-import { SelectionTooltip } from "@/components/shared/SelectionTooltip";
-import { FloatingOverview } from "@/components/shared/FloatingOverview";
-import { JobQueuePop } from "@/components/shared/JobQueuePop";
-import { CommandPalette } from "@/components/shared/CommandPalette";
-import { FeedbackButton } from "@/components/shared/FeedbackButton";
-import { BackupBar } from "@/components/shared/BackupBar";
+import { AppChrome } from "@/components/shared/AppChrome";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -41,12 +36,9 @@ export default function RootLayout({
         className={`${fraunces.variable} ${nunito.variable} antialiased min-h-dvh`}
       >
         {children}
-        <SelectionTooltip />
-        <JobQueuePop />
-        <FloatingOverview />
-        <CommandPalette />
-        <FeedbackButton />
-        <BackupBar />
+        {/* T-054: global app-chrome — landing (`/`) rotasında mount edilmez,
+            bkz. AppChrome. */}
+        <AppChrome />
       </body>
     </html>
   );

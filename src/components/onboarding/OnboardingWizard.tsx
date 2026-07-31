@@ -9,6 +9,7 @@ import { pick } from "@/lib/i18n";
 import { AppError } from "@/lib/errors";
 import { localizeError } from "@/lib/i18n/errors";
 import { resolveUiLang } from "@/lib/i18n/use-localize-error";
+import { markVisited } from "@/lib/visited-flag";
 import {
   profileData,
   createProfileApi,
@@ -329,6 +330,7 @@ export function OnboardingWizard() {
       // Deliberately NO curriculumGenerate here, even with an LLM configured:
       // the personalization questions are unanswered, so generating from
       // defaults would waste tokens. The /map hub owns the trigger.
+      markVisited(); // T-054: artık profil var — landing bir daha araya girmesin
       window.location.href = withBase("/map");
     } catch (err) {
       setAnonError(localizeError(err, resolveUiLang(draft.uiLanguage)));
@@ -384,6 +386,10 @@ export function OnboardingWizard() {
     setPushOffer(null); // drop any offer left by a previous import
     try {
       await saveImportApi(file);
+      // T-054: import ETTİ = bu tarayıcıda artık veri var. Bayrağı burada
+      // yaz — aşağıdaki iki çıkıştan (push teklifi / doğrudan /map) biri
+      // navigasyonsuz döndüğü için çıkışlara koymak bir yolu ıskalardı.
+      markVisited();
       // T-049 fix 1+2 (import→push bridge). A signed-in user's device now
       // holds real data that the cloud does not — offer to push it BEFORE
       // navigating away, because /map has no such affordance and Settings is
@@ -500,6 +506,9 @@ export function OnboardingWizard() {
     setCloudError(null);
     try {
       const r = await cloudPull();
+      // T-054: pull başarılı = veri indi. Uyarı dalı navigasyonsuz döndüğü
+      // için bayrak burada, dallanmadan önce yazılır.
+      markVisited();
       if (r.warnings.length > 0) {
         // Do NOT navigate yet — the navigation would discard the list, making
         // seed-drift content loss silent. Acknowledge first.
@@ -577,6 +586,11 @@ export function OnboardingWizard() {
         draft as unknown as Record<string, unknown>
       );
       if (!profile) throw new Error(t.profileSaveFailed);
+      // T-054: profil oluştu. Müfredat üretimi bundan sonra başarısız olsa
+      // bile (LLM yok / job hatası) profil DURUYOR — /map kendi boş durumunu
+      // gösterir. Bayrağı burada yazmak, o kullanıcıyı landing'e geri
+      // düşürmemek demek.
+      markVisited();
 
       let gen: { jobId?: string };
       try {
