@@ -56,7 +56,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 | [T-005](T-005-zh-stroke-dictionary.md) | zh yazım + hanzi sözlüğü (CEDICT) | backlog | p2 | L | medium |
 | [T-004](T-004-overview-llm-layer.md) | Overview LLM yorum katmanı | backlog | p3 | S | medium |
 | [T-002](T-002-skill-tree.md) | Skill tree (dallı ders grafiği) | backlog | p3 | XL | low |
-| [T-023](T-023-haiku-content-qa.md) | Haiku içerik kalite denetimi — vocab ayağı koşulabilir, session promptu ticket'ta | todo | p1 | S | high |
+| [T-023](T-023-haiku-content-qa.md) | İçerik kalite denetimi — tüm diller/yüzeyler, salt-okunur rapor; session promptu ticket'ta | todo | p1 | S | high |
 | [T-019](T-019-vocab-bulk-fill-seed.md) | zh sözlük seed altyapısı (export + applyVocabSeed) | done | p2 | M | high |
 | [T-003](T-003-remaining-grammar.md) | Kalan grammar (zh 99 + ja 16) — hafta sonu kota | done | p1 | S | high |
 | [T-021](T-021-conjugate-zh-nl-content.md) | Çekim cheatsheet — zh zayıf, nl boş | done | p2 | M | medium |
