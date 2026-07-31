@@ -8,6 +8,16 @@ confidence: high
 depends: []
 created: 2026-07-27
 ---
+> **REVİZE (2026-07-31, Burak kararı):** npm paketi PUBLISH EDİLMEYECEK.
+> Paket hiç publish edilmemişti ve wizard'daki `npx okumo-bridge` komutu
+> herkes için 404'tü (28 Temmuz saha bulgusu #1). Karar: birincil kurulum
+> curl/iwr + `node llm-bridge.mjs` (siteden, kullanıcının zaten güvendiği
+> origin; npm ikinci bir supply-chain yüzeyi + ayrı release adımı eklerdi).
+> `packages/okumo-bridge/` iskeleti ARŞİV olarak repoda duruyor; okumo
+> üçüncü parti dokümanlarda anılacak kadar büyürse publish o gün yeniden
+> değerlendirilir. Aşağıdaki kapsamın 1. maddesi bu revizyonla geçersiz;
+> /health ve opencode kısımları geçerli kaldı.
+
 Burak kararı (2026-07-27): bridge kalıyor (kendisi kullanıyor), ama akış
 "curl indir + node çalıştır" yerine tek komut olacak ve site köprüyü canlı
 algılayabilecek (algılama UI'ı T-060'ta; bu ticket altyapı).

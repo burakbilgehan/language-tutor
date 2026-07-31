@@ -85,9 +85,9 @@ try {
 }
 
 if (failed) process.exit(1);
-// Köprü scriptini siteyle birlikte dağıt (curl/iwr fallback — npx okumo-bridge
-// registry'ye erişemeyenler için; packages/okumo-bridge/bin/'deki kopyanın
-// da kaynağı burasıdır, bkz. packages/okumo-bridge/sync-source.mjs).
+// Köprü scriptini siteyle birlikte dağıt: curl/iwr + node ile kurulan
+// BİRİNCİL yol budur (npm paketi bilinçli publish edilmedi, 2026-07-31;
+// packages/okumo-bridge/ arşiv, bkz. sync-source.mjs ve T-059).
 fs.copyFileSync("scripts/llm-bridge.mjs", "out/llm-bridge.mjs");
 // GitHub Pages: _next dizini için Jekyll'i kapat.
 fs.writeFileSync("out/.nojekyll", "");

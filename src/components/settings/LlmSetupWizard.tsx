@@ -172,7 +172,6 @@ const S = {
     testOk: "✅ Bağlantı kuruldu ve kaydedildi!",
     testFail: "❌ Bağlanamadı:",
     done: "Bitti",
-    npxFallback: "npx çalışmıyorsa",
     advanced: "Gelişmiş ayarlar",
     advancedHint:
       "Nokta atışı model id'si, özel adres, JSON modu, CLI modu, diğer backend'ler.",
@@ -278,7 +277,6 @@ const S = {
     testOk: "✅ Connected and saved!",
     testFail: "❌ Could not connect:",
     done: "Done",
-    npxFallback: "If npx doesn't work",
     advanced: "Advanced settings",
     advancedHint:
       "Exact model ids, custom address, JSON mode, CLI mode, other backends.",
@@ -748,9 +746,13 @@ export function LlmSetupWizard({
     lane === "ollama" ? "ollama" : "bridge"
   );
 
-  // Köprü komutu: T-059 ile birincil yol `npx okumo-bridge`. Hosted origin'de
-  // --origin ŞART (köprünün T-039 kapısı izinsiz origin'de CLI'yı hiç
-  // çalıştırmaz); localhost'ta gereksiz.
+  // Köprü komutu: birincil yol siteden indirilen kopya (curl/iwr + node).
+  // `npx okumo-bridge` bilinçli olarak YOK: paket npm'e hiç publish edilmedi
+  // ve edilmeyecek; kullanıcı zaten bu origin'e güveniyor, npm ikinci bir
+  // supply-chain yüzeyi ve ayrı bir release adımı eklerdi (2026-07-31 kararı,
+  // paket iskeleti packages/okumo-bridge'te arşiv olarak duruyor). Hosted
+  // origin'de --origin ŞART (köprünün T-039 kapısı izinsiz origin'de CLI'yı
+  // hiç çalıştırmaz); localhost'ta gereksiz.
   const originFlag = isLocalOrigin ? "" : ` --origin ${origin}`;
   const bridgeCmd = useMemo(() => {
     const backendFlag = subBackend === "claude" ? "" : ` --backend ${subBackend}`;
@@ -759,17 +761,11 @@ export function LlmSetupWizard({
       // doğrudan; npm run llm:bridge argümanları `--` sonrası alır.
       return `npm run llm:bridge${backendFlag ? ` --${backendFlag}` : ""}`;
     }
-    return `npx okumo-bridge${backendFlag}${originFlag}`;
-  }, [subBackend, originFlag, isLocalOrigin]);
-
-  // Registry'ye erişemeyenler için siteden indirilen kopya (T-059 fallback).
-  const bridgeFallbackCmd = useMemo(() => {
-    const backendFlag = subBackend === "claude" ? "" : ` --backend ${subBackend}`;
     const url = `${origin}${BASE_PATH}/llm-bridge.mjs`;
     return os === "win"
       ? `iwr ${url} -OutFile llm-bridge.mjs; node llm-bridge.mjs${backendFlag}${originFlag}`
       : `curl -fsSL ${url} -o llm-bridge.mjs && node llm-bridge.mjs${backendFlag}${originFlag}`;
-  }, [subBackend, os, origin, originFlag]);
+  }, [subBackend, os, origin, originFlag, isLocalOrigin]);
 
   const ollamaCorsCmd: Record<Os, string> = {
     mac: `launchctl setenv OLLAMA_ORIGINS "${origin}"`,
@@ -1291,18 +1287,6 @@ export function LlmSetupWizard({
               <p>{t.subStep2(SUB_BACKENDS[subBackend].cli)}</p>
               <p>{t.subStep3}</p>
               <CmdBlock cmd={bridgeCmd} copyLabel={t.copy} copiedLabel={t.copied} />
-              {IS_STATIC && (
-                <details className="text-xs text-ink-soft">
-                  <summary className="cursor-pointer">{t.npxFallback}</summary>
-                  <div className="mt-2">
-                    <CmdBlock
-                      cmd={bridgeFallbackCmd}
-                      copyLabel={t.copy}
-                      copiedLabel={t.copied}
-                    />
-                  </div>
-                </details>
-              )}
               {/* claude dışındaki backend'lerde model seçimi bizde değil:
                   köprü sentinel'i CLI'nın kendi varsayılanını kullandırır. */}
               {subBackend === "claude" ? (

@@ -78,7 +78,7 @@ export type GenerationDiagnosis =
 const S = {
   tr: {
     downBridge: (originHint: string) =>
-      `Köprün kapalı görünüyor. Terminalde yeniden başlat: \`npx okumo-bridge\`${originHint}`,
+      `Köprün kapalı görünüyor. Terminalde yeniden başlat: \`node llm-bridge.mjs\`${originHint}; dosya yoksa Ayarlar'daki kurulum komutunu kullan.`,
     downOllama: (originHint: string) =>
       `Ollama'ya ulaşılamıyor. Ollama'nın açık olduğundan emin ol.${originHint}`,
     staleBridge:
@@ -88,7 +88,7 @@ const S = {
   },
   en: {
     downBridge: (originHint: string) =>
-      `Your bridge looks offline. Restart it in a terminal: \`npx okumo-bridge\`${originHint}`,
+      `Your bridge looks offline. Restart it in a terminal: \`node llm-bridge.mjs\`${originHint}; if you don't have the file, use the setup command in Settings.`,
     downOllama: (originHint: string) =>
       `Can't reach Ollama. Make sure Ollama is running.${originHint}`,
     staleBridge:

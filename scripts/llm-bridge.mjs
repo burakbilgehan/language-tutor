@@ -12,9 +12,11 @@
 //   node scripts/llm-bridge.mjs --origin https://kullanici.github.io
 //   node scripts/llm-bridge.mjs --token gizli   # ek: bearer token zorunlu
 //
-// Alternatif kurulum (T-059): `npx okumo-bridge` — bu dosyanın npm paketi
-// hâli (packages/okumo-bridge/), registry'ye erişemeyenler için bu dosya
-// sitede de servis edilir (fallback, out/llm-bridge.mjs).
+// Birincil kurulum: bu dosya sitede servis edilir (out/llm-bridge.mjs),
+// kullanıcı curl/iwr ile indirip node ile çalıştırır. `npx okumo-bridge`
+// bilinçli olarak publish edilmedi (2026-07-31 kararı: ikinci supply-chain
+// yüzeyi + ayrı release adımı, kazanç sıfır); paket iskeleti
+// packages/okumo-bridge/ altında arşiv olarak duruyor (T-059).
 //
 // GET /health → { ok, backend, cliFound } — aynı Host/Origin/PNA
 // kapısından geçer (T-039 aynen); "cliFound" yalnız PATH taraması, CLI

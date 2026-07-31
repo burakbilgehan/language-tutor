@@ -81,7 +81,7 @@ test("classifyGenerationFailure: probe absent + bridge -> local_down naming the 
   });
   assert.equal(result.kind, "local_down");
   assert.equal((result as { target: string }).target, "bridge");
-  assert.match(result.message, /okumo-bridge/);
+  assert.match(result.message, /llm-bridge\.mjs/);
 });
 
 test("classifyGenerationFailure: probe absent + ollama -> local_down naming Ollama, not the bridge command", () => {
