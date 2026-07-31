@@ -496,12 +496,15 @@ export function RoadmapView() {
         streak={data.streak}
       />
 
-      {/* When a lesson is open the map column slides left: right padding
-          reserves the panel's width, left padding the review bubble's rail.
-          The DOM (and thus body scroll position) is untouched. */}
+      {/* When a lesson is open the map column slides left to clear the panel
+          (plus the review rail's width). Transform, NOT padding: a padding
+          transition relayouts the whole map on every animation frame, which
+          is what made the drawer open at a crawl. Same visual shift: the
+          column is centered, so translating by half the reserved width lands
+          where the padding version did. Layout (and body scroll) untouched. */}
       <div
-        className={`transition-[padding] duration-500 ease-in-out ${
-          lessonOpen ? "sm:pl-20 sm:pr-[var(--panel-w)]" : ""
+        className={`transition-transform duration-500 ease-in-out ${
+          lessonOpen ? "sm:translate-x-[calc((5rem-var(--panel-w))/2)]" : ""
         }`}
       >
       <main className="mx-auto max-w-xl px-4">

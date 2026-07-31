@@ -352,7 +352,10 @@ export function LessonPlayer({
   return (
     <div className={embedded ? "" : "min-h-dvh pb-16"}>
       {embedded ? (
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-surface-2 bg-surface/95 px-5 py-3 backdrop-blur">
+        // Opaque on purpose: a backdrop-filter inside the drawer's scroller
+        // kicks it off the compositor fast path, so every scrolled frame
+        // repaints the whole panel (~80ms/frame, 12fps).
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-surface-2 bg-surface px-5 py-3">
           <h2 className="truncate font-display text-lg font-semibold">
             {lesson.titleTr}
           </h2>
