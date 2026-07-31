@@ -8,6 +8,7 @@ import {
   cliAllowed,
   type LlmConfig,
 } from "@/lib/llm/config";
+import { mergeLlmConfig } from "@/lib/llm/config-merge";
 
 export const runtime = "nodejs";
 
@@ -63,19 +64,23 @@ export async function PUT(req: Request) {
   const input = parsed.data;
 
   // Preserve the existing key when the client sends a masked placeholder or
-  // omits it (the UI shows the masked key and doesn't resend the real one).
+  // omits it (the UI shows the masked key and doesn't resend the real one)
+  // — but ONLY when saving onto the same (mode, baseUrl) endpoint. Otherwise
+  // a key typed for one provider would silently ride along onto a different
+  // target (e.g. a DeepSeek key sent as a Bearer token to a local bridge)
+  // when the user switches providers with an empty key field. concurrency
+  // is preserved the same way: neither settings UI sends it today, so an
+  // omitted field must not reset it to undefined. See config-merge.ts.
   const existing = readLlmConfig();
-  const keyLooksMasked = input.apiKey?.startsWith("••••");
-  const apiKey =
-    input.apiKey && !keyLooksMasked ? input.apiKey : existing?.apiKey;
+  const merged = mergeLlmConfig(existing, input);
 
   const config: LlmConfig = {
-    mode: input.mode,
-    baseUrl: input.baseUrl,
-    apiKey,
-    models: input.models,
-    jsonMode: input.jsonMode,
-    concurrency: input.concurrency,
+    mode: merged.mode,
+    baseUrl: merged.baseUrl,
+    apiKey: merged.apiKey,
+    models: merged.models,
+    jsonMode: merged.jsonMode,
+    concurrency: merged.concurrency,
   };
   writeLlmConfig(config);
   resetLlmConfig();

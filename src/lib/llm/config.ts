@@ -95,9 +95,17 @@ export function llmConfigured(): boolean {
  * provider keeps modelForTier in provider.ts for its short aliases — same
  * resolveModelId() underneath, different provider id/no env needed there).
  * Throws when nothing resolves — a literal tier string ("fast") must never
- * reach a real API as a model id (T-057: that was the bug). */
-export function modelForTierConfigured(tier: ModelTier): string {
-  const config = readLlmConfig();
+ * reach a real API as a model id (T-057: that was the bug).
+ *
+ * `override` lets a caller resolve against a candidate config that hasn't
+ * been saved yet (T-066: "test before save" needs to probe the config the
+ * user is about to save, not the one on disk) — defaults to readLlmConfig()
+ * so every existing call site is unchanged. */
+export function modelForTierConfigured(
+  tier: ModelTier,
+  override?: LlmConfig | null
+): string {
+  const config = override !== undefined ? override : readLlmConfig();
   const providerId: ProviderId =
     config?.mode === "anthropic" ? "anthropic" : providerIdForConfig(config);
   return resolveModelId({

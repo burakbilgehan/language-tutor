@@ -327,3 +327,38 @@ export function getBrowserGen(): Gen | null {
     },
   };
 }
+
+/** T-066: smoke-test a CANDIDATE config (not the one in localStorage) —
+ * static mode's mirror of the server probe route's providerForCandidate().
+ * Deliberately calls callOnce(c, ...) directly instead of going through
+ * getBrowserGen()/readBrowserLlmConfig(), which only ever see the SAVED
+ * config, so the wizard can test before it writes anything to localStorage. */
+export async function probeBrowserConfig(
+  c: BrowserLlmConfig
+): Promise<{ ok: boolean; ms?: number; error?: string }> {
+  const started = Date.now();
+  try {
+    const { z } = await import("zod");
+    const result = await runJsonWithRetry(
+      {
+        system: "Kısa cevap ver.",
+        prompt: 'JSON döndür: {"ok": true}',
+        schema: z.object({ ok: z.boolean() }),
+        fixtureKey: "smoke",
+        tier: "fast" as ModelTier,
+        timeoutMs: 60_000,
+      },
+      (prompt) =>
+        callOnce(c, {
+          prompt,
+          tier: "fast",
+          purpose: "smoke",
+          jsonMode: c.jsonMode ?? false,
+          timeoutMs: 60_000,
+        })
+    );
+    return { ok: result.ok === true, ms: Date.now() - started };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

@@ -1168,6 +1168,7 @@ export interface LlmConfigDto {
   hasKey: boolean;
   models?: { fast?: string; balanced?: string; deep?: string };
   jsonMode?: boolean;
+  concurrency?: number;
   cliAllowed: boolean;
 }
 
@@ -1191,13 +1192,15 @@ export async function llmConfigGet(): Promise<LlmConfigDto> {
   };
 }
 
-export async function llmConfigPut(input: {
+export interface LlmConfigPutInput {
   mode: string;
   baseUrl?: string;
   apiKey?: string;
   models?: { fast?: string; balanced?: string; deep?: string };
   jsonMode?: boolean;
-}): Promise<void> {
+}
+
+export async function llmConfigPut(input: LlmConfigPutInput): Promise<void> {
   if (!IS_STATIC) {
     await fetchJson("/api/llm-config", {
       method: "PUT",
@@ -1209,25 +1212,55 @@ export async function llmConfigPut(input: {
   const { readBrowserLlmConfig, writeBrowserLlmConfig } = await import(
     "@/lib/llm/browser-provider"
   );
+  const { mergeLlmConfig } = await import("@/lib/llm/config-merge");
   const existing = readBrowserLlmConfig();
-  const keyLooksMasked = input.apiKey?.startsWith("••••");
+  // Same rule as the server route (config-merge.ts): an empty/masked apiKey
+  // input preserves the stored key only when saving onto the SAME (mode,
+  // baseUrl) endpoint — otherwise a key typed for one provider would ride
+  // along onto a different one when the user switches providers.
+  const merged = mergeLlmConfig(
+    existing ? { mode: existing.mode, baseUrl: existing.baseUrl, apiKey: existing.apiKey } : null,
+    { mode: input.mode, baseUrl: input.baseUrl, apiKey: input.apiKey }
+  );
   writeBrowserLlmConfig({
     mode: (input.mode === "cli" ? "none" : input.mode) as
       | "openai"
       | "anthropic"
       | "none",
-    baseUrl: input.baseUrl,
-    apiKey:
-      input.apiKey && !keyLooksMasked ? input.apiKey : existing?.apiKey,
+    baseUrl: merged.baseUrl,
+    apiKey: merged.apiKey,
     models: input.models,
     jsonMode: input.jsonMode,
   });
 }
 
-export async function llmTest(): Promise<{ ok: boolean; ms?: number; error?: string }> {
+/** T-066: `candidate` tests an UNSAVED config (the "test before save" path —
+ * see LlmSetupWizard's testAndSave) without persisting anything. Omitted =
+ * test the SAVED config (LlmAdvancedPanel's separate "Test connection"
+ * button keeps this behaviour by design — it has its own Save button). */
+export async function llmTest(
+  candidate?: LlmConfigPutInput
+): Promise<{ ok: boolean; ms?: number; error?: string }> {
   if (!IS_STATIC) {
-    const res = await fetch("/api/health/llm", { method: "POST" });
+    const res = await fetch("/api/health/llm", {
+      method: "POST",
+      headers: candidate ? { "Content-Type": "application/json" } : undefined,
+      body: candidate ? JSON.stringify(candidate) : undefined,
+    });
     return res.json();
+  }
+  if (candidate) {
+    const { probeBrowserConfig } = await import("@/lib/llm/browser-provider");
+    return probeBrowserConfig({
+      mode: (candidate.mode === "cli" ? "none" : candidate.mode) as
+        | "openai"
+        | "anthropic"
+        | "none",
+      baseUrl: candidate.baseUrl,
+      apiKey: candidate.apiKey,
+      models: candidate.models,
+      jsonMode: candidate.jsonMode,
+    });
   }
   const started = Date.now();
   try {
