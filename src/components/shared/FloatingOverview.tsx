@@ -81,7 +81,7 @@ export function FloatingOverview() {
           setOpen((o) => !o);
           setData(null); // her açılışta taze veri
         }}
-        className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-xl text-white shadow-cozy transition-transform hover:scale-105"
+        className="fixed bottom-5 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-xl text-surface shadow-cozy transition-transform hover:scale-105"
       >
         📈
       </button>
