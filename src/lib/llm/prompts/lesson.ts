@@ -73,11 +73,12 @@ Bu ders için içerik üret:
 - Örnek bağlamlarını öğrencinin ilgi alanlarından seç.
 
 Alıştırma KALİTE kuralları (çok önemli, ihlal etme):
+- SORU METNİ ANA DİLDE: prompt_tr HER ZAMAN ${native} dilinde yazılır. Hedef dil sadece SINANAN materyalde geçer (options, target_text, boşluklu cümlenin kendisi). Yönerge ve meta-dil hedef dilde YASAK — "「家族」の読み方はどれですか" gibi bir soru kökü kurma; "家族 kelimesinin okunuşu hangisi?" de.
 - SADECE ÖĞRETİLEN ÖGELERİ SINA: bir alıştırmanın doğru cevabı, ancak BU derste (vocab/examples/explanation içinde) veya önceki derslerde öğretilmiş bir kelime/kalıp olabilir. Öğretilmemiş bir kelimeyi tek doğru cevap yapan soru KURMA — öğrenci bilemeyeceği bir kelimeden puan kaybetmemeli.
 - Soru cevabı ELE VERMESİN: cevap veya bariz kalıbı soru metninde geçmesin; konuyu bilmeyen biri sırf soru tarzından doğru cevabı tahmin edememeli.
 - KANONİK SIRA YASAK: ögeleri asla sözlük/tablo sırasıyla sorma veya sıralatma (a-i-u-e-o, ka-ki-ku-ke-ko gibi diziler ezbere biliniyor, hiçbir şey ölçmez). Rastgele alt kümeler ve karışık sırayla çalıştır.
 - YÖN ÇEŞİTLİLİĞİ: tanıma ile üretimi karıştır — hedef dil→${native}, ${native}→hedef dil, yazı→okunuş, okunuş→yazı yönlerinin en az üçü derste bulunsun.
-- MCQ çeldiricileri gerçekten yanıltıcı olsun: şekilce/sesçe benzeyen ya da sık karıştırılan alternatifler; bariz saçma seçenek koyma.
+- MCQ çeldiricileri gerçekten yanıltıcı olsun: sık karıştırılan GERÇEK alternatifler (başka bir öğretilmiş kelime, akla yatkın farklı bir okunuş/anlam); bariz saçma seçenek koyma. YASAK KALIP: dört seçeneğin aynı kelimenin tek diakritik/işaret farkıyla yazılmış varyantları olması (かぞく/かそく/がぞく/かぞぐ gibi dakuten avı, ya da pinyin'de sırf ton farkı) — bu dil değil "noktayı bul" testi ölçer. Böyle bir karışıklık (ör. rendaku) gerçekten öğretildiyse EN FAZLA BİR çeldirici o kalıptan olabilir; kalanlar farklı kelime/okunuşlar olmalı.
 - YAZI SİSTEMİ DE SORULSUN: derste/önceki derslerde öğretilen kanji/hanzi sınanacak ögedir — bazı alıştırmalar okunuşu veya anlamı hedeflesin (ör. "'これは 本 です' cümlesindeki 本 kelimesinin okunuşunu romaji ile yaz" → hon). ELE VERME: bir kelimenin okunuşu/anlamı test ediliyorsa o kelimeye alıştırma metninde okunuş parantezi EKLEME; test edilmeyen diğer kelimelere ekle. Cümledeki en öğretici öge dururken önemsiz ögeyi boşluk yapma.
 - İyi soru kalıpları (örnek): "Bu 4 kanadan hangisi 'nu' okunur?" (benzer görünümlüler arasından: ぬ/め/ね/わ), "Hangisi な satırından DEĞİLDİR?", karışık bir listeden belirli sesi/harfi ayıklatma. Kötü kalıp (yasak): "X satırındaki harfleri sırasıyla yaz" — ezberlenmiş dizi, hiçbir şey ölçmez.
 - Açıklama/örnek bölümünde geçen bir cümleyi alıştırmada AYNEN tekrar kullanma; her alıştırma farklı bir öge veya beceriyi hedeflesin.
