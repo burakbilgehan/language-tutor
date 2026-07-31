@@ -98,16 +98,23 @@ test("mergeLlmConfig: a real (non-masked) apiKey input always wins, even on the 
   assert.equal(merged.apiKey, "sk-new");
 });
 
-test("mergeLlmConfig: cli/none have no endpoint to leak a key to, so a stored key survives the round trip", () => {
+test("mergeLlmConfig: switching to none drops the stored key (turning back on requires re-entering it)", () => {
   const existing: MergeableLlmConfig = {
     mode: "anthropic",
     baseUrl: "https://api.anthropic.com/v1",
     apiKey: "sk-ant-secret",
   };
-  // User flips to "none" (turns LLM off) then back to the same anthropic
-  // config without retyping the key.
+  // User flips to "none" (turns LLM off): the key is dropped, not parked —
+  // a config with no live endpoint shouldn't keep a secret around.
   const toNone = mergeLlmConfig(existing, { mode: "none", apiKey: undefined });
-  assert.equal(toNone.apiKey, undefined, "none mode itself shouldn't carry a key forward as apiKey usage");
+  assert.equal(toNone.apiKey, undefined);
+  // Flipping back on therefore starts keyless.
+  const backOn = mergeLlmConfig(toNone, {
+    mode: "anthropic",
+    baseUrl: "https://api.anthropic.com/v1",
+    apiKey: undefined,
+  });
+  assert.equal(backOn.apiKey, undefined);
 });
 
 test("mergeLlmConfig: switching mode (anthropic -> openai) with empty input drops the key", () => {

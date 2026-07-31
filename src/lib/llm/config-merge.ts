@@ -12,11 +12,11 @@
 //    provider's key onto the new baseUrl, which then gets sent as a Bearer
 //    token to whatever is listening there (T-066 finding #1). Identity is
 //    (mode, baseUrl normalized with a trailing slash stripped) — the same
-//    normalization providerForBaseUrl() already documents. cli/none have no
-//    endpoint to leak a key to, so a stored key is preserved across them
-//    (lets "turn off, turn back on" round-trip without re-entering a key);
-//    the key is dropped the moment the baseUrl (or mode, for anthropic vs
-//    openai) actually changes.
+//    normalization providerForBaseUrl() already documents. cli and none are
+//    each their own identity, so ANY mode change — including switching to
+//    "none" to turn the LLM off — drops the stored key; turning it back on
+//    means re-entering the key. That's deliberate: a config with no live
+//    endpoint shouldn't keep a secret around.
 // 2. concurrency is never sent by either settings UI today (T-066 finding
 //    #2) — an omitted field means "keep the stored value", not "reset to
 //    undefined".
