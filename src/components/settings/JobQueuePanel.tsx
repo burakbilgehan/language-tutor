@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useStrings } from "@/lib/i18n/use-strings";
 import {
   onJobsChange,
@@ -9,6 +9,13 @@ import {
   resumePendingJobsApi,
   IS_STATIC,
 } from "@/lib/client-api";
+import {
+  subscribeLessonGen,
+  lessonGenVersion,
+  runningLessonGens,
+  lessonGenState,
+  cancelLessonGen,
+} from "@/lib/lesson-gen-store";
 import type { JobSummary, JobsSnapshot } from "@/core/jobs";
 
 const S = {
@@ -118,6 +125,33 @@ export function JobQueuePanel() {
 
   useEffect(() => onJobsChange(setSnap), []);
 
+  // T-070-E: static modda ders üretimleri job tablosuna değil bellek-içi
+  // store'a yazılır (lesson-gen-store); onJobsChange onları hiç görmez.
+  // Panel store'a da abone olur ve çalışanları sentetik satır olarak ekler,
+  // yoksa "bir ders üretiliyor ama kuyruk boş" çelişkisi doğar.
+  useSyncExternalStore(
+    subscribeLessonGen,
+    () => lessonGenVersion(),
+    () => 0
+  );
+  const lessonRows: JobSummary[] = IS_STATIC
+    ? runningLessonGens().map(({ nodeId, startedAt }) => {
+        const st = lessonGenState(nodeId);
+        const urgent = st?.kind === "running" && st.urgent;
+        return {
+          id: `lesson-gen:${nodeId}`,
+          jobType: "lesson",
+          refId: nodeId,
+          kind: urgent ? "user" : "system",
+          status: "running",
+          error: null,
+          createdAt: startedAt,
+          startedAt,
+          finishedAt: null,
+        } as JobSummary;
+      })
+    : [];
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -162,7 +196,11 @@ export function JobQueuePanel() {
         <button
           type="button"
           disabled={busy}
-          onClick={() => void run(() => cancelJobApi(j.id))}
+          onClick={() =>
+            j.id.startsWith("lesson-gen:")
+              ? cancelLessonGen(j.refId)
+              : void run(() => cancelJobApi(j.id))
+          }
           className="shrink-0 rounded-full px-2 py-0.5 text-xs text-danger transition-colors hover:bg-surface-2 disabled:opacity-60"
         >
           {t.cancel}
@@ -192,7 +230,7 @@ export function JobQueuePanel() {
         </button>
       )}
 
-      {!snap || snap.active.length === 0 ? (
+      {lessonRows.length === 0 && (!snap || snap.active.length === 0) ? (
         <p className="text-sm text-ink-soft">{t.idle}</p>
       ) : (
         <>
@@ -201,7 +239,7 @@ export function JobQueuePanel() {
               {t.active}
             </h3>
             <div className="flex gap-2">
-              {snap.counts.user > 0 && (
+              {snap && snap.counts.user > 0 && (
                 <button
                   type="button"
                   disabled={busy}
@@ -211,7 +249,7 @@ export function JobQueuePanel() {
                   {t.stopUser}
                 </button>
               )}
-              {snap.counts.total > snap.counts.user && (
+              {snap && snap.counts.total > snap.counts.user && (
                 <button
                   type="button"
                   disabled={busy}
@@ -223,7 +261,9 @@ export function JobQueuePanel() {
               )}
             </div>
           </div>
-          <div>{snap.active.map((j) => row(j, false))}</div>
+          <div>
+            {[...lessonRows, ...(snap?.active ?? [])].map((j) => row(j, false))}
+          </div>
         </>
       )}
 
