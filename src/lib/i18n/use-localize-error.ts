@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { localizeError } from "./errors";
 import type { UiLanguage } from "./index";
@@ -17,9 +18,14 @@ export function resolveUiLang(profileUi?: string | null): UiLanguage {
 
 /** Returns a function that turns any thrown value into a localized display
  * string, using the active profile's uiLanguage (falling back gracefully). Use
- * in catch blocks: `catch (e) { setError(localize(e)) }`. */
+ * in catch blocks: `catch (e) { setError(localize(e)) }`.
+ *
+ * Identity is stable per uiLanguage: callers put this in useCallback/useEffect
+ * dependency arrays (LessonPlayer's open chain), so a per-render identity
+ * would re-fire those effects on every render — a setState-driven infinite
+ * fetch loop that pegs the main thread. */
 export function useLocalizeError(): (err: unknown) => string {
   const meta = useProfileMeta();
   const uiLang = resolveUiLang(meta?.uiLanguage);
-  return (err: unknown) => localizeError(err, uiLang);
+  return useCallback((err: unknown) => localizeError(err, uiLang), [uiLang]);
 }
