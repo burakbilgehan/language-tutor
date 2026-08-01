@@ -143,6 +143,7 @@ async function callOpenAiCompat(
     jsonMode: boolean;
     timeoutMs: number;
     signal?: AbortSignal;
+    label?: string;
   }
 ): Promise<string> {
   const baseUrl = c.baseUrl?.replace(/\/$/, "");
@@ -175,6 +176,12 @@ async function callOpenAiCompat(
     opts.timeoutMs > BRIDGE_TIMEOUT_MIN_REQUEST_MS
   ) {
     body.bridge_timeout_ms = opts.timeoutMs - BRIDGE_TIMEOUT_MARGIN_MS;
+  }
+  // Köprü şeffaflığı: log satırları "model=sonnet 187s" yerine NE üretildiğini
+  // söylesin. Yalnız köprüye gider; gerçek OpenAI uçları bilinmeyen alanda 400
+  // verebilir diye timeout alanıyla aynı gate'in arkasında.
+  if (providerForBaseUrl(baseUrl) === "bridge") {
+    body.bridge_label = opts.label ?? opts.purpose;
   }
 
   const headers: Record<string, string> = { "content-type": "application/json" };
@@ -355,6 +362,7 @@ function callOnce(
     jsonMode: boolean;
     timeoutMs: number;
     signal?: AbortSignal;
+    label?: string;
   }
 ): Promise<string> {
   return c.mode === "anthropic" ? callAnthropic(c, opts) : callOpenAiCompat(c, opts);
@@ -381,6 +389,7 @@ export function getBrowserGen(): Gen | null {
               jsonMode: c.jsonMode ?? false,
               timeoutMs,
               signal: opts.signal,
+              label: opts.label,
             })
           ),
         opts.urgent,
@@ -400,6 +409,7 @@ export function getBrowserGen(): Gen | null {
             jsonMode: false,
             timeoutMs,
             signal: opts.signal,
+            label: opts.label,
           }),
         opts.urgent,
         { signal: opts.signal, key: opts.queueKey }

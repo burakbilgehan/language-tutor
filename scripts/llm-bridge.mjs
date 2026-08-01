@@ -283,9 +283,17 @@ function timeoutForRequest(parsed) {
 
 // Aynı anda tek CLI süreci (abonelik limitleri + makine yükü).
 let chain = Promise.resolve();
+let pendingCount = 0;
+/** Şu an çalışan ya da sırada bekleyen iş var mı? Yeni isteğin log satırına
+ * "sırada" notu düşmek için; davranışı etkilemez. */
+function chainIsBusy() {
+  return pendingCount > 0;
+}
 function serialize(fn) {
+  pendingCount++;
   const next = chain.then(fn, fn);
   chain = next.catch(() => {});
+  next.finally(() => pendingCount--).catch(() => {});
   return next;
 }
 
@@ -415,6 +423,12 @@ const server = http.createServer(async (req, res) => {
     req.on("data", (d) => (body += d));
     req.on("end", async () => {
       const started = Date.now();
+      // Şeffaflık: köprü yalnız iş bitince log basıyordu; 3 dakikalık bir
+      // üretim boyunca ekran sessiz kalınca "istek hiç gelmedi" sanılıyor.
+      // Artık istek anında, sürerken (30 sn'de bir) ve her sonuçta satır var.
+      // Etiket: uygulama gövdede `bridge_label` geçer ("ders: Sayaçlar ...");
+      // eski uygulama sürümü geçmezse model adına düşülür.
+      let heartbeat = null;
       try {
         const parsed = JSON.parse(body);
         const { system, prompt } = messagesToPrompt(parsed.messages ?? []);
@@ -423,18 +437,30 @@ const server = http.createServer(async (req, res) => {
         const model = ["fast", "balanced", "deep"].includes(parsed.model)
           ? undefined
           : parsed.model;
+        const label =
+          typeof parsed.bridge_label === "string" && parsed.bridge_label.trim()
+            ? parsed.bridge_label.trim().replace(/\s+/g, " ").slice(0, 160)
+            : `model=${parsed.model ?? "-"}`;
         const spec = adapter.build(prompt, system, model);
         const timeoutMs = timeoutForRequest(parsed);
+        console.log(
+          `[bridge] istek: ${label} (timeout ${Math.round(timeoutMs / 1000)}s${chainIsBusy() ? ", sırada" : ""})`
+        );
+        heartbeat = setInterval(() => {
+          const s = Math.round((Date.now() - started) / 1000);
+          console.log(`[bridge] sürüyor: ${label} (${s}s)`);
+        }, 30_000);
         const stdout = await serialize(() => {
           // Sırası gelmeden vazgeçildiyse CLI hiç başlatılmaz: zombi üretim
           // tek şeritli kuyruğu dakikalarca işgal etmesin.
           if (cancel.requested) throw new BridgeCancelledError(spec.cmd);
           return runCli(spec, timeoutMs, cancel);
         });
+        clearInterval(heartbeat);
         const { text, usage } = adapter.parse(stdout);
         const secs = ((Date.now() - started) / 1000).toFixed(1);
         console.log(
-          `[bridge] backend=${BACKEND} model=${parsed.model ?? "-"} ${secs}s ${text.length}ch`
+          `[bridge] bitti: ${label} — ${secs}s ${text.length}ch (backend=${BACKEND} model=${parsed.model ?? "-"})`
         );
         res.writeHead(200, { ...cors, "content-type": "application/json" });
         res.end(
@@ -453,6 +479,7 @@ const server = http.createServer(async (req, res) => {
           })
         );
       } catch (err) {
+        if (heartbeat) clearInterval(heartbeat);
         const message = err instanceof Error ? err.message : String(err);
         // İptal hata değil: istemci gitti, yanıt yazacak soket de yok.
         // Logla ve çık; 500 sayılmasın, kuyruk bir sonrakine geçsin.

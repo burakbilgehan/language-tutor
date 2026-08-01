@@ -7,6 +7,7 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
+| [T-071](T-071-lesson-skeleton-lazy-load.md) | Ders üretimini böl: hızlı iskelet + arkadan tamamlanan egzersizler | todo | p1 | L | medium |
 | [T-069](T-069-kill-server-static-duality.md) | Server/static ikiliğini kaldır — tek runtime olarak static'e yakınsama | todo | p1 | XL | medium |
 | [T-070](T-070-lesson-gen-failure-ux.md) | Ders üretim hatası kara deliği: köprü timeout + yutulan hata + iptal/retry | done | p1 | M | high |
 | [T-068](T-068-lesson-window-prefetch.md) | Ders prefetch penceresi — "aktif n ise n+2'ye kadar hazır" invariant'ı (iki mod) | done | p1 | M | high |

@@ -24,6 +24,11 @@ export interface GenerateJsonOptions<T> {
    * be promoted to urgent (T-070-D: the user opens a lesson that a prefetch
    * already queued). Ignored by providers without a queue. */
   queueKey?: string;
+  /** Short human-readable description ("ders: Sayaçlar"), max ~1-2 lines.
+   * Sent to the local bridge as `bridge_label` so its log says WHAT is
+   * generating, not just the model name. Ignored by other providers; old
+   * bridges silently drop unknown body fields. */
+  label?: string;
 }
 
 export interface GenerateTextOptions {
@@ -42,6 +47,8 @@ export interface GenerateTextOptions {
    * be promoted to urgent (T-070-D: the user opens a lesson that a prefetch
    * already queued). Ignored by providers without a queue. */
   queueKey?: string;
+  /** See GenerateJsonOptions.label. */
+  label?: string;
 }
 
 export interface LlmProvider {

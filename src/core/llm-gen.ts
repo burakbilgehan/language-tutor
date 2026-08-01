@@ -157,6 +157,8 @@ export async function generateLessonContent(
       // (T-070-D): prefetch olarak sıraya girmiş bir ders kullanıcı onu
       // açtığında öne alınabilsin.
       queueKey: `lesson:${nodeId}`,
+      // Köprü logunda "model=sonnet" yerine hangi ders üretiliyorsa o görünsün.
+      label: `ders: ${node.titleTr} (${unit.titleTr})`,
     });
 
     db.transaction((tx) => {
