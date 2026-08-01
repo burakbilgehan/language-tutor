@@ -144,6 +144,11 @@ async function callOpenAiCompat(
     timeoutMs: number;
     signal?: AbortSignal;
     label?: string;
+    /** JSON üretimlerinde şemanın kendisi — yalnız köprüye gövde alanı olarak
+     * gider (bridge_json_schema), köprü de claude backend'inde CLI'a
+     * `--json-schema` ile geçirir: çıktı şemaya ZORLANIR, prompt ipucuyla
+     * "rica edilmez". Eski köprü alanı sessizce yok sayar (davranış: eski). */
+    jsonSchema?: Record<string, unknown>;
   }
 ): Promise<string> {
   const baseUrl = c.baseUrl?.replace(/\/$/, "");
@@ -180,6 +185,9 @@ async function callOpenAiCompat(
   // Köprü şeffaflığı: log satırları "model=sonnet 187s" yerine NE üretildiğini
   // söylesin. Yalnız köprüye gider; gerçek OpenAI uçları bilinmeyen alanda 400
   // verebilir diye timeout alanıyla aynı gate'in arkasında.
+  if (providerForBaseUrl(baseUrl) === "bridge" && opts.jsonSchema) {
+    body.bridge_json_schema = opts.jsonSchema;
+  }
   if (providerForBaseUrl(baseUrl) === "bridge") {
     body.bridge_label = opts.label ?? opts.purpose;
     // Köprü log dili uygulamanın UI diliyle aynı olsun (tr/en). Ayna
@@ -370,6 +378,8 @@ function callOnce(
     timeoutMs: number;
     signal?: AbortSignal;
     label?: string;
+    /** bkz. callOpenAiCompat — anthropic modunda yok sayılır. */
+    jsonSchema?: Record<string, unknown>;
   }
 ): Promise<string> {
   return c.mode === "anthropic" ? callAnthropic(c, opts) : callOpenAiCompat(c, opts);
@@ -382,14 +392,19 @@ export function getBrowserGen(): Gen | null {
     async generateJson<T>(opts: GenerateJsonOptions<T>): Promise<T> {
       const c = readBrowserLlmConfig()!;
       const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      const jsonSchema = schemaToJsonSchema(opts.schema);
       const schemaHint = `\n\nÇıktın SADECE şu JSON şemasına uyan geçerli bir JSON olmalı:\n${JSON.stringify(
-        schemaToJsonSchema(opts.schema)
+        jsonSchema
       )}`;
       return enqueue(
         () =>
+          // Şema ipucu RETRY'da da gider: retry prompt'u yalnız zod hata
+          // listesini taşır, şemanın kendisini değil — ders prompt'u örn.
+          // title_tr alanından hiç bahsetmez, yani ipucusuz retry şemayı
+          // bilemez ve GARANTİ başarısız olur (2026-08-01 canlı ders kilidi).
           runJsonWithRetry(opts, (prompt, isRetry) =>
             callOnce(c, {
-              prompt: prompt + (isRetry ? "" : schemaHint),
+              prompt: prompt + schemaHint,
               system: opts.system,
               tier: opts.tier,
               purpose: isRetry ? `${opts.fixtureKey}-retry` : opts.fixtureKey,
@@ -397,6 +412,7 @@ export function getBrowserGen(): Gen | null {
               timeoutMs,
               signal: opts.signal,
               label: opts.label,
+              jsonSchema,
             })
           ),
         opts.urgent,

@@ -35,6 +35,7 @@ import { AppError, isErrorCode } from "@/lib/errors";
 import {
   LlmAuthError,
   LlmCancelledError,
+  LlmParseError,
   LlmTimeoutError,
 } from "@/lib/llm/provider-types";
 import { CATALOG } from "@/lib/llm/catalog";
@@ -83,7 +84,13 @@ export type GenerationDiagnosis =
    * needed: a timeout already proves the endpoint was answering. Its advice
    * is the opposite of "restart your bridge", so it must not collapse into
    * the generic message. */
-  | { kind: "timeout"; message: string };
+  | { kind: "timeout"; message: string }
+  /** The model answered but the output failed schema validation twice
+   * (LlmParseError). The endpoint is provably up (it produced text), so no
+   * probe; and "restart your bridge" advice would be misleading. Saying
+   * this plainly matters: 2026-08-01, a guaranteed-failing schema retry hid
+   * behind the generic message for a whole afternoon. */
+  | { kind: "bad_output"; message: string };
 
 const S = {
   tr: {
@@ -99,6 +106,8 @@ const S = {
       "Üretim çok uzun sürdü ve yarıda kesildi. Tekrar deneyebilirsin; sık oluyorsa köprüyü daha uzun süreyle başlat (`node llm-bridge.mjs --timeout 600`) ya da daha hızlı bir model seç.",
     timeoutGeneric:
       "Üretim çok uzun sürdü ve yarıda kesildi. Tekrar deneyebilirsin; sık oluyorsa daha hızlı bir model seç.",
+    badOutput:
+      "Model cevap verdi ama çıktı beklenen biçime uymadı (iki denemede de). Tekrar dene; sık oluyorsa daha güçlü bir model seç, köprü kullanıyorsan köprü dosyanı siteden yeniden indirip yeniden başlat.",
   },
   en: {
     downBridge: (originHint: string) =>
@@ -113,6 +122,8 @@ const S = {
       "Generation took too long and was cut off. You can try again; if it keeps happening, start the bridge with a longer limit (`node llm-bridge.mjs --timeout 600`) or pick a faster model.",
     timeoutGeneric:
       "Generation took too long and was cut off. You can try again; if it keeps happening, pick a faster model.",
+    badOutput:
+      "The model answered but the output didn't match the expected format (on both attempts). Try again; if it keeps happening, pick a stronger model — and if you use the bridge, re-download the bridge file from the site and restart it.",
   },
 } as const;
 
@@ -165,6 +176,13 @@ export function classifyGenerationFailure(
       kind: "timeout",
       message: probeTarget === "bridge" ? t.timeoutBridge : t.timeoutGeneric,
     };
+  }
+  // Şema hatası da kendi kendini teşhis eder: model METİN ürettiğine göre uç
+  // nokta ayakta, probe gereksiz; "köprünü yeniden başlat" tavsiyesi yanıltıcı
+  // olur. LlmParseError, LlmError'ın alt sınıfı olduğu için timeout'tan sonra,
+  // generic'e düşmeden ayrılır.
+  if (err instanceof LlmParseError) {
+    return { kind: "bad_output", message: t.badOutput };
   }
   if (probeTarget === null || probeState === "skipped") {
     return { kind: "pass_through", message: generic };
@@ -228,6 +246,7 @@ export async function diagnoseGenerationFailure(
     err instanceof LlmAuthError ||
     err instanceof LlmCancelledError ||
     err instanceof LlmTimeoutError ||
+    err instanceof LlmParseError ||
     probeTarget === null ||
     !baseUrl
   ) {

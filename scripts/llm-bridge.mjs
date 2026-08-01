@@ -89,7 +89,7 @@ const WORKDIR = mkdtempSync(path.join(tmpdir(), "llm-bridge-"));
 
 const ADAPTERS = {
   claude: {
-    build(prompt, system, model) {
+    build(prompt, system, model, jsonSchema) {
       const args = [
         "-p",
         "--output-format", "json",
@@ -100,6 +100,11 @@ const ADAPTERS = {
         "--setting-sources", "",
       ];
       if (system) args.push("--system-prompt", system);
+      // Uygulama JSON üretimlerinde şemayı gövdede geçer (bridge_json_schema):
+      // CLI çıktıyı şemaya ZORLAR — prompt ipucuyla "rica etmek" özellikle
+      // düzeltme denemelerinde şemaya uymayan çıktı üretiyordu (2026-08-01
+      // ders üretim kilidi). Alanı göndermeyen eski uygulama: davranış eski.
+      if (jsonSchema) args.push("--json-schema", JSON.stringify(jsonSchema));
       // Abonelik girişini gölgeleyip API'ye faturalandırmasın:
       const env = { ...process.env };
       delete env.ANTHROPIC_API_KEY;
@@ -475,7 +480,13 @@ const server = http.createServer(async (req, res) => {
             ? parsed.bridge_label.trim().replace(/\s+/g, " ").slice(0, 160)
             : `model=${parsed.model ?? "-"}`;
         L = LOG_STRINGS[parsed.bridge_lang === "en" ? "en" : "tr"];
-        const spec = adapter.build(prompt, system, model);
+        // bridge_json_schema: yalnız claude adaptörü kullanır (CLI'ın
+        // --json-schema bayrağı); diğer backend'ler fazladan argümanı görmez.
+        const jsonSchema =
+          parsed.bridge_json_schema && typeof parsed.bridge_json_schema === "object"
+            ? parsed.bridge_json_schema
+            : undefined;
+        const spec = adapter.build(prompt, system, model, jsonSchema);
         const timeoutMs = timeoutForRequest(parsed);
         console.log(
           `[bridge ${ts()}] ${L.request}: ${label} (${L.timeoutNote} ${Math.round(timeoutMs / 1000)}s${chainIsBusy() ? `, ${L.queued}` : ""})`

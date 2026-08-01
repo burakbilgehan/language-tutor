@@ -20,7 +20,7 @@ Next.js 15 (App Router, `src/`) + TS + Tailwind 4 + SQLite (Drizzle + better-sql
 - `npm run llm:smoke` — provider canary (one haiku call); fixture mode validates fixtures
 - `npm run llm:bridge` — local CLI→OpenAI-compat bridge (`scripts/llm-bridge.mjs`, backends: claude/codex/copilot/gemini/opencode; app connects via the "Yerel köprü" preset, `--origin` for static deploys)
 - `npm run db:push` / `db:studio`, `npm test` (SM-2 unit tests)
-- `npm run build:static` — serverless static site to `out/` (production serves this via the Worker, `wrangler deploy --env production` in `worker/`)
+- `npm run build:static` — serverless static site to `out/` (production serves this via the Worker). **Deploy = push to main**: `.github/workflows/deploy.yml` builds and deploys okumo.dev automatically (tickets/ and *.md-only pushes skipped). Do NOT run `wrangler deploy` manually; just commit + push.
 - `npx tsx --tsconfig tsconfig.json scripts/test-sqljs-parity.ts` — core-on-sql.js parity harness against the real `data/app.db` (run after touching `src/core/*` or the browser DB layer)
 
 ## Static mode (local-first) — Faz 2b

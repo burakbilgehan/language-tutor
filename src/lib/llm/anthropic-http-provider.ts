@@ -139,9 +139,12 @@ export class AnthropicHttpProvider implements LlmProvider {
 
     return enqueue(
       () =>
+        // Şema ipucu retry'da da gider: retry prompt'u yalnız zod hatalarını
+        // taşır, şemayı değil — ipucusuz retry şemayı bilemez (browser-provider
+        // ile aynı kural).
         runJsonWithRetry(opts, (prompt, isRetry) =>
           messages({
-            prompt: prompt + (isRetry ? "" : schemaHint),
+            prompt: prompt + schemaHint,
             system: opts.system,
             tier: opts.tier,
             purpose: isRetry ? `${opts.fixtureKey}-retry` : opts.fixtureKey,
