@@ -20,15 +20,23 @@ export function useProfileMeta(): ProfileMeta | null {
   useEffect(() => {
     if (cached) return;
     inflight ??= profileData()
-      .then((d) =>
-        d?.profile
-          ? (cached = {
-              targetLanguage: d.profile.targetLanguage as ProfileMeta["targetLanguage"],
-              nativeLanguage: d.profile.nativeLanguage ?? "tr",
-              uiLanguage: d.profile.uiLanguage ?? "tr",
-            })
-          : null
-      )
+      .then((d) => {
+        if (!d?.profile) return null;
+        cached = {
+          targetLanguage: d.profile.targetLanguage as ProfileMeta["targetLanguage"],
+          nativeLanguage: d.profile.nativeLanguage ?? "tr",
+          uiLanguage: d.profile.uiLanguage ?? "tr",
+        };
+        // Köprü log dili UI dilini izlesin diye senkron okunabilir bir ayna:
+        // browser-provider istek gövdesine `bridge_lang` koyarken DB'ye inip
+        // profil çekemez (her LLM çağrısında gereksiz async yük), buradan okur.
+        try {
+          localStorage.setItem("okumo-ui-lang", cached.uiLanguage);
+        } catch {
+          /* private mode vb. */
+        }
+        return cached;
+      })
       .catch(() => null);
     let stopped = false;
     inflight.then((m) => {

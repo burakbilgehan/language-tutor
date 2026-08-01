@@ -281,6 +281,36 @@ function timeoutForRequest(parsed) {
   return Math.min(raw, TIMEOUT_MS);
 }
 
+/** Log zaman damgası: "2026-08-01 14:42:12" (yerel saat). */
+function ts() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** İstek log satırları uygulamanın UI dilinde (gövdedeki `bridge_lang`,
+ * tr varsayılan). Eski uygulama sürümü alanı göndermez → tr. */
+const LOG_STRINGS = {
+  tr: {
+    request: "istek",
+    queued: "sırada",
+    running: "sürüyor",
+    done: "bitti",
+    cancelled: "iptal",
+    error: "HATA",
+    timeoutNote: "timeout",
+  },
+  en: {
+    request: "request",
+    queued: "queued",
+    running: "running",
+    done: "done",
+    cancelled: "cancelled",
+    error: "ERROR",
+    timeoutNote: "timeout",
+  },
+};
+
 // Aynı anda tek CLI süreci (abonelik limitleri + makine yükü).
 let chain = Promise.resolve();
 let pendingCount = 0;
@@ -429,6 +459,9 @@ const server = http.createServer(async (req, res) => {
       // Etiket: uygulama gövdede `bridge_label` geçer ("ders: Sayaçlar ...");
       // eski uygulama sürümü geçmezse model adına düşülür.
       let heartbeat = null;
+      // catch'te de lazım (JSON.parse patlarsa varsayılanlar geçerli).
+      let label = "?";
+      let L = LOG_STRINGS.tr;
       try {
         const parsed = JSON.parse(body);
         const { system, prompt } = messagesToPrompt(parsed.messages ?? []);
@@ -437,18 +470,19 @@ const server = http.createServer(async (req, res) => {
         const model = ["fast", "balanced", "deep"].includes(parsed.model)
           ? undefined
           : parsed.model;
-        const label =
+        label =
           typeof parsed.bridge_label === "string" && parsed.bridge_label.trim()
             ? parsed.bridge_label.trim().replace(/\s+/g, " ").slice(0, 160)
             : `model=${parsed.model ?? "-"}`;
+        L = LOG_STRINGS[parsed.bridge_lang === "en" ? "en" : "tr"];
         const spec = adapter.build(prompt, system, model);
         const timeoutMs = timeoutForRequest(parsed);
         console.log(
-          `[bridge] istek: ${label} (timeout ${Math.round(timeoutMs / 1000)}s${chainIsBusy() ? ", sırada" : ""})`
+          `[bridge ${ts()}] ${L.request}: ${label} (${L.timeoutNote} ${Math.round(timeoutMs / 1000)}s${chainIsBusy() ? `, ${L.queued}` : ""})`
         );
         heartbeat = setInterval(() => {
           const s = Math.round((Date.now() - started) / 1000);
-          console.log(`[bridge] sürüyor: ${label} (${s}s)`);
+          console.log(`[bridge ${ts()}] ${L.running}: ${label} (${s}s)`);
         }, 30_000);
         const stdout = await serialize(() => {
           // Sırası gelmeden vazgeçildiyse CLI hiç başlatılmaz: zombi üretim
@@ -460,7 +494,7 @@ const server = http.createServer(async (req, res) => {
         const { text, usage } = adapter.parse(stdout);
         const secs = ((Date.now() - started) / 1000).toFixed(1);
         console.log(
-          `[bridge] bitti: ${label} — ${secs}s ${text.length}ch (backend=${BACKEND} model=${parsed.model ?? "-"})`
+          `[bridge ${ts()}] ${L.done}: ${label} — ${secs}s ${text.length}ch (backend=${BACKEND} model=${parsed.model ?? "-"})`
         );
         res.writeHead(200, { ...cors, "content-type": "application/json" });
         res.end(
@@ -484,11 +518,11 @@ const server = http.createServer(async (req, res) => {
         // İptal hata değil: istemci gitti, yanıt yazacak soket de yok.
         // Logla ve çık; 500 sayılmasın, kuyruk bir sonrakine geçsin.
         if (err instanceof BridgeCancelledError) {
-          console.log(`[bridge] iptal: ${message}`);
+          console.log(`[bridge ${ts()}] ${L.cancelled}: ${label} — ${message}`);
           res.destroy();
           return;
         }
-        console.error(`[bridge] HATA: ${message}`);
+        console.error(`[bridge ${ts()}] ${L.error}: ${label} — ${message}`);
         // Zaman aşımı ayrı statü + tip: uygulama bunu LlmTimeoutError'a
         // çevirip "üretim çok uzun sürdü, tekrar dene" diyebilsin. Diğer her
         // şey 500 olarak kalır (davranış değişmedi).

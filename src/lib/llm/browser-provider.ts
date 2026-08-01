@@ -182,6 +182,13 @@ async function callOpenAiCompat(
   // verebilir diye timeout alanıyla aynı gate'in arkasında.
   if (providerForBaseUrl(baseUrl) === "bridge") {
     body.bridge_label = opts.label ?? opts.purpose;
+    // Köprü log dili uygulamanın UI diliyle aynı olsun (tr/en). Ayna
+    // use-profile-meta'da yazılır; yoksa tr. Eski köprü alanı yok sayar.
+    try {
+      body.bridge_lang = localStorage.getItem("okumo-ui-lang") ?? "tr";
+    } catch {
+      body.bridge_lang = "tr";
+    }
   }
 
   const headers: Record<string, string> = { "content-type": "application/json" };
