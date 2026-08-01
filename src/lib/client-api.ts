@@ -258,7 +258,29 @@ async function runLessonWindow(anchorNodeId: string, k = 2): Promise<void> {
       console.warn("[prefetch] ders üretimi hata:", id, err)
     );
   }
+  // Pencere içindeki KALICI error dersleri: oturum başına EN FAZLA bir kez
+  // otomatik yeniden dene. Kalıcı damga çoğunlukla geçici bir köprü/timeout
+  // arızasının fosili (2026-08-01: 180s kesimleri); hiç denenmezse kullanıcı
+  // frontier'a geldiğinde çıkmaz sokağa giriyor, sınırsız denenirse bozuk
+  // prompt sonsuz harcama olur. Bir deneme ikisinin de ortası: yine ölürse
+  // rozet kalır, sonraki deneme kullanıcının (harita rozeti / retry ekranı).
+  const { clearLessonGen } = await import("@/lib/lesson-gen-store");
+  for (const id of coreW.lessonWindowErrored(db, anchorNodeId, k)) {
+    if (autoRetriedLessonGens.has(id)) continue;
+    const st = lessonGenState(id)?.kind;
+    // Oturumda zaten bir sonuç/aksiyon varsa karışma: çalışan üretim, taze
+    // hata, kullanıcı iptali ya da bu oturumda üretilmiş içerik.
+    if (st) continue;
+    autoRetriedLessonGens.add(id);
+    clearLessonGen(id);
+    void ensureLessonGen(id).catch((err) =>
+      console.warn("[prefetch] otomatik retry hata:", id, err)
+    );
+  }
 }
+
+/** Oturum başına tek otomatik retry defteri (bkz. runLessonWindow). */
+const autoRetriedLessonGens = new Set<string>();
 
 /** Uygulama/harita açılışı tetiği (T-068 üçüncü tetik): frontier'dan bir kez.
  * Statikte sekme kapanınca ölen in-flight üretimi sessizce toparlar; pencere
@@ -1172,8 +1194,13 @@ export async function openNodeApi(nodeId: string): Promise<
 }
 
 /** T-070-B/C: kullanıcının açık "tekrar dene" eylemi. Store'daki hata kaydını
- * temizler ve üretimi urgent olarak yeniden başlatır. */
-export async function retryLessonGen(nodeId: string): Promise<void> {
+ * temizler ve üretimi yeniden başlatır. Varsayılan urgent (retry ekranında
+ * kullanıcı bekliyor); harita rozetinden tetiklenen retry `urgent: false`
+ * geçer; kullanıcı beklemiyor, o an açık dersin çağrısının önüne geçmesin. */
+export async function retryLessonGen(
+  nodeId: string,
+  opts?: { urgent?: boolean }
+): Promise<void> {
   if (!IS_STATIC) {
     // Sunucuda retry = yeni job; regenerateLessonJob satırı "generating"e
     // çevirdiği için açılıştaki error dalı da temizlenmiş olur.
@@ -1182,7 +1209,7 @@ export async function retryLessonGen(nodeId: string): Promise<void> {
   }
   const { clearLessonGen } = await import("@/lib/lesson-gen-store");
   clearLessonGen(nodeId);
-  await ensureLessonGen(nodeId, true);
+  await ensureLessonGen(nodeId, opts?.urgent ?? true);
 }
 
 export async function completeNodeApi(nodeId: string): Promise<{

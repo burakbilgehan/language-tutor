@@ -119,6 +119,39 @@ export function lessonWindowTargets(
 }
 
 /**
+ * Pencere aralığındaki `error` statülü node id'leri (anchor dahil, zincir
+ * sırasında). `lessonWindowTargets` bunları bilerek DIŞLAR (sınırsız arka plan
+ * retry'ı olmasın); yürütücü katmanı bunlara SINIRLI (oturum başına bir)
+ * otomatik retry uygular: 2026-08-01 canlı dersi, geçici köprü hatalarının
+ * kalıcı damgası pencereyi sessizce boşaltıp kilitli node'ları çıkmaz sokağa
+ * çevirmesiydi. Saf okuma.
+ */
+export function lessonWindowErrored(
+  db: AppDb,
+  activeNodeId: string,
+  k = 2
+): string[] {
+  const node = db
+    .select({ id: tables.nodes.id, nodeType: tables.nodes.nodeType })
+    .from(tables.nodes)
+    .where(eq(tables.nodes.id, activeNodeId))
+    .limit(1)
+    .get();
+  if (!node || node.nodeType !== "main") return [];
+
+  const errored: string[] = [];
+  const seen = new Set<string>();
+  let current: string | null = activeNodeId;
+  for (let i = 0; i <= k && current && i < MAX_WALK; i++) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    if (isErrored(db, current)) errored.push(current);
+    current = successorOf(db, current);
+  }
+  return errored;
+}
+
+/**
  * Pencerenin üçüncü tetiği için çıpa: ilk TAMAMLANMAMIŞ main node (frontier).
  * Kullanıcının aktif dersi budur; "revisit’te çekme" kuralı böyle korunur:
  * eski bir dersi tekrar açmak pencereyi geri sarmaz.

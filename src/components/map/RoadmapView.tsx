@@ -27,6 +27,7 @@ import {
   curriculumGenerate,
   curriculumRetranslate,
   primeLessonWindow,
+  retryLessonGen,
 } from "@/lib/client-api";
 import {
   subscribeLessonGen,
@@ -51,8 +52,10 @@ const S = {
     allDone: (lvl: string) =>
       `Tüm seviyeler (${lvl}'e kadar) tamamlandı. Sözlük + gramer artık senin.`,
     review: "Tekrar",
-    genPreparing: "Bu ders arkada hazırlanıyor",
-    genFailed: "Ders hazırlanamadı; açıp tekrar deneyebilirsin",
+    genPreparing: "Üretiliyor",
+    genFailed: "Üretilemedi; tekrar denemek için tıkla",
+    genReady: "Üretildi; ders indirildi, anında açılır",
+    genNotReady: "Henüz hazır değil; sıran yaklaşınca üretilecek",
     langMismatchTitle: "Müfredat başka bir dilde hazırlanmış",
     langMismatchBody:
       "Bu müfredatın başlıkları farklı bir dilde. İlerlemen korunur — yalnızca görünen başlıklar bu dile çevrilir.",
@@ -115,8 +118,10 @@ const S = {
     allDone: (lvl: string) =>
       `All levels (up to ${lvl}) completed. The dictionary + grammar are yours now.`,
     review: "Review",
-    genPreparing: "This lesson is being prepared in the background",
-    genFailed: "The lesson could not be prepared; open it to try again",
+    genPreparing: "Generating",
+    genFailed: "Generation failed; click to retry",
+    genReady: "Generated; lesson is downloaded and opens instantly",
+    genNotReady: "Not ready yet; it will be generated as your turn approaches",
     langMismatchTitle: "Curriculum is in another language",
     langMismatchBody:
       "This curriculum's titles are in a different language. Your progress is kept — only the visible titles are translated into this language.",
@@ -591,7 +596,14 @@ export function RoadmapView() {
                   genLabels={{
                     preparing: t.genPreparing,
                     failed: t.genFailed,
+                    ready: t.genReady,
+                    notReady: t.genNotReady,
                   }}
+                  onRetry={() =>
+                    void retryLessonGen(node.id, { urgent: false }).catch(
+                      () => {}
+                    )
+                  }
                 />
               ))}
             </div>
@@ -723,6 +735,7 @@ function NodeBubble({
   onClick,
   genState,
   genLabels,
+  onRetry,
 }: {
   node: NodeDto;
   offsetFactor: number;
@@ -731,27 +744,45 @@ function NodeBubble({
    * kapalıyken biten hata haritada BURADA görünür; eskiden hiçbir yüzeye
    * çıkmıyordu. */
   genState: LessonGenState | null;
-  genLabels: { preparing: string; failed: string };
+  genLabels: {
+    preparing: string;
+    failed: string;
+    ready: string;
+    notReady: string;
+  };
+  /** Rozetten, dersi AÇMADAN yeniden üretim (urgent'sız). Kilitli node'da da
+   * çalışır; asıl düğüm tıklaması kilitliyken zaten no-op. */
+  onRetry: () => void;
 }) {
   const locked = node.status === "locked";
   const completed = node.status === "completed";
   const available = node.status === "available";
-  const generating = genState?.kind === "running";
-  // Kalıcı error (DB satırı) da rozet olur: reload sonrası store boşken tek
-  // hakikat kaynağı o. Store'da canlı bir üretim varsa o kazanır (retry
-  // sürerken "başarısız" gösterme).
+  // İçerik durumu: OTURUMDAKİ canlı store önce, DB'deki kalıcı damga sonra
+  // (reload sonrası store boşken tek hakikat kaynağı DB satırı; retry
+  // sürerken de bayat "error" damgası "başarısız" diye gösterilmez).
+  const st = genState?.kind;
+  const generating = st === "running";
+  const genReady =
+    !generating && (st === "ready" || (!st && node.lessonStatus === "ready"));
   const genFailed =
     !generating &&
-    (genState?.kind === "error" || node.lessonStatus === "error");
+    !genReady &&
+    (st === "error" ||
+      ((!st || st === "cancelled") && node.lessonStatus === "error"));
 
   return (
+    // `disabled` DEĞİL aria-disabled: disabled buton çocuklarının tıklamasını
+    // da yutar ve kilitli dersteki "!" rozetinden retry imkânsızlaşırdı.
+    // Kilit koruması çağıran taraftaki onClick guard'ında.
     <button
       onClick={onClick}
-      disabled={locked}
+      aria-disabled={locked}
       style={{
         transform: `translateX(calc(${offsetFactor} * min(90px, 18vw)))`,
       }}
-      className={`group relative z-[1] my-2 flex flex-col items-center cursor-pointer disabled:cursor-not-allowed`}
+      className={`group relative z-[1] my-2 flex flex-col items-center ${
+        locked ? "cursor-not-allowed" : "cursor-pointer"
+      }`}
       title={node.subtitleTr ?? undefined}
     >
       <div
@@ -765,17 +796,52 @@ function NodeBubble({
       >
         {locked ? "🔒" : completed ? "✓" : TYPE_ICON[node.lessonType]}
       </div>
-      {/* Üretim rozeti: hazırlanıyor (indigo = durum) / başarısız (vermilion
-          = eylem gerektiriyor, tıklayınca "tekrar dene" ekranı açılır). */}
-      {!completed && (generating || genFailed) && (
+      {/* İçerik durumu göstergesi (tooltip = title). Dört durum:
+          üretiliyor (indigo ⋯) / üretilemedi (vermilion !, TIKLANINCA dersi
+          açmadan yeniden dener) / üretildi (dolu indigo nokta) / henüz hazır
+          değil (içi boş soluk nokta). Tamamlanmış derste gösterge yok. */}
+      {!completed && generating && (
         <span
-          title={genFailed ? genLabels.failed : genLabels.preparing}
-          className={`absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] leading-none shadow-cozy ${
-            genFailed ? "bg-accent text-surface" : "bg-indigo text-surface"
-          }`}
+          title={genLabels.preparing}
+          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo text-[10px] leading-none text-surface shadow-cozy"
         >
-          {genFailed ? "!" : "⋯"}
+          ⋯
         </span>
+      )}
+      {!completed && genFailed && (
+        <span
+          role="button"
+          tabIndex={0}
+          title={genLabels.failed}
+          onClick={(e) => {
+            // Düğüm tıklamasından ayrık: ders açılmaz, üretim yeniden başlar.
+            e.stopPropagation();
+            onRetry();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onRetry();
+            }
+          }}
+          className="absolute -right-1 -top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-accent text-[10px] leading-none text-surface shadow-cozy transition-transform hover:scale-125"
+        >
+          !
+        </span>
+      )}
+      {!completed && !generating && !genFailed && (
+        <span
+          title={genReady ? genLabels.ready : genLabels.notReady}
+          className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full shadow-cozy ${
+            genReady
+              ? "bg-indigo"
+              : // İçi boş nokta iki temada da okunmalı: ink-soft kenarlık
+                // (açıkta koyu kahve, koyuda açık bej) + surface dolgu,
+                // düğüm dairesinden ayrışsın diye.
+                "border-2 border-ink-soft/60 bg-surface"
+          }`}
+        />
       )}
       <div
         className={`mt-1.5 max-w-36 text-center text-xs font-semibold leading-tight ${
