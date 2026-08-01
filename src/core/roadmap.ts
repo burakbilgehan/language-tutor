@@ -71,6 +71,24 @@ export function getRoadmap(
     mainByUnit.set(n.unitId, list);
   }
 
+  // Kalıcı ders üretim hatası haritada görünmek ZORUNDA: error satırı hem
+  // pencere prefetch'inden dışlanır (bilerek, otomatik retry yok) hem de
+  // openNode'da retry ekranına düşer. Reload sonrası bellek-içi store boş
+  // olduğundan bu satır tek hakikat kaynağı; harita onu okumazsa kullanıcı
+  // "neden hiçbir şey üretilmiyor"u hiçbir yüzeyden göremez (2026-08-01
+  // canlı: ます dersi error'da, pencere onu atlıyor, harita hiçbir şey
+  // göstermiyor).
+  const lessonStatusByNode = new Map(
+    db
+      .select({
+        nodeId: tables.lessons.nodeId,
+        status: tables.lessons.status,
+      })
+      .from(tables.lessons)
+      .all()
+      .map((l) => [l.nodeId, l.status] as const)
+  );
+
   const next = topLevel ? nextLevelFor(lang, topLevel) : null;
   const scheme = schemeFor(lang);
 
@@ -102,7 +120,7 @@ export function getRoadmap(
       theme: u.theme,
       level: u.level,
       nodes: (mainByUnit.get(u.id) ?? []).map((n) =>
-        publicNode(n, contentLangMismatch)
+        publicNode(n, contentLangMismatch, lessonStatusByNode.get(n.id) ?? null)
       ),
     })),
     chapters: chapterRows.map((c) => ({
@@ -119,7 +137,8 @@ export function getRoadmap(
 
 function publicNode(
   n: typeof tables.nodes.$inferSelect,
-  langMismatch = false
+  langMismatch = false,
+  lessonStatus: string | null = null
 ) {
   return {
     id: n.id,
@@ -131,6 +150,9 @@ function publicNode(
     objectives: langMismatch ? [] : n.objectives,
     xpReward: n.xpReward,
     status: n.status,
+    /** Ders satırının kalıcı üretim statüsü ("error" haritada rozet olur);
+     * satır yoksa null. DB shape değişmedi, sadece listeye eklenen alan. */
+    lessonStatus,
   };
 }
 

@@ -176,6 +176,10 @@ interface NodeDto {
   subtitleTr: string | null;
   xpReward: number;
   status: "locked" | "available" | "completed";
+  /** Ders satırının kalıcı üretim statüsü; "error" = üretim başarısız ve
+   * kullanıcı retry'ı bekleniyor. Reload sonrası bellek-içi store boş
+   * olduğundan hata rozeti bunsuz görünmezdi. */
+  lessonStatus?: string | null;
 }
 
 interface RoadmapDto {
@@ -733,7 +737,12 @@ function NodeBubble({
   const completed = node.status === "completed";
   const available = node.status === "available";
   const generating = genState?.kind === "running";
-  const genFailed = genState?.kind === "error";
+  // Kalıcı error (DB satırı) da rozet olur: reload sonrası store boşken tek
+  // hakikat kaynağı o. Store'da canlı bir üretim varsa o kazanır (retry
+  // sürerken "başarısız" gösterme).
+  const genFailed =
+    !generating &&
+    (genState?.kind === "error" || node.lessonStatus === "error");
 
   return (
     <button
