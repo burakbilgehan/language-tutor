@@ -127,6 +127,26 @@ export const LessonSchema = z.object({
 });
 export type LessonContent = z.infer<typeof LessonSchema>;
 
+/** Ders çıktısı için son çare kurtarma (GenerateJsonOptions.salvage):
+ * superRefine içerik sözleşmelerini (mcq answer options'ta birebir olmalı,
+ * translate accept_also >=1, fill_blank ___ ...) İHLAL EDEN alıştırmaları
+ * atar; en az 4 geçerli alıştırma kalıyorsa ders kabul edilir. Sözleşmeler
+ * JSON Şeması'na çevrilemez (CLI --json-schema yalnız yapıyı zorlar), yani
+ * bunlar ancak zod'da yakalanır; tek bozuk alıştırma yüzünden 5-6k
+ * karakterlik dersi komple çöpe atmak 2x2.5 dakikalık kesin başarısızlık
+ * üretiyordu (2026-08-01 canlı kilit). Dersin geri kalanı (başlık, açıklama,
+ * örnekler...) hâlâ tam şemadan geçer; yapısal bozukluk kurtarılMAZ. */
+export function salvageLessonContent(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const obj = raw as Record<string, unknown>;
+  if (!Array.isArray(obj.exercises)) return raw;
+  const kept = obj.exercises.filter(
+    (ex) => LessonExerciseSchema.safeParse(ex).success
+  );
+  if (kept.length < 4 || kept.length === obj.exercises.length) return raw;
+  return { ...obj, exercises: kept };
+}
+
 // -- Curriculum re-translation (T-031) ---------------------------------------
 // Curriculum titles/descriptions are plain columns (not a lang map), so when
 // the learner's native language changes they're re-translated in place. The

@@ -29,6 +29,14 @@ export interface GenerateJsonOptions<T> {
    * generating, not just the model name. Ignored by other providers; old
    * bridges silently drop unknown body fields. */
   label?: string;
+  /** Son çare kurtarma (runJsonWithRetry): şema doğrulaması başarısız olunca
+   * ham JSON'a uygulanır, sonuç şemadan yeniden geçirilir; hâlâ geçmezse
+   * normal retry/hata akışı sürer. Ders üretimi bunu "geçersiz alıştırmaları
+   * at, >=4 kaldıysa dersi kabul et" için kullanır: superRefine içerik
+   * sözleşmeleri JSON Şeması'na çevrilemediğinden model %90 doğru bir dersi
+   * tek bozuk alıştırma yüzünden kesin ölüme sürükleyebiliyordu (2026-08-01,
+   * 20+ boşa üretim). */
+  salvage?: (raw: unknown) => unknown;
 }
 
 export interface GenerateTextOptions {

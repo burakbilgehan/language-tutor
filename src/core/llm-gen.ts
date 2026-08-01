@@ -4,6 +4,7 @@ import * as tables from "@/db/schema";
 import type { LlmProvider } from "@/lib/llm/provider-types";
 import {
   LessonSchema,
+  salvageLessonContent,
   GrammarTopicSchema,
   KanjiContentSchema,
   VocabContentSchema,
@@ -148,6 +149,9 @@ export async function generateLessonContent(
       system,
       prompt,
       schema: LessonSchema,
+      // Tek bozuk alıştırma dersi öldürmesin: sözleşme ihlal eden
+      // alıştırmalar atılır, >=4 geçerli kaldıysa ders kabul (schemas.ts).
+      salvage: salvageLessonContent,
       fixtureKey: "lesson",
       tier: "balanced",
       timeoutMs: 300_000,

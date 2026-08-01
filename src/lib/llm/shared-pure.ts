@@ -46,8 +46,22 @@ export async function runJsonWithRetry<T>(
 ): Promise<T> {
   let raw = await callOnce(opts.prompt, false);
   for (let attempt = 0; ; attempt++) {
-    const parsed = opts.schema.safeParse(tryJsonParse(extractJson(raw)));
+    const candidate = tryJsonParse(extractJson(raw));
+    const parsed = opts.schema.safeParse(candidate);
     if (parsed.success) return parsed.data;
+    // Kurtarma HER başarısız denemede denenir, retry'dan ÖNCE: bir üretim
+    // ~2.5 dk; tek bozuk alıştırma için o bedeli yeniden ödemek yerine
+    // çağıranın kurtarma dönüşümü (örn. geçersiz alıştırmaları at) sıfır
+    // maliyetle geçerli bir sonuç çıkarabiliyorsa onu kullan.
+    if (opts.salvage) {
+      const saved = opts.schema.safeParse(opts.salvage(candidate));
+      if (saved.success) {
+        console.warn(
+          `[llm] ${opts.fixtureKey}: şema hatası kurtarmayla giderildi (deneme ${attempt + 1}): ${parsed.error.message.slice(0, 400)}`
+        );
+        return saved.data;
+      }
+    }
     if (attempt >= 1) {
       throw new LlmParseError(
         `LLM çıktısı şemaya uymadı: ${parsed.error.message}`,
