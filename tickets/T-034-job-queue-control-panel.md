@@ -1,95 +1,103 @@
 ---
 id: T-034
-title: Job kuyruğu kontrol paneli — görünürlük + cancel + boot'ta onay
+title: Job queue control panel, visibility + cancel + boot-time confirmation
 status: backlog
 priority: p1
 effort: L
 confidence: medium
 depends: [T-024]
 created: 2026-07-22
-status_note: done 2026-07-22 (branch t-034-job-queue-panel) — core/jobs.ts
+status_note: done 2026-07-22 (branch t-034-job-queue-panel); core/jobs.ts
   (env-agnostic list/cancel/cancelAll/resume, no-bump), src/lib/jobs.ts boot
-  recovery now marks orphan queued → pending_approval (no auto-run), 4 routes
+  recovery now marks orphan queued -> pending_approval (no auto-run), 4 routes
   (GET /api/jobs, cancel, cancel-all, resume-pending), browser store
   (jobs-store.ts + client-api seam onJobsChange), JobQueuePop (global) +
   JobQueuePanel (settings). Kanji auto-fill left as-is (panel makes it
-  visible/cancellable — original concern resolved). tsc/test/parity all green.
+  visible/cancellable; original concern resolved). tsc/test/parity all green.
 ---
-Bağlam: kullanıcının arka plan LLM kuyruğu üzerinde hiç kontrolü yok.
-Somut acılar (Burak):
-1. Grammar/kanji/vocab'da "tümünü üret" → geri dönüş yok, **cancel yok**.
-   Yanlışlıkla başlatılan koca batch durdurulamıyor.
-2. "İndir" deyip başka sayfaya geçen kullanıcı işi **unutur** → arkada
-   sessizce token yakan bir kuyruk kalır, farkında olmaz.
-3. Boot'ta `recoverStaleJobs` (`src/lib/jobs.ts:76-94`) bekleyen queued
-   işleri **koşulsuz evlat edinip otomatik koşturuyor** — kaza kurtarma
-   için doğru, import edilmiş/unutulmuş kuyruk için sürpriz. T-024 sadece
-   import ANINDA belt vuruyor; tekrar import'a basmadan (localStorage/
-   IndexedDB'den) devam eden kullanıcıyı korumuyor.
+Context: the user has zero control over the background LLM queue.
+Concrete pain points (Burak):
+1. Grammar/kanji/vocab "generate all" -> no way back, **no cancel**. A
+   batch started by mistake can't be stopped.
+2. A user who clicks "download" then navigates away **forgets** the job
+   -> a queue is left silently burning tokens in the background, unaware.
+3. On boot, `recoverStaleJobs` (`src/lib/jobs.ts:76-94`) **unconditionally
+   adopts and auto-runs** pending queued jobs; correct for crash
+   recovery, surprising for an imported/forgotten queue. T-024 only
+   patches this AT import time (belt-and-suspenders); it doesn't protect
+   a user who continues (from localStorage/IndexedDB) without hitting
+   import again.
 
-Referans deneyim: `scripts/blast-dashboard.mjs` (:4646) — aktif/bekleyen/
-biten job listesi, canlı durum. Son kullanıcıya aynı kontrolü ver.
+Reference experience: `scripts/blast-dashboard.mjs` (:4646); active/
+pending/finished job list, live status. Give the end user the same
+control.
 
-Karar (Burak): T-024'ün mevcut fix'i (export strip + import belt) geçici
-olarak yeterli — sürpriz kuyruğun ana vektörünü kapatıyor. Bu ticket
-kalıcı, tam çözüm.
+Decision (Burak): T-024's existing fix (export strip + import belt) is
+temporarily sufficient; it closes the main vector for a surprise queue.
+This ticket is the permanent, full fix.
 
-İş — ikili yerleşim (Burak kararı):
-1. **Sağ-alt global pop** (mevcut anlık maliyet özetinin hemen üstünde,
-   HER sayfadan görünür): aktif/bekleyen job sayısı + "hepsini durdur".
-   Aktif iş yoksa görünmez/minik. Farkındalık her yerde.
-2. **Ayarlar içinde tam panel** (blast-dashboard klonu): job listesi
-   (jobType/refId/status/başlangıç), tek tek cancel + toplu cancel,
-   biten/hatalı geçmiş. Detay burada.
-3. **Cancel yolu**: queued → sil (dedupe kilidini de aç); running →
-   iptal işaretle (CLI child'ı öldürmek zor olabilir — en azından
-   sonraki adımı koşturma, `runJob`'a iptal-kontrolü). Yeni route:
-   `POST /api/jobs/[id]/cancel` + `POST /api/jobs/cancel-all`. Core'a
-   `cancelJob`/`cancelAllJobs` (env-agnostik, `src/core/*`), route ince
-   kabuk. Statik modda inline batch için de bir dur mekanizması (Abort
-   sinyali) — sekme kapanınca zaten ölüyor ama elle dur da olmalı.
-4. **Boot'ta otomatik koşma yerine onay**: `recoverStaleJobs`'un
-   queued-evlat-edinme adımını otomatik `runJob`'dan çıkar; bekleyen
-   kuyruğu "recovery pending" olarak işaretle, panelde "N iş bekliyor —
-   devam et?" göster. Crash-recovery korunur (elle tetiklenir), sürpriz
-   otomatik koşma biter. **Davranış değişikliği** — commit'te not düş.
-5. Server + statik mod paritesi (`client-api.ts` seam, `src/core/*`).
-   Parity harness core'a dokununca koşar.
-6. i18n: tr canonical + en mirror (co-located `S` tablosu).
+Work; two-part placement (Burak's decision):
+1. **Global bottom-right popover** (right above the existing running-cost
+   summary, visible from EVERY page): active/pending job count + "stop
+   all". Invisible/minimal when there's no active work. Awareness
+   everywhere.
+2. **Full panel in Settings** (blast-dashboard clone): job list
+   (jobType/refId/status/start time), individual cancel + bulk cancel,
+   finished/errored history. Detail lives here.
+3. **Cancel path**: queued -> delete (also releases the dedupe lock);
+   running -> mark as canceled (killing the CLI child may be hard; at
+   least don't run the next step, add a cancel-check to `runJob`). New
+   route: `POST /api/jobs/[id]/cancel` + `POST /api/jobs/cancel-all`.
+   Core gets `cancelJob`/`cancelAllJobs` (env-agnostic, `src/core/*`),
+   route stays a thin shell. Static mode also needs a stop mechanism for
+   the inline batch (an Abort signal); closing the tab already kills it,
+   but a manual stop should exist too.
+4. **Confirmation instead of auto-run on boot**: remove the
+   queued-adoption step from `recoverStaleJobs`'s automatic `runJob`;
+   mark the pending queue as "recovery pending" and show "N jobs waiting,
+   continue?" in the panel. Crash recovery is preserved (manually
+   triggered), the surprise auto-run ends. **Behavior change**, note it
+   in the commit.
+5. Server + static mode parity (`client-api.ts` seam, `src/core/*`).
+   Parity harness runs whenever core is touched.
+6. i18n: tr canonical + en mirror (co-located `S` table).
 
-Not — kanji liste GET auto-fill (T-024 sub-decision'da ertelendi): bu
-panel gelince auto-fill kuyruğu da görünür/cancel'lanabilir olur; ayrı
-"user-triggered'a çek" kararına gerek kalmayabilir. Panel'i implement
-ederken tekrar değerlendir.
+Note; kanji list GET auto-fill (deferred in T-024's sub-decision): once
+this panel exists, the auto-fill queue also becomes visible/cancellable;
+the separate "move to user-triggered" decision may no longer be needed.
+Revisit while implementing the panel.
 
-Review ekleri (backlog session, 2026-07-22):
-7. **Liste endpoint'i yok**: `/api/jobs/` altında sadece `[id]` var.
-   Pop + panel için `GET /api/jobs` (aktif/bekleyen + son N geçmiş)
-   gerekiyor — hafif, LLM'siz; pop bunu poll'lar (roadmap'in 4s
-   kalıbı emsal).
-8. **Statik modda veri kaynağı**: job tablosu orada HİÇ kullanılmıyor —
-   batch, client-api içinde inline döngü. Pop/panel statikte aynı UI'ı
-   tarayıcı-içi bir kuyruk store'undan (module-level state + subscribe,
-   AbortController'la iptal) beslemeli; `GET /api/jobs` yalnız server
-   modu. Seam yine client-api.
-9. **"Recovery pending" işareti şema tuzağı**: yeni KOLON ekleme —
-   `generation_jobs` şekli değişir, SAVE_SCHEMA_VERSION bump + eski
-   save'ler reddedilir. Text `status` kolonuna yeni DEĞER (ör.
-   `pending_approval`) bump gerektirmez (`gradedBy:"self"` emsali).
-   Yeni değerle git; eski app sürümü görmezse zaten koşmaz, güvenli yön.
-10. **Sistem işi ≠ kullanıcı batch'i**: prefetch (ensureLessonJob) ve
-   auto-extend de bu kuyruğa giriyor. Panelde etiketle (sistem/kullanıcı);
-   "hepsini durdur" default'u kullanıcı batch'lerini hedeflesin — yoksa
-   kullanıcı normal ders prefetch'ini görüp cancel'lar, node açılışları
-   yavaşlar diye şikayet geri gelir.
-11. **Ayrım KOLONSUZ yapılacak** (madde 9'daki tuzağın aynısı: "source"
-   kolonu = şema şekli değişikliği = SAVE_SCHEMA_VERSION bump, değmez):
-   jobType üzerinden kaba sınıflama — lesson/chapter = sistem
-   (prefetch/auto-extend), grammar/vocab/kanji = kullanıcı batch'i.
-   Lesson'da "kullanıcı açtı" vs "prefetch" ayrımı kaybolur; kabul —
-   pop toplam sayı gösteriyor, panelde jobType etiketi yeterli.
+Review additions (backlog session, 2026-07-22):
+7. **No list endpoint**: only `[id]` exists under `/api/jobs/`. The pop +
+   panel need `GET /api/jobs` (active/pending + last N history); light,
+   no LLM; the pop polls this (the roadmap's 4s pattern is precedent).
+8. **Static-mode data source**: the job table isn't used there at all;
+   batch is an inline loop inside client-api. The pop/panel in static
+   mode should be fed from an in-browser queue store (module-level state
+   + subscribe, cancel via AbortController); `GET /api/jobs` is
+   server-mode only. Seam again is client-api.
+9. **"Recovery pending" flag is a schema trap**: adding a new COLUMN
+   changes the `generation_jobs` shape, forcing a SAVE_SCHEMA_VERSION
+   bump + rejecting old saves. A new VALUE on the existing text `status`
+   column (e.g. `pending_approval`) doesn't require a bump
+   (`gradedBy:"self"` precedent). Go with the new value; an old app
+   version simply won't recognize it and won't run it; the safe
+   direction.
+10. **System work != user batch**: prefetch (ensureLessonJob) and
+   auto-extend also feed into this queue. Label them in the panel
+   (system/user); "stop all"'s default should target user batches; 
+   otherwise a user will see normal lesson prefetch, cancel it, and
+   complain that node opens got slower.
+11. **The distinction will be made WITHOUT a column** (same trap as item
+   9: a "source" column = a shape change = a SAVE_SCHEMA_VERSION bump,
+   not worth it): coarse classification via jobType; lesson/chapter =
+   system (prefetch/auto-extend), grammar/vocab/kanji = user batch. The
+   "user opened it" vs "prefetch" distinction is lost for lessons;
+   accepted; the pop shows a total count, the jobType label in the panel
+   is enough.
 
-Doğrulama: "tümünü üret" başlat → panelden gör → cancel → kuyruk durdu,
-token akışı kesildi (llm_calls artmıyor); başka sayfaya geç → global pop
-aktif işi gösteriyor; kirli save'i import etmeden boot → hiçbir job
-otomatik koşmuyor, panel "devam et?" sunuyor; parity ALL PASS.
+Verification: start "generate all" -> see it in the panel -> cancel ->
+queue stopped, token flow cut off (llm_calls stops growing); navigate to
+another page -> global pop shows the active job; boot with a dirty save
+imported without clicking import -> no job auto-runs, panel offers
+"continue?"; parity ALL PASS.

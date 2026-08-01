@@ -1,6 +1,6 @@
 ---
 id: T-018
-title: Side quest özelliğini kaldır
+title: Remove the side quest feature
 status: done
 priority: p2
 effort: M
@@ -8,25 +8,28 @@ confidence: high
 depends: []
 created: 2026-07-18
 ---
-Karar: side quest'ler siliniyor. Ana sayfalar + Tekrar (review) pratiği
-zaten kapsıyor; aynı şeyi 5. bir biçimde göstermenin katkısı yok. Bu karar
-T-011'i (nl/zh side quest backfill) geçersiz kılar → T-011 wontfix.
+Decision: side quests are being deleted. Main pages + Review practice already
+cover the same ground; showing the same thing in a 5th form adds nothing.
+This decision supersedes T-011 (nl/zh side quest backfill), making T-011
+wontfix.
 
-Kaldırılacak yüzeyler (grep: `side_quest|sideQuest|side-quest`):
-- UI: `/quest` sayfası, RoadmapView'daki quest node'ları/girişleri
-- Server: `/api/quests/[id]/start` route
-- Core: `src/core/quest.ts`, curriculum-gen'deki quest üretimi,
-  roadmap.ts'deki quest listeleme, llm-gen ilgili kısım
-- LLM: `src/lib/llm/prompts/side-quest.ts`, schemas.ts'deki quest şemaları,
-  curriculum prompt'undaki quest talimatları + fixture güncellemesi
+Surfaces to remove (grep: `side_quest|sideQuest|side-quest`):
+- UI: the `/quest` page, quest nodes/entries in RoadmapView
+- Server: the `/api/quests/[id]/start` route
+- Core: `src/core/quest.ts`, quest generation in curriculum-gen, quest listing
+  in roadmap.ts, the related part of llm-gen
+- LLM: `src/lib/llm/prompts/side-quest.ts`, quest schemas in schemas.ts, quest
+  instructions in the curriculum prompt + fixture update
 
-**DB kararı — dikkat**: `nodes.side_quest_payload` kolonu ve quest tipli
-`nodes` satırları schema'da kalabilir (ölü veri). Kolon DROP etmek
-`SAVE_SCHEMA_VERSION` bump + eski save'lerin import reddi demek — sıfır
-kazanç için maliyet. Öneri: schema'ya dokunma, sadece kod/UI/prompt kaldır;
-mevcut quest node'ları roadmap sorgusunda filtrele. Schema temizliği
-ileride başka bir zorunlu bump'a binerse yapılır.
+**DB decision, note this**: the `nodes.side_quest_payload` column and
+quest-typed `nodes` rows can stay in the schema (dead data). Dropping the
+column means a `SAVE_SCHEMA_VERSION` bump and old saves getting rejected on
+import, a cost for zero benefit. Recommendation: don't touch the schema, only
+remove code/UI/prompt; filter existing quest nodes out of the roadmap query.
+Schema cleanup can happen later if it rides along with some other required
+bump.
 
-Doğrulama: fixture modda yeni curriculum üret (quest'siz), mevcut DB'yle
-roadmap/complete akışı çalışsın, `npm test` + parity harness
-(`scripts/test-sqljs-parity.ts` — core değişiyor).
+Verification: generate a new curriculum in fixture mode (quest-free), the
+roadmap/complete flow should work with the existing DB, `npm test` + the
+parity harness (`scripts/test-sqljs-parity.ts`, core is changing).
+</content>

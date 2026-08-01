@@ -1,6 +1,6 @@
 ---
 id: T-062
-title: OpenRouter PKCE tek-tık bağlantı ("OpenRouter ile bağlan")
+title: OpenRouter PKCE one-click connect ("Connect with OpenRouter")
 status: done
 priority: p3
 effort: M
@@ -8,36 +8,17 @@ confidence: medium
 depends: [T-060]
 created: 2026-07-27
 ---
-KARAR-GATE: Burak henüz emin değil ("api key zaten basit") — T-060 oturduktan
-sonra istenirse çekilir; redesign dalgasını şişirmemek bilinçli karar.
+DECISION-GATE: Burak isn't sure yet ("an API key is already simple") - can be pulled in after T-060 settles if wanted; a deliberate call to not bloat the redesign wave.
 
-## Araştırma özeti (2026-07-27, saha araştırması session'ı)
-- Abonelik-OAuth yolu KAPALI: Anthropic legal sayfası üçüncü partinin
-  Claude.ai login sunmasını/kullanıcı abonelik kimliğiyle istek yönlendirmesini
-  açıkça yasaklıyor (Oca 2026 sunucu bloğu + Nis 2026 yaptırım); Google aynı
-  (Gemini CLI OAuth üçüncü partide ihlal, Haz 2026'da bireysel katman kapandı).
-  OpenAI gri-tolere (Codex OAuth, resmî program GA değil) — izlemede.
-- OpenRouter PKCE ise RESMÎ ve canlı: `openrouter.ai/auth?callback_url=…&
-  code_challenge=…(S256)` → onay → `POST /api/v1/auth/keys` ile kullanıcıya
-  ait gerçek API key. Tarayıcıdan çalışır (client secret yok, CORS açık) →
-  statik modda key localStorage'da kalır, BİZDE emanet yok. Kullanıcı
-  openrouter.ai/keys'ten iptal edebilir.
-- `:free` modeller: 20 istek/dk; 50 istek/gün (hesap ömründe $10+ kredi
-  aldıysa kalıcı 1000/gün).
+## Research summary (2026-07-27, field-research session)
+- The subscription-OAuth path is CLOSED: Anthropic's legal page explicitly forbids third parties from offering Claude.ai login or routing requests under a user's subscription identity (Jan 2026 server block plus Apr 2026 enforcement); Google is the same (Gemini CLI OAuth violated by a third party, the individual tier was shut down in Jun 2026). OpenAI is gray-tolerated (Codex OAuth, the official program isn't GA yet) - watch this space.
+- OpenRouter PKCE, however, is OFFICIAL and live: `openrouter.ai/auth?callback_url=...&code_challenge=...(S256)` -> approval -> `POST /api/v1/auth/keys` returns a real API key belonging to the user. Works from the browser (no client secret, CORS open) -> in static mode the key stays in localStorage, WE never hold it in escrow. The user can revoke it from openrouter.ai/keys.
+- `:free` models: 20 requests/min; 50 requests/day (permanently 1000/day if the account has ever received $10+ in credit).
 
-## Burak'ın sorusunun cevabı (ticket'a gömülü kalsın)
-"Bu key Claude da çağırabilir, Çin modeli de — kullanıcı nasıl ayarlayacak?"
-→ Ayarlamaz. Model her istekte BİZİM app tarafından `model` parametresiyle
-seçilir; key sadece ödemeyi taşır. Kalite profili (T-060) OpenRouter için de
-somut slug üçlüsü doldurur (Eko → :free/deepseek, Denge → sonnet sınıfı,
-En iyi → opus/frontier); gelişmişte T-061 canlı katalog. Yani UX diğer
-sağlayıcılarla birebir aynı — PKCE yalnızca "key kopyala-yapıştır" adımını
-"OpenRouter ile bağlan" düğmesine çevirir.
+## Answer to Burak's question (stays embedded in the ticket)
+"This key can call Claude, it can call a Chinese model too - how does the user configure that?" -> They don't. The model is chosen per-request by OUR app via the `model` parameter; the key only carries payment. The quality profile (T-060) fills a concrete slug trio for OpenRouter too (Eco -> :free/deepseek, Balanced -> sonnet class, Best -> opus/frontier); the T-061 live catalog is available in advanced mode. So the UX is identical to other providers - PKCE just turns the "copy-paste a key" step into a "Connect with OpenRouter" button.
 
-## Kapsam
-- API-key kapısında OpenRouter seçiliyken "OpenRouter ile bağlan" düğmesi
-  (PKCE S256; callback = site origin'i; statik+server iki modda da çalışmalı).
-- Bağlıyken kalan kredi gösterimi: `GET /api/v1/key` → `limit_remaining`
-  (T-063 durum kartına beslenebilir).
-- Key saklama mevcut config yolundan (localStorage / llm-config.json) —
-  yeni saklama katmanı İCAT ETME.
+## Scope
+- A "Connect with OpenRouter" button on the API-key door when OpenRouter is selected (PKCE S256; callback = site origin; must work in both static and server modes).
+- Remaining-credit display once connected: `GET /api/v1/key` -> `limit_remaining` (can feed the T-063 status card).
+- Key storage via the existing config path (localStorage / llm-config.json) - do NOT invent a new storage layer.

@@ -1,6 +1,6 @@
 ---
 id: T-039
-title: Bridge CSRF quota-burn + DNS-rebinding çıktı exfil (llm-bridge.mjs)
+title: Bridge CSRF quota-burn + DNS-rebinding output exfil (llm-bridge.mjs)
 status: done
 priority: p1
 effort: S
@@ -8,43 +8,46 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-T-026 dalga 5 bulgusu. **Tehdit çerçevesi A (bugün gerçek)** — bridge'i
-çalıştıran kullanıcı için uzaktan web saldırganı, lokal foothold gerekmez.
-Bulgu fable-verifier'dan geçti + üç POST varyantı empirik ateşlendi (hepsi
-CLI spawn'a ulaştı). **Verdict: CONFIRMED.**
+T-026 wave 5 finding. **Threat frame A (real today)**; a remote web
+attacker against the user running the bridge, no local foothold needed.
+The finding passed fable-verifier + three POST variants were fired
+empirically (all reached the CLI spawn). **Verdict: CONFIRMED.**
 
-Kök neden: `scripts/llm-bridge.mjs` POST handler'ı (satır 233-277)
-execution'ı Origin'e HİÇ gate'lemiyor. `corsHeaders` (207-218) `allowed`'ı
-(209) yalnız yanıt ACAO header'ını (212) koşullamak için hesaplıyor;
-`runCli` (247) her isteğe koşulsuz çalışıyor. Content-Type de kontrol
-edilmiyor (`JSON.parse` her body'ye, 239).
+Root cause: `scripts/llm-bridge.mjs`'s POST handler (lines 233-277) never
+gates execution on Origin. `corsHeaders` (207-218) only uses `allowed`
+(209) to condition the response ACAO header (212); `runCli` (247) runs
+unconditionally on every request. Content-Type isn't checked either
+(`JSON.parse` on any body, 239).
 
-İki ayrı saldırı:
-- **CSRF quota-burn (rebinding gerekmez):** Kurban, bridge açıkken kötücül
-  bir sayfayı ziyaret eder. Sayfa CORS "simple request" POST atar
-  (`Content-Type: text/plain`, JSON string body) → preflight yok → tarayıcı
-  isteği gönderir → CLI çalışır → owner'ın Max kotası yanar. Kör saldırı
-  (evil.com ACAO alamadığı için yanıtı okuyamaz), ama side-effect gerçekleşir.
-- **Çıktı exfiltration (DNS rebinding ile):** Saldırgan `attacker.com`'u
-  kısa-TTL DNS ile 127.0.0.1'e rebind eder; sayfa `attacker.com:8484`'e
-  fetch eder → istek same-origin olur → tarayıcı ACAO okuma kontrolü
-  uygulamaz → LLM çıktısı okunur. PNA'sız tarayıcılarda (Firefox/Safari)
-  çalışır; Chromium PNA preflight'ı muhtemelen bloklar (bridge `attacker.com`
-  için ACAO göndermiyor). Port 8484 tahmin edilebilir. `127.0.0.1` bind'i
-  rebinding'i durdurmaz (isim kurbanın kendi makinesinde loopback'e çözülür).
-- **PNA header** (216): `access-control-allow-private-network: true`
-  KOŞULSUZ gönderiliyor (212'nin aksine `allowed` guard'ı dışında). Tek
-  başına inert ama Chromium'un B1/B2'yi bloklayacak tek savunmasını her
-  origin için kapatıyor — mitigation-defeating.
+Two separate attacks:
+- **CSRF quota-burn (no rebinding needed):** the victim, with the bridge
+  open, visits a malicious page. The page fires a CORS "simple request"
+  POST (`Content-Type: text/plain`, JSON string body) -> no preflight ->
+  the browser sends the request -> the CLI runs -> the owner's Max quota
+  burns. Blind attack (evil.com can't read the response since it doesn't
+  get ACAO), but the side effect still happens.
+- **Output exfiltration (via DNS rebinding):** an attacker rebinds
+  `attacker.com` to 127.0.0.1 with a short-TTL DNS entry; the page fetches
+  `attacker.com:8484` -> the request becomes same-origin -> the browser
+  doesn't apply the ACAO read check -> the LLM output is read. Works on
+  browsers without PNA (Firefox/Safari); Chromium's PNA preflight likely
+  blocks it (the bridge doesn't send ACAO for `attacker.com`). Port 8484
+  is guessable. Binding to `127.0.0.1` doesn't stop rebinding (the name
+  resolves to loopback on the victim's own machine).
+- **PNA header** (216): `access-control-allow-private-network: true` is
+  sent UNCONDITIONALLY (unlike 212's `allowed` guard). Inert on its own,
+  but disables Chromium's one defense that would have blocked B1/B2, for
+  every origin; mitigation-defeating.
 
-Bulguların ilk sözlü mekanizması (`!origin` branch / "same-origin POST
-Origin göndermez") YANLIŞTI — Fetch spec'e göre POST her zaman Origin taşır.
-Risk sonucu yine de geçerli, çünkü handler Origin'e hiç bakmıyor.
+The findings' initial verbal mechanism (`!origin` branch / "same-origin
+POST doesn't send Origin") was WRONG; per the Fetch spec, POST always
+carries an Origin. The risk conclusion still holds, because the handler
+never looks at Origin at all.
 
-Önerilen fix (küçük): (1) Host-header allowlist — `Host` başlığı
-`localhost`/`127.0.0.1[:port]` değilse reddet → rebinding ölür. (2) `runCli`'yi
-`allowed`'a gate'le VEYA başlangıçta üretilen bearer token iste (preset'e
-göm) → simple-request CSRF ölür. (3) PNA header'ını `allowed`'a gate'le.
-(4) Content-Type'ı `application/json`'a kısıtla (simple-request yolunu kapatır).
-Bearer token (2) tek başına hem CSRF'i hem exfil'i kapatır (saldırgan sayfa
-token'ı okuyamaz).
+Suggested fix (small): (1) Host-header allowlist; reject if the `Host`
+header isn't `localhost`/`127.0.0.1[:port]` -> kills rebinding. (2) Gate
+`runCli` on `allowed` OR require a bearer token generated at startup
+(baked into the preset) -> kills simple-request CSRF. (3) Gate the PNA
+header on `allowed`. (4) Restrict Content-Type to `application/json`
+(closes the simple-request path). The bearer token (2) alone closes both
+CSRF and exfil (an attacker page can't read the token).

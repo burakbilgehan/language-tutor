@@ -1,6 +1,6 @@
 ---
 id: T-049
-title: Login/cloud UX düzeltmeleri (return-leg çıkmazı + import→push köprüsü + signed-in intro)
+title: Login/cloud UX fixes (return-leg dead end + import->push bridge + signed-in intro)
 status: done
 priority: p1
 effort: M
@@ -8,56 +8,60 @@ confidence: high
 depends: [T-048]
 created: 2026-07-27
 ---
-Burak'ın okumo.dev'deki ilk gerçek kullanım turundan (2026-07-27) çıkan UX
-kırıkları. Ayarlar → "Bulut Hesabı" bölümü mevcut ve tam (giriş/çıkış +
-push/pull) ama akış onu hiç göstermiyor; kullanıcı "Google eşleme yok"
-sanıyor. Üç düzeltme:
+UX breakage found during Burak's first real usage pass on okumo.dev
+(2026-07-27). Settings -> "Cloud Account" section exists and is complete
+(sign in/out + push/pull), but the flow never surfaces it; the user thinks
+"there's no Google linking." Three fixes:
 
-1. **Return-leg çıkmazı**: Login başarılı + bulutta kayıt yok → ekran yalnız
-   "Try again / Continue" sunuyor. Elinde save dosyası olan kullanıcının doğal
-   adımı eksik. Üçüncü aksiyon: **"Kayıt dosyası yükle"** (mevcut file-import
-   akışı) → import başarılıysa AYNI ekranda "buluta gönder" önerisi (push).
-2. **Import→push köprüsü**: Signed-in kullanıcı hangi yoldan olursa olsun
-   (onboarding load kapısı, Ayarlar import) kayıt yüklediğinde, inline
-   "buluta gönder?" önerisi görünsün (Ayarlar'daki bölüme köprü ya da yerinde
-   push butonu).
-3. **Signed-in intro**: Girişli kullanıcıya intro'da hâlâ "Sign in" kapısı
-   gösteriliyor (T-048 bilinen polish borcu). Signed-in durumda o kart hesap
-   durumu + "buluttan getir / buluta gönder" kısayoluna dönüşsün.
+1. **Return-leg dead end**: login succeeds + nothing in the cloud, the screen
+   only offers "Try again / Continue." The natural next step for a user who
+   already has a save file is missing. Third action: **"Load a save file"**
+   (existing file-import flow) -> on successful import, an inline "push to
+   cloud" suggestion (push) on the SAME screen.
+2. **Import->push bridge**: whenever a signed-in user loads a save through
+   any path (onboarding load door, Settings import), an inline "push to
+   cloud?" suggestion should appear (a bridge to the Settings section, or an
+   inline push button).
+3. **Signed-in intro**: a signed-in user still sees the "Sign in" door in the
+   intro (T-048's known polish debt). In the signed-in state, that card should
+   turn into account status + a "pull from cloud / push to cloud" shortcut.
 
-Fence: onboarding + settings component'leri + auth-status/cloud controller
-TÜKETİMİ (cloud.ts/seed-strip mantığına dokunma), worker/'a dokunma.
-i18n tr/en co-located S kalıbı.
+Fence: onboarding + settings components + auth-status/cloud controller
+CONSUMPTION (don't touch cloud.ts/seed-strip logic), don't touch worker/.
+i18n tr/en co-located S pattern.
 
-**T-049 uygulama kararları (2026-07-27):**
+**T-049 implementation decisions (2026-07-27):**
 
-- **Gizli `<input type="file">` showIntro JSX'inin İÇİNDEydi** — dönüş ayağı
-  ayrı bir erken return olduğu için orada mount edilmiyordu, yani
-  `fileInputRef.current?.click()` sessizce hiçbir şey yapmayacaktı. Input her
-  iki dalın da render ettiği tek bir `fileInput` değişkenine çıkarıldı. Fix 1'i
-  "çalışıyor gibi görünüp çalışmayan" hâle getirecek olan buydu.
-- **Import→push onay semantiği iki yüzeyde KASTEN farklı.** Onboarding'de
-  inline teklifin kendisi onaydır (kullanıcı dosyayı saniyeler önce seçti, ilk
-  cihaz push'ının ezeceği bir şey yok) — üstüne `window.confirm` koymak aynı
-  tıklamada iki onay olurdu. Ayarlar'da `window.confirm` KORUNDU: orada bulutta
-  başka bir cihazdan gelmiş gerçek bir kayıt olabilir ve kullanıcı oraya bir
-  giriş akışından gelmemiş olabilir.
-- **Push-after-import'un veriyi görmesi doğrulandı (varsayılmadı):**
-  `pushToCloud` → `isLocalEmpty()` → `getActiveProfile(handle.db)`;
-  `importBytes` `live`'ı yeniden atıyor ve `handle.db` `live` üzerinde bir
-  Proxy (`src/db/browser.ts:225`), yani okumalar her zaman güncel imaja gidiyor.
-  Düz bir property olsaydı mutlu yolda `local_empty` alırdık.
-- **Intro'da import sonrası kapılar gizleniyor:** `showIntro` mount'ta
-  hesaplandığı için "Yeni başla" tıklanabilir kalıyordu ve yeni yüklenen
-  verinin ÜSTÜNE sihirbazı açardı.
-- **`CloudWarnings` intro dalında da render ediliyor:** fix 3 ile pull artık
-  intro kartından da başlatılabiliyor; warnings state'i yalnız dönüş ayağında
-  render ediliyordu, yani seed-drift içerik kaybı sessiz kalırdı.
-- **`auth.loading` sırasında hesap kartı "kontrol ediliyor" gösteriyor.**
-  `useAuthStatus` karamsar varsayılanlı (T-048 kararı), naif
-  `auth.user ? hesap : giriş` önce giriş kartını flaş ederdi.
-- `cloudErrorText` push hatalarını da (`local_empty`, `too_large`) çeviriyor;
-  T-048'de "onboarding hiç push yapmaz" gerekçesiyle dışarıda bırakılmışlardı,
-  artık yapıyor.
+- **The hidden `<input type="file">` was INSIDE the showIntro JSX**, so it
+  wasn't mounted on the return leg (a separate early return), meaning
+  `fileInputRef.current?.click()` would silently do nothing. The input was
+  factored out into a single `fileInput` variable rendered by both branches.
+  This was the thing that would have made fix 1 "look like it works but
+  doesn't."
+- **Import->push confirmation semantics are DELIBERATELY different across the
+  two surfaces.** In onboarding, the inline offer itself is the confirmation
+  (the user picked the file seconds ago, there's nothing a first-device push
+  would overwrite); stacking a `window.confirm` on top would be two
+  confirmations in the same click. In Settings, `window.confirm` was KEPT:
+  there could be a real save from another device already in the cloud, and
+  the user may not have arrived there from a login flow.
+- **Verified (not assumed) that push-after-import sees the data:**
+  `pushToCloud` -> `isLocalEmpty()` -> `getActiveProfile(handle.db)`;
+  `importBytes` reassigns `live`, and `handle.db` is a Proxy over `live`
+  (`src/db/browser.ts:225`), so reads always go to the current image. With a
+  plain property we'd get `local_empty` on the happy path.
+- **Doors are hidden in the intro after import:** since `showIntro` was
+  computed at mount, "Start fresh" stayed clickable and would open the wizard
+  ON TOP of the newly loaded data.
+- **`CloudWarnings` also renders on the intro branch:** with fix 3, pull can
+  now also be started from the intro card; warnings state used to render only
+  on the return leg, so seed-drift content loss would go unnoticed there.
+- **The account card shows "checking" while `auth.loading`.** With
+  `useAuthStatus`'s pessimistic default (T-048 decision), a naive
+  `auth.user ? account : sign-in` would flash the sign-in card first.
+- `cloudErrorText` now also translates push errors (`local_empty`,
+  `too_large`); T-048 left them out on the grounds that "onboarding never
+  pushes," now it does.
 
-**Tarayıcı gerektiren, ELLE doğrulanacaklar:** rapordaki kontrol listesi.
+**Requires a browser, needs MANUAL verification:** the checklist in the
+report.

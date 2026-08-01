@@ -1,6 +1,6 @@
 ---
 id: T-029
-title: Vocab index çok-formlu girdiler — 马 "surname Ma" / "horse" bulunamıyor
+title: Vocab index multi-form entries, 马 "surname Ma" / "horse" can't be found
 status: done
 priority: p2
 effort: S
@@ -8,39 +8,41 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-✅ Kapatıldı (2026-07-22, backlog session'ında implement edildi). Uygulanan
-kural: birincil form = özel-isim-olmayan (pinyin'i büyük harfle başlamayan)
-formlar içinden EN ÇOK gloss'u olan (骑'de tek gloss'lu jì'yi değil qí'yı
-seçmek için "ilk form" yerine "en zengin form"); tüm formların gloss'ları
-kayıpsız union (MAX_GLOSSES kaldırıldı), classifiers da union. Doğrulama:
-马→"mǎ | horse ... surname Ma" (surname aranabilir), 骑→qí, 地/得/还/行
-tüm okunuş anlamları listede; "horse" araması 马/马上/骑/乘/匹 döndürür.
-4991 giriş, seviye dağılımı değişmedi. Mevcut profillere yayılım:
-ensureVocabSeeded diff-sync zaten reading/meaningsEn/classifiers alanlarını
-güncelliyor, ek iş gerekmedi.
+Closed (2026-07-22, implemented in the backlog session). Rule applied:
+primary form = among the non-proper-noun forms (pinyin not starting with a
+capital letter), the one with the MOST glosses (so that for 骑 it picks qí,
+not the single-gloss jì, i.e. "richest form" instead of "first form"); all
+forms' glosses are union'd without loss (MAX_GLOSSES removed), classifiers
+also union'd. Verified: 马 -> "mǎ | horse ... surname Ma" (surname is
+searchable), 骑 -> qí, 地/得/还/行 list all reading meanings; searching
+"horse" returns 马/马上/骑/乘/匹. 4991 entries, level distribution unchanged.
+Rollout to existing profiles: ensureVocabSeeded's diff-sync already updates
+the reading/meaningsEn/classifiers fields, no extra work needed.
 
-Kök neden (2026-07-22): `scripts/build-vocab-index.mjs` çok formlu
-girdilerde "gloss'u olan İLK formu" alıyor. 马'nın ilk formu Mǎ (soyadı),
-ikincisi mǎ (at) — index'e sadece "surname Ma" giriyor. Sonuç: listede
-saçma görünüm + İngilizce "horse" araması 马'yı bulamıyor. LLM hatası
-değil, distilasyon hatası.
+Root cause (2026-07-22): `scripts/build-vocab-index.mjs` took "the FIRST form
+that has a gloss" for multi-form entries. 马's first form is Mǎ (surname),
+the second is mǎ (horse), so only "surname Ma" made it into the index.
+Result: a nonsensical listing + an English search for "horse" can't find 马.
+Not an LLM error, a distillation error.
 
-Karar (Burak): birleştirme kayıplı (downsample) OLMASIN. Kural:
-1. **Birincil form** = özel-isim-olmayan form (gloss'ları proper-noun
-   kalıbında olmayan; "surname X" / baş harfi büyük tek gloss vb.).
-   Görünen okunuş + ilk gloss ondan gelir (mǎ, "horse").
-2. **Bütün formların gloss'ları union'lanır** — `en` listesi hiçbir anlamı
-   atmaz; soyadı anlamı da listede kalır, sadece başa geçmez.
-   `MAX_GLOSSES=4` kesmesi bu hedefle çelişiyor — kaldır ya da form başına
-   uygula; SKIP_GLOSS çöp filtresi ("variant of" vb.) kalsın.
-3. Arama zaten `meaningsEn.some(includes)` — union sayesinde hangi anlam
-   aranırsa aransın kelime çıkar ("horse" da "surname" da 马'yı bulur).
+Decision (Burak): merging should NOT be lossy (downsampling). Rule:
+1. **Primary form** = the non-proper-noun form (glosses not in a proper-noun
+   pattern; "surname X" / a single capitalized gloss, etc.). The displayed
+   reading + first gloss come from it (mǎ, "horse").
+2. **All forms' glosses are union'd**, the `en` list drops no meaning; the
+   surname meaning stays in the list too, just not first. The `MAX_GLOSSES=4`
+   cutoff works against this goal, remove it or apply it per form; keep the
+   SKIP_GLOSS junk filter ("variant of" etc.).
+3. Search already does `meaningsEn.some(includes)`, thanks to the union
+   whichever meaning is searched, the word comes up ("horse" and "surname"
+   both find 马).
 
-İş: script fix → `node scripts/build-vocab-index.mjs` ile
-`src/lib/vocab-index/zh-data.json` yeniden üret → commit. Statik yarı
-`ensureVocabSeeded` diff-sync'i mevcut profillere yeni gloss'ları taşıyor
-mu doğrula (taşımıyorsa sync alanlarına `en`/`reading` ekle).
+Work: fix the script -> regenerate `src/lib/vocab-index/zh-data.json` with
+`node scripts/build-vocab-index.mjs` -> commit. Verify the static half's
+`ensureVocabSeeded` diff-sync carries the new glosses to existing profiles
+(if not, add `en`/`reading` to the sync fields).
 
-Doğrulama: 马 listede "mǎ / horse" görünür; "horse" ve "surname" aramaları
-ikisi de 马'yı döndürür; parity harness ALL PASS; birkaç başka çok-formlu
-girdi (地, 得, 还 gibi çok okunuşlular) göz kontrolü.
+Verification: 马 shows "mǎ / horse" in the list; both "horse" and "surname"
+searches return 马; parity harness ALL PASS; eyeball check a few other
+multi-form entries (multi-reading ones like 地, 得, 还).
+</content>

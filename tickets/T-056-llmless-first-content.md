@@ -1,6 +1,6 @@
 ---
 id: T-056
-title: LLM'siz akış bozuk + ilk açılışta anında statik içerik (augmentation modeli)
+title: No-LLM flow broken + instant static content on first open (augmentation model)
 status: done
 priority: p1
 effort: M
@@ -8,62 +8,72 @@ confidence: high
 depends: []
 created: 2026-07-27
 ---
-★ ACİL. İki fazlı — Faz 1 canlı bug (hemen), Faz 2 mimari düzeltme.
+URGENT. Two phases: Phase 1 is a live bug (immediate), Phase 2 is an
+architectural fix.
 
-**Durum güncellemesi (2026-07-27):** Faz 1 MERGE EDİLDİ (`d791e63` +
-`53c65da` — onboarding `llm_unconfigured`'ı yakalayıp /map'e düşüyor,
-RoadmapView boş-harita durumunu gösteriyor). Kalan kapsam = yalnız Faz 2.
-İlişki: T-060 (sihirbaz redesign) "Bağlamadan devam"ı birinci sınıf kapı
-yapıyor; o kapının arka yüzü bu ticket'ın Faz 2'si.
+**Status update (2026-07-27):** Phase 1 MERGED (`d791e63` + `53c65da`,
+onboarding now catches `llm_unconfigured` and falls through to /map,
+RoadmapView shows the empty-roadmap state). Remaining scope = Phase 2 only.
+Related: T-060 (wizard redesign) makes "Continue without connecting" a
+first-class door; this ticket's Phase 2 is the back side of that door.
 
-**Kapanış (2026-07-27, solo wave):** Faz 2 de merge edildi (`b330e6c` /
-merge `2cf0ae6`). Ruling'ler (Burak): **B — cheatsheet hub'ı** (iskele
-curriculum reddedildi; flip: ders içeriği için paketlenmiş seed shiplenirse
-A yeniden masaya gelir). `/map` müfredatsız durumu artık dil-farkındalıklı
-kütüphane hub'ı (kartlar `visibleNavItems`'tan; lessons/review/chat hariç) +
-LLM varsa "Müfredatı oluştur", yoksa "LLM bağla". Kapı ekranı dörtlü ve
-yeniden sıralandı: rehberli kurulum (birincil) / kayıt yükle / bulut girişi /
-**anonim başlangıç** (tek soru: hedef dil — immutable olduğu için
-default'lanamaz; kalan her şey default, Ayarlar'dan özelleştirilir; anonim
-yol curriculum'u LLM bağlıyken bile otomatik üretmez — tetik hub'da).
-Ek düzeltme `40250c0`: grammar/vocab sidebar'ları yükleme hatasını boş
-listeye maskeliyordu ("müfredat oluşunca..." yanıltıcı kopyasıyla) — hata
-artık retry'lı görünür durum. en-native seed boşluğu → **T-064**.
+**Closure (2026-07-27, solo wave):** Phase 2 also merged (`b330e6c` / merge
+`2cf0ae6`). Rulings (Burak): **B, the cheatsheet hub** (a scaffold curriculum
+was rejected; flip: if packaged seed ships for lesson content itself, A comes
+back on the table). The no-curriculum state of `/map` is now a
+language-aware library hub (cards from `visibleNavItems`, excluding
+lessons/review/chat) + "Generate curriculum" if LLM is connected, else
+"Connect LLM." The entry screen has four doors, reordered: guided setup
+(primary) / load save / cloud sign-in / **anonymous start** (one question:
+target language, since it's immutable and can't be defaulted; everything else
+defaults and is customizable from Settings; the anonymous path doesn't
+auto-generate a curriculum even with LLM connected, the trigger lives in the
+hub). Extra fix `40250c0`: the grammar/vocab sidebars were masking a load
+error as an empty list (with the misleading copy "once the curriculum is
+ready..."); the error now shows a retryable state. The en-native seed gap
+became **T-064**.
 
-**Temel ilke (Burak):** LLM bağlama + kişiselleştirme bir **augmentation**'dır,
-ön-koşul DEĞİL. Statik content her an hazır (grammar/kanji/vocab seed CDN'de +
-packaged seed, `applyGrammarSeed`/`applyKanjiSeed`/`applyVocabSeed`). Kullanıcı
-siteyi ilk açtığında VE setup bitince ANINDA içerik görmeli; LLM sonradan
-gelip dersleri/kişisel müfredatı ekler.
+**Core principle (Burak):** connecting an LLM + personalization is an
+**augmentation**, not a prerequisite. Static content is always ready
+(grammar/kanji/vocab seed on the CDN + packaged seed,
+`applyGrammarSeed`/`applyKanjiSeed`/`applyVocabSeed`). The user should see
+content INSTANTLY both on first opening the site AND right after setup
+finishes; the LLM comes later and adds lessons/a personal curriculum.
 
-## Faz 1 — "Continue without LLM" bozuk (canlı bug, acil)
-Onboarding son adımı koşulsuz `curriculumGenerate(profile.id)` çağırıyor
-(`src/components/onboarding/OnboardingWizard.tsx:531`) — bu LLM-gated. LLM
-bağlı değilken "continue without LLM" dendiğinde bu çağrı "LLM bağlayın"
-hatası verip akışı KİLİTLİYOR. "Continue without LLM" çok önemli ve düzgün
-çalışmalı: LLM yoksa curriculum generate ATLANMALI, kullanıcı stuck olmadan
-statik-içerikli bir başlangıca (aşağıda Faz 2) götürülmeli. Doğrulama: temiz
-tarayıcı → siteyi aç → "LLM'siz devam" → hatasız içerik gelmeli.
+## Phase 1 - "Continue without LLM" broken (live bug, urgent)
+The last onboarding step unconditionally calls
+`curriculumGenerate(profile.id)` (`src/components/onboarding/OnboardingWizard.tsx:531`),
+which is LLM-gated. When "continue without LLM" is chosen while the LLM
+isn't connected, this call errors with "connect an LLM" and LOCKS the flow.
+"Continue without LLM" is important and must work correctly: if there's no
+LLM, curriculum generation should be SKIPPED, and the user should land in a
+static-content start (Phase 2 below) without getting stuck. Verification: a
+clean browser -> open the site -> "Continue without LLM" -> content should
+appear with no error.
 
-## Faz 2 — İlk açılışta + setup sonrası anında statik içerik
-LLM'siz kullanıcı için değerli bir başlangıç durumu:
-- **Grammar cheatsheet** (dil-geneli index + packaged seed — LLM'siz tam hazır),
-  **sözlük/vocab** (zh), **kanji** (ja) — hepsi anında gezilebilir.
-- `/map` (roadmap) LLM'siz ne gösterecek? Curriculum LLM-üretimi → ya statik
-  bir "iskele" curriculum (seed'lenebilir mi?) ya da açık "dersler için LLM
-  bağla" durumu + bu arada cheatsheet/sözlüğe yönlendiren canlı içerik. Kör
-  boş /map GÖSTERME.
-- İlk açılış: onboarding'e girmeden bile (ya da anonim başlayınca hemen)
-  statik kütüphaneye erişim hissi.
-- LLM bağlanınca kişiselleştirme (curriculum + dersler) augmentation olarak
-  eklenir — mevcut curriculumGenerate/ensureLesson akışı LLM gelince devreye.
+## Phase 2 - Instant static content on first open + after setup
+A valuable starting state for a no-LLM user:
+- **Grammar cheatsheet** (language-wide index + packaged seed, fully ready
+  without LLM), **dictionary/vocab** (zh), **kanji** (ja): all instantly
+  browsable.
+- What should `/map` (roadmap) show without LLM? Curriculum is
+  LLM-generated, so either a static "scaffold" curriculum (seedable?) or an
+  explicit "connect an LLM for lessons" state plus live content in the
+  meantime pointing to the cheatsheet/dictionary. Do NOT show a blind empty
+  /map.
+- First open: a sense of access to the static library even before entering
+  onboarding (or immediately after starting anonymously).
+- Once an LLM is connected, personalization (curriculum + lessons) is added
+  as augmentation; the existing curriculumGenerate/ensureLesson flow kicks in
+  once the LLM arrives.
 
-Karar noktası (fix session'ında netleşir): LLM'siz "roadmap" nasıl görünür —
-statik iskele curriculum mu, yoksa cheatsheet-merkezli bir giriş mi? Mevcut
-`llmConfigured()` / `useLlmStatus` gate'leri (`src/lib/llm/config.ts`,
-`src/lib/llm-status.ts`) zaten "no-LLM degrade" için var — bu akışı onların
-üstüne kur, yeni gate icat etme.
+Decision point (to be settled during the fix session): what a no-LLM
+"roadmap" looks like, a static scaffold curriculum or a cheatsheet-centered
+entry point. The existing `llmConfigured()` / `useLlmStatus` gates
+(`src/lib/llm/config.ts`, `src/lib/llm-status.ts`) already exist for
+"no-LLM degrade"; build this flow on top of them, don't invent a new gate.
 
-Fence: `OnboardingWizard.tsx` sonu + `/map` (roadmap) ilk-render + muhtemelen
-`client-api.ts` curriculum yolu. Model: **opus** (Faz 2 mimari yargı —
-LLM'siz başlangıç durumunun tasarımı, kör find-replace değil).
+Fence: end of `OnboardingWizard.tsx` + `/map` (roadmap) first render +
+probably the curriculum path in `client-api.ts`. Model: **opus** (Phase 2 is
+architectural judgment, designing the no-LLM start state, not blind
+find-replace).

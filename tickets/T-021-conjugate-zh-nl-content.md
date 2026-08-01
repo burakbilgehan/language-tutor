@@ -1,6 +1,6 @@
 ---
 id: T-021
-title: Çekim cheatsheet'i — zh zayıf, nl boş; ja seviyesine getir
+title: Conjugation cheatsheet, zh weak, nl empty; bring up to ja level
 status: done
 priority: p2
 effort: M
@@ -8,38 +8,39 @@ confidence: medium
 depends: []
 created: 2026-07-18
 ---
-ja çekim sayfası beğenildi (referans kalite). zh tarafı zayıf
-(`ZhAspectView.tsx` 96 satır — aspect partikülleriyle sınırlı), nl boş
-denecek durumda (`NlConjugatorView.tsx` var ama içerik hissi vermiyor).
-Veri dosyaları: `src/lib/conjugation/{ja,zh,nl}.ts` + `ja-charts.ts`.
+The ja conjugation page was well received (reference quality). The zh side is
+weak (`ZhAspectView.tsx` 96 lines, limited to aspect particles), nl is close
+to empty (`NlConjugatorView.tsx` exists but doesn't feel like content). Data
+files: `src/lib/conjugation/{ja,zh,nl}.ts` + `ja-charts.ts`.
 
-Kapsam:
-- **zh**: fiil çekimi yok ama ja'daki "chart" kalıbının karşılığı var:
-  aspect/partikül sistemi (了/过/着/在/正在), yön tümleçleri, sonuç
-  tümleçleri, 把/被 yapıları, soru/olumsuzlama kalıpları (不/没),
-  yardımcılar (会/能/可以/要/想). Her biri örnekli tablo — ja-charts
-  formatında deterministik statik veri.
-- **nl**: gerçek çekim dili — şimdiki/geçmiş (zwak/sterk/onregelmatig),
-  perfectum (hebben/zijn seçimi), ayrılabilir fiiller (T-006 ile temas:
-  o ticket'ın zayıf-fiil listesi buradan beslenebilir), modal fiiller,
-  imperatief. `nl.ts`'deki mevcut motoru genişlet + chart görünümü.
-- İçerik ja'daki gibi **statik kod** olmalı (LLM'siz, deterministik) —
-  grammar cheatsheet felsefesiyle aynı.
+Scope:
+- **zh**: no verb conjugation, but there's an equivalent of ja's "chart"
+  pattern: the aspect/particle system (了/过/着/在/正在), directional
+  complements, resultative complements, 把/被 structures, question/negation
+  patterns (不/没), auxiliaries (会/能/可以/要/想). Each with an example
+  table, deterministic static data in the ja-charts format.
+- **nl**: an actual conjugating language, present/past (zwak/sterk/onregelmatig),
+  perfectum (hebben/zijn choice), separable verbs (touches T-006, that
+  ticket's weak-verb list could feed from here), modal verbs, imperatief.
+  Extend the existing engine in `nl.ts` + chart view. Content should be
+  **static code** like ja (no LLM, deterministic), same philosophy as the
+  grammar cheatsheet.
 
-`conjugation-nl.test.ts` mevcut — yeni fiil sınıfları test eklenerek girer.
-ja-charts.ts formatı önce okunup birebir taklit edilmeli.
+`conjugation-nl.test.ts` exists, new verb classes go in via added tests.
+The `ja-charts.ts` format should be read first and copied exactly.
 
-Bağımlılık yok; T-006 (nl zayıf ayrılabilir fiiller) ile aynı dosyalara
-dokunur — aynı session'da ele almak çakışmayı önler.
+No dependency; touches the same files as T-006 (nl weak separable verbs),
+handling them in the same session avoids conflicts.
 
-## Durum (2026-07-18)
-Ticket açıldığından beri commit f587ab9 ("Bigger zh/nl cheatsheets,
-browser TTS, verified nl strong table") bu kapsamı zaten kapatmış: zh
-tarafında `ZH_ASPECT_GROUPS` 6 grup (aspect/negation/future-modal/
-time-frames/structures/questions, ~40 satır), nl tarafında hem
-`conjugateNl` motoru (zwak/sterk/onregelmatig, perfectum, ayrılabilir)
-hem `NL_PATTERN_GROUPS` (connector/infinitive/er/word-order, 4 grup).
-İkisi de view'larda generic map ile render ediliyor (ZhAspectView,
-NlConjugatorView) — statik veri, LLM'siz. Ticket metni artık repoyla
-eşleşmiyordu; ek iş gerekmedi, T-006 (aynı session) ayrı gerçek bug
-olarak kaldı ve ayrıca çözüldü.
+## Status (2026-07-18)
+Since the ticket was opened, commit f587ab9 ("Bigger zh/nl cheatsheets,
+browser TTS, verified nl strong table") already covered this scope: on the zh
+side, `ZH_ASPECT_GROUPS` has 6 groups (aspect/negation/future-modal/
+time-frames/structures/questions, ~40 lines), on the nl side both the
+`conjugateNl` engine (zwak/sterk/onregelmatig, perfectum, separable) and
+`NL_PATTERN_GROUPS` (connector/infinitive/er/word-order, 4 groups). Both are
+rendered in the views with a generic map (ZhAspectView, NlConjugatorView),
+static data, no LLM. The ticket text no longer matched the repo; no
+additional work was needed. T-006 (same session) remained a separate real bug
+and was also resolved.
+</content>

@@ -1,6 +1,6 @@
 ---
 id: T-074
-title: Köprü loglarında iş kimliği tüm satırlara işlensin (sürüyor/bitti/iptal)
+title: Stamp the job id onto every bridge log line (running/done/cancelled)
 status: todo
 priority: p3
 effort: XS
@@ -9,17 +9,11 @@ depends: []
 created: 2026-08-01
 ---
 
-## Sorun
+## Problem
 
-T-072 iş kimliğini yalnız "istek" satırına ekledi. `sürüyor` (heartbeat),
-`bitti`, `iptal`, `sahipsiz bitti`, `önbellekten teslim` satırları yalnız
-etiketle yazılıyor; aynı dersin iki işi aynı anda koşarken/kuyruktayken
-loglar ayırt edilemiyor ("ne anlayım hangi iş?", 2026-08-01).
+T-072 added the job identity only to the "request" log line. The `running`
+(heartbeat), `done`, `cancelled`, `orphaned-finished`, `delivered-from-cache` lines are only labeled; when two jobs for the same lesson are running/queued at the same time, the logs can't be told apart ("how am I supposed to tell which job is which," 2026-08-01).
 
-## İş
+## Work
 
-`scripts/llm-bridge.mjs`: job id (ya da id yoksa istek başına kısa bir yerel
-sayaç) log satırlarının tümüne `id=xxxxxxxx` olarak eklensin. Heartbeat
-closure'ı ve settle logları zaten job kaydına erişiyor; kroki basit.
-Değişiklik sonrası `public` kopya deploy'la güncellenir (out/ kopyası
-build-static'te otomatik).
+`scripts/llm-bridge.mjs`: append the job id (or, if none exists, a short local per-request counter) to ALL log lines as `id=xxxxxxxx`. The heartbeat closure and settle-time logs already have access to the job record; the change is straightforward. After the change, the `public` copy gets updated on deploy (the `out/` copy happens automatically in build-static).

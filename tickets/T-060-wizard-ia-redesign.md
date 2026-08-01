@@ -1,6 +1,6 @@
 ---
 id: T-060
-title: LLM sihirbazı IA redesign — 3 kapı, canlı algılama, kalite profili, dürüst copy
+title: LLM wizard IA redesign: 3 doors, live detection, quality profile, honest copy
 status: done
 priority: p2
 effort: L
@@ -8,57 +8,29 @@ confidence: medium
 depends: [T-057, T-059]
 created: 2026-07-27
 ---
-Dalganın kalbi. Burak kararları (2026-07-27 tartışması):
+The heart of the wave. Burak's decisions (2026-07-27 discussion):
 
-## 1. Üç kapı
-- **"Bağlamadan devam" (No-LLM)** — birinci sınıf kapı, "atla" linki değil.
-  Copy: statik kütüphane (grammar/kanji/vocab seed) ANINDA açık, dersler/chat
-  LLM bağlanınca kilidi açılır. Arka yüzü T-056 Faz 2 (ayrı ticket; bu kapı
-  onun çıktısına yaslanır ama ona hard-bağımlı değil — kapı önce gelirse
-  mevcut no-LLM degrade davranışına düşer).
-- **"Bilgisayarımdaki AI" (lokal)** — Ollama + abonelik köprüsü TEK kapıda
-  (ikisi de "tarayıcın localhost'taki OpenAI-uyumlu sunucuya bağlanır");
-  içeride iki şerit: "mevcut aboneliğim (Claude/ChatGPT/Copilot/Gemini)" ve
-  "ücretsiz yerel model (Ollama)". Teknik seam birleşmez (Ollama kendi
-  endpoint'i, bridge kendi portu) — yalnız UX birleşir.
-- **"API anahtarı"** — bugünkü key yolu; sağlayıcı seçimi + kalite profili.
+## 1. Three doors
+- **"Continue without connecting" (No-LLM)** - a first-class door, not a "skip" link.
+  Copy: the static library (grammar/kanji/vocab seed) opens INSTANTLY, lessons/chat unlock once an LLM connects. Backend is T-056 Phase 2 (separate ticket; this door leans on its output but isn't hard-dependent on it: if the door ships first, it falls back to the existing no-LLM degrade behavior).
+- **"AI on my computer" (local)** - Ollama and the subscription bridge in ONE door (both are "your browser connects to an OpenAI-compatible server on localhost"); inside, two lanes: "my existing subscription (Claude/ChatGPT/Copilot/Gemini)" and "free local model (Ollama)". The technical seam doesn't merge (Ollama has its own endpoint, the bridge its own port), only the UX merges.
+- **"API key"** - today's key path; provider choice plus quality profile.
 
-## 2. Canlı algılama checklist'i (statik talimat yerine)
-Lokal kapıda sihirbaz kendi ilerler: kısa-timeout probe ile bridge
-`GET :8484/health` (T-059) ve Ollama `GET :11434/api/tags` yoklanır →
-"köprü bekleniyor… → köprü bulundu ✓ (claude) → test et". Komut satırı yine
-gösterilir (`npx okumo-bridge`, T-059) ama kullanıcı "test"e körlemesine
-basmaz; site durumu görür. Safari uyarısı ve `--origin` mantığı korunur.
-Probe yalnız bu kapı açıkken ve interval'li — arka planda sürekli polling yok
-(OnboardingWizard.tsx:346'daki "probe pahalı" dersi geçerli).
+## 2. Live detection checklist (instead of a static instruction)
+In the local door the wizard advances on its own: short-timeout probes hit the bridge `GET :8484/health` (T-059) and Ollama `GET :11434/api/tags` -> "waiting for bridge... -> bridge found (claude) -> test". The command line is still shown (`npx okumo-bridge`, T-059) but the user doesn't blindly click "test"; the site sees the status. The Safari warning and `--origin` logic are preserved. The probe runs only while this door is open and at an interval; no continuous background polling (the "probing is expensive" lesson from OnboardingWizard.tsx:346 still applies).
 
-## 3. Kalite profili + bütçe ipucu (model muallaklığının çözümü)
-- Sağlayıcı seçildikten sonra TEK seçim: **Eko / Denge / En iyi** — arkada
-  T-057 kataloğundan somut fast/balanced/deep üçlüsü dolar.
-- Seçimin altında görünürlük satırı: "Kullanılacak: DeepSeek V3 (hızlı işler)
-  · DeepSeek R1 (dersler)" — hangi modelin çalışacağı ASLA gizli kalmaz
-  (bugünkü ekran görüntüsü şikâyeti: DeepSeek seçince hangi model, belirsiz).
-- Bütçe ipucu: katalog fiyat metadata'sından kaba aylık tahmin
-  ("tipik kullanımda ~$X/ay"; yerel/abonelikte "ek ücret yok").
-- fast/balanced/deep ÜÇLÜSÜ casual akıştan tamamen çıkar.
+## 3. Quality profile + budget hint (resolves model ambiguity)
+- After a provider is chosen, a SINGLE choice: **Eco / Balanced / Best** - behind the scenes it's filled with a concrete fast/balanced/deep trio from the T-057 catalog.
+- A visibility line under the choice: "Will use: DeepSeek V3 (quick tasks) - DeepSeek R1 (lessons)" - which model actually runs is NEVER hidden (today's screenshot complaint: picking DeepSeek doesn't say which model).
+- Budget hint: a rough monthly estimate from the catalog's price metadata ("typically ~$X/month at usual usage"; "no extra cost" for local/subscription).
+- The fast/balanced/deep TRIO disappears entirely from the casual flow.
 
-## 4. Gelişmiş panel — LlmProviderSection erir
-Nokta atışı model id'leri, custom base URL, tier override, jsonMode,
-opencode gibi ekstra backend'ler → tek "Gelişmiş" accordion'ı.
-`LlmProviderSection` ayrı yüzey olmaktan çıkar (masking/save mantığı
-client-api'de zaten ortak); CLI modu (server-mode, Burak'ın kullanımı)
-gelişmişte aynen kalır. İki yüzeyin duplike Anthropic sabitleri T-057 ile
-zaten ölmüş olacak.
+## 4. Advanced panel: LlmProviderSection melts away
+Exact model ids, custom base URL, tier override, jsonMode, extra backends like opencode -> a single "Advanced" accordion.
+`LlmProviderSection` stops being a separate surface (masking/save logic is already shared in client-api); CLI mode (server-mode, Burak's own usage) stays exactly as is under Advanced. The two surfaces' duplicate Anthropic constants will already be dead once T-057 lands.
 
-## 5. Dürüst-friction copy (Burak, karar 4)
-Lokal kapının tonu: "evet, bu adım biraz tekniktir — yıl 2026, AI literacy
-artık bir beceri; öğrenmeye değer. Daha kolayını istersen: No-LLM ile hemen
-başla (statik içerik her geçen gün büyüyor) ya da 5 dakikalık API anahtarı
-yolu." Friction'ı gizleme, gerekçelendir. tr canonical + en ayna
-(`useStrings` düzeni).
+## 5. Honest-friction copy (Burak, decision 4)
+Tone of the local door: "yes, this step is a bit technical; it's 2026, AI literacy is now a skill worth learning. Want something easier? Start right away with No-LLM (the static content keeps growing every day) or the 5-minute API key path." Don't hide the friction, justify it. tr canonical + en mirror (`useStrings` pattern).
 
 Fence: `components/settings/LlmSetupWizard.tsx` + `LlmProviderSection.tsx`
-(+ onboarding'deki embed noktası `OnboardingWizard.tsx:1037` civarı — yalnız
-embed, wizard'ın kendisi), `lib/llm-status.ts` gerekiyorsa. `src/lib/llm/*`
-T-057'de bitmiş olmalı — bu ticket oraya DOKUNMAZ. Model: opus (IA + copy +
-state machine, mekanik değil).
+(+ the onboarding embed point around `OnboardingWizard.tsx:1037`; embed only, not the wizard itself), `lib/llm-status.ts` if needed. `src/lib/llm/*` should already be finished by T-057; this ticket does NOT touch that. Model: opus (IA + copy + state machine, not mechanical).

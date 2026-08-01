@@ -1,6 +1,6 @@
 ---
 id: T-019
-title: zh sözlük içeriğini toplu doldurma + paketlenmiş seed
+title: Bulk-fill zh vocab dictionary content + packaged seed
 status: done
 priority: p2
 effort: M
@@ -8,47 +8,50 @@ confidence: high
 depends: []
 created: 2026-07-18
 ---
-Sözlük (vocab) girişlerinin çoğu boş; dolu kelime örneği (的: örnekler +
-eşdizimler + karakter analizi) beğenildi — hedef bütün HSK listesini bu
-kaliteye getirmek. T-012'de bilerek ertelenen "packaged content seed"
-işinin kendisi.
+Most vocab entries are empty; the filled-in word example (的: examples +
+collocations + character analysis) was well received, the goal is to bring
+the whole HSK list to that quality. This is the "packaged content seed" work
+that was deliberately deferred in T-012.
 
-İçerik uniform mu sorusunun cevabı: evet — her kelime **bir kez** üretilir
-(`VocabContentSchema`: meanings_tr + not + 量词 notu + örnekler +
-eşdizimler + karakter kırılımı, zod-validated), DB'ye cache'lenir; LLM her
-açılışta yeniden üretmez. Yapı şemayla sabit, dolayısıyla tüm kelimeler
-aynı bölümlerle gelir.
+Answer to "is the content uniform": yes, each word is generated **once**
+(`VocabContentSchema`: meanings_tr + note + 量词 note + examples +
+collocations + character breakdown, zod-validated), cached in the DB; the LLM
+doesn't regenerate it on every open. The structure is fixed by the schema, so
+every word comes with the same sections.
 
-İş iki parça (grammar'daki kalıbın birebir kopyası):
-1. **Toplu üretim scripti**: ✅ YAPILDI (2026-07-18, backlog session'ında):
-   `scripts/blast-generate.ts` vocab'ı da kapsayacak şekilde genişletildi
-   (pending/error `vocab_entries` → `generateVocabContent`, position
-   sıralı = HSK1→6). Kontrol paneli: `node scripts/blast-dashboard.mjs`
-   → http://127.0.0.1:4646 (canlı izleme + dur/başlat/concurrency).
-   Concurrency 8-16 bandında tut — 100 denendi, makine boğulup çağrılar
-   120s timeout'a düştü. Kanji kuyruğu bitince vocab otomatik sıraya girer;
-   sonraki kota penceresinde koşturulacak.
-   Not: liste GET'i asla auto-queue yapmaz (T-012 kararı) — o kural duruyor.
-2. **Packaged seed**: ✅ YAPILDI (2026-07-18). `npm run seed:vocab`
-   (`scripts/export-vocab-seed.ts`, grammar'daki `export-grammar-seed.ts`
-   kalıbının birebir kopyası) — `data/app.db`'deki ready girişleri
-   `public/vocab-seed/<lang>.json`'a export. `applyVocabSeed` (core/vocab.ts,
-   grammar'daki `applyGrammarSeed`'in aynısı, word-keyed) pending/error
-   satırları seed'den doldurur. Bağlandığı yerler (grammar ile birebir):
-   server `/api/vocab` GET liste (dosyayı process-ömrü boyunca cache'ler);
-   statik mod `client-api.ts` `vocabList` + `vocabDetail` (tarayıcıdan
-   `src/lib/vocab-seed.ts` `fetchVocabSeed` ile indirir, dil başına promise
-   cache). Server `/api/vocab/[word]` deep-link route'u grammar'ın
-   `[slug]`'ı gibi seed'e dokunmuyor (kasıtlı — pattern öyle, sadece liste
-   GET'i ve statik client-api uyguluyor).
+The work has two parts (an exact copy of the grammar pattern):
+1. **Bulk generation script**: DONE (2026-07-18, in the backlog session):
+   `scripts/blast-generate.ts` extended to cover vocab too (pending/error
+   `vocab_entries` -> `generateVocabContent`, ordered by position = HSK1->6).
+   Control panel: `node scripts/blast-dashboard.mjs`
+   -> http://127.0.0.1:4646 (live monitoring + stop/start/concurrency).
+   Keep concurrency in the 8-16 band; 100 was tried and the machine choked,
+   with calls hitting the 120s timeout. Once the kanji queue finishes, vocab
+   enters the queue automatically; will run in the next quota window.
+   Note: the list GET never auto-queues (T-012 decision), that rule still
+   stands.
+2. **Packaged seed**: DONE (2026-07-18). `npm run seed:vocab`
+   (`scripts/export-vocab-seed.ts`, an exact copy of the grammar
+   `export-grammar-seed.ts` pattern), exports ready entries from `data/app.db`
+   to `public/vocab-seed/<lang>.json`. `applyVocabSeed` (core/vocab.ts, the
+   same as grammar's `applyGrammarSeed`, word-keyed) fills pending/error rows
+   from the seed. Wiring (identical to grammar): server `/api/vocab` GET list
+   (caches the file for the process lifetime); static mode `client-api.ts`
+   `vocabList` + `vocabDetail` (downloaded from the browser via
+   `src/lib/vocab-seed.ts` `fetchVocabSeed`, per-language promise cache).
+   The server `/api/vocab/[word]` deep-link route doesn't touch the seed, like
+   grammar's `[slug]` (deliberate, that's the pattern; only the list GET and
+   the static client-api apply it).
 
-   Doğrulama: `npx tsc --noEmit` temiz, parity harness ALL PASS
-   (`listVocab (zh seed) → 4991 kelime` dahil), `npm run seed:vocab` gerçek
-   DB'den 2 hazır kelimeyi export etti (kalanı blast arka planda dolduruyor),
-   `applyVocabSeed` geçici DB kopyasında pending→ready dolum manuel
-   doğrulandı (bkz. session notu — filled:1, hasContent:true).
+   Verification: `npx tsc --noEmit` clean, parity harness ALL PASS
+   (including `listVocab (zh seed) -> 4991 words`), `npm run seed:vocab`
+   exported 2 ready words from the real DB (the rest is being filled by the
+   blast run in the background), `applyVocabSeed` pending->ready fill was
+   manually verified on a temporary DB copy (see session note, filled:1,
+   hasContent:true).
 
-Not: committed `public/vocab-seed/zh.json` şu an sadece 2 kelime (blast
-kuyruğu bitmedi) — INDEX.md ops adımı 3'te ("seed:grammar + seed:vocab
-re-export → commit → Pages deploy") tam kütüphaneyle re-export planlı,
-bu bilinçli bir eksik, unutulmuş değil.
+Note: the committed `public/vocab-seed/zh.json` currently has only 2 words
+(the blast queue hasn't finished), a full re-export with the complete library
+is planned in INDEX.md ops step 3 ("seed:grammar + seed:vocab re-export ->
+commit -> Pages deploy"); this is a deliberate gap, not something forgotten.
+</content>

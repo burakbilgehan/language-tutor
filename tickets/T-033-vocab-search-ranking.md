@@ -1,6 +1,6 @@
 ---
 id: T-033
-title: Sözlük araması — ranking yok, "ma" alakasız sonuç kusuyor
+title: Dictionary search, no ranking, "ma" spews irrelevant results
 status: done
 priority: p1
 effort: S
@@ -8,34 +8,38 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-Semptom (Burak, canlı screenshot): sözlükte "ma" yazınca 了/是/你/和/好/
-小/做 gibi alakasız sonuçlar dönüyor; 马/妈/吗 üstte değil.
+Symptom (Burak, live screenshot): typing "ma" in the dictionary returns
+irrelevant results like 了/是/你/和/好/小/做; 马/妈/吗 aren't on top.
 
-Neden: `VocabSidebar` filtresi düz substring — `fold(reading).includes(q)`
-+ `meaningsEn.some(m => fold(m).includes(q))`. "ma" → "many", "small",
-"make", "marker", "(coll.) what?" gibi gloss'ların İÇİNDE geçiyor. T-029
-union'ı anlam listelerini bilinçli büyüttü; arama katmanı buna göre
-düzeltilmeden gürültü arttı (T-029'un eksik bırakılan yarısı).
+Cause: the `VocabSidebar` filter is plain substring:
+`fold(reading).includes(q)` + `meaningsEn.some(m => fold(m).includes(q))`.
+"ma" matches INSIDE glosses like "many", "small", "make", "marker",
+"(coll.) what?". The T-029 union deliberately grew the gloss lists; the
+search layer wasn't adjusted for that, so noise increased (the part of
+T-029 left unfinished).
 
-Fix — skor katmanlı ranking + eşik, filtre değil sıralama problemi:
-1. Katmanlar (yüksekten düşüğe):
-   a. Kelime CJK eşleşmesi (query hanzi içeriyorsa exact > prefix >
+Fix: a scored ranking layer + threshold, this is a sorting problem, not
+a filtering one:
+1. Tiers (highest to lowest):
+   a. CJK word match (if the query contains hanzi: exact > prefix >
       substring).
-   b. Okunuş TAM hece eşleşmesi, toneless fold ("ma" == mǎ/má/mā/ma).
-   c. Okunuş prefix ("ma" → mǎshàng; "mashang" → 马上).
-   d. Gloss kelime-sınırı eşleşmesi (\b ile; "horse" tam kelime olarak).
-   e. Gloss substring — sadece query ≥3 harfse ve üstteki katmanlar
-      boşsa; "ma" gibi kısa query'lerde hiç girmesin.
-2. Katman içi sıralama: seviye (HSK1 önce) + position (frequency zaten
-   position'a gömülü).
-3. cmd+K palette'in reading-aware mantığıyla (T-016, `search-index.ts`)
-   tutarlılık — ortak yardımcı çıkarılabilirse çıkar, kopya kural olmasın.
-4. Ayrı küçük parça: 吗'nın birincil formu má "(coll.) what?" görünüyor —
-   build script tie-break'i eşitlikte dataset sırasını alıyor. Nötr tonlu
-   (işaretsiz pinyinli) form particle'larda kazanmalı (吗→ma, 得→de gibi).
-   `build-vocab-index.mjs`'e tie-break + index re-export; değişen
-   birincil okunuşları diff'te gözden geçir (davranış değişikliği).
+   b. Reading FULL syllable match, toneless fold ("ma" == mǎ/má/mā/ma).
+   c. Reading prefix ("ma" -> mǎshàng; "mashang" -> 马上).
+   d. Gloss word-boundary match (via \b; "horse" as a whole word).
+   e. Gloss substring; only when the query is >=3 characters and the
+      tiers above are empty; should never fire for short queries like "ma".
+2. Within-tier ordering: level (HSK1 first) + position (frequency is
+   already embedded in position).
+3. Consistency with the cmd+K palette's reading-aware logic (T-016,
+   `search-index.ts`); extract a shared helper if possible, no duplicated
+   rules.
+4. A separate small piece: 吗's primary form shows up as má "(coll.)
+   what?"; the build script's tie-break falls back to dataset order on
+   ties. The neutral-tone form (unmarked pinyin) should win for particles
+   (吗->ma, 得->de etc.). Add a tie-break to `build-vocab-index.mjs` +
+   re-export the index; review changed primary readings in the diff
+   (behavior change).
 
-Doğrulama: "ma" → 妈/马/吗 ilk üçte, 小/那/做/了 listede YOK; "horse" →
-马 üstte; "mashang" → 马上; hanzi yapıştırma (马) exact üstte; parity
-harness ALL PASS (core'a dokunulursa).
+Verification: "ma" -> 妈/马/吗 in the top three, 小/那/做/了 NOT in the
+list; "horse" -> 马 on top; "mashang" -> 马上; pasting hanzi (马) exact match
+on top; parity harness ALL PASS (if core is touched).

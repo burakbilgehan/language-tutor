@@ -1,6 +1,6 @@
 ---
 id: T-023
-title: Haiku üretimi içerik kalite denetimi (halüsinasyon taraması)
+title: Content quality audit for haiku generation (hallucination sweep)
 status: todo
 priority: p1
 effort: S
@@ -8,72 +8,74 @@ confidence: high
 depends: []
 created: 2026-07-18
 ---
-Tüm cheatsheet içeriği (kanji/grammar/vocab) haiku ile üretiliyor; uydurma
-kelime / yanlış okunuş / saçma anlam şüphesi var. Opus'lu ayrı bir session
-`data/app.db`'den rastgele 100 ready örnek çekip (≈60 kanji / 20 vocab /
-20 grammar) statik referans kolonlarıyla (onyomi/kunyomi, pinyin,
-meanings_en) çapraz kontrol edecek; kesin hatalıları `status='error'`
-yapacak ki `scripts/blast-generate.ts` sonraki koşuda yeniden üretsin.
-Tam prompt backlog session'ında verildi (2026-07-18); özü yukarıda —
-"kesin hatalı" eşiği yüksek, emin olunmayan "şüpheli" olarak sadece
-listelenir, UPDATE'ler blast dururken yapılır.
+All cheatsheet content (kanji/grammar/vocab) is generated with haiku; there's
+a suspicion of made-up words / wrong readings / nonsensical meanings. A
+separate Opus session will pull 100 random ready examples from `data/app.db`
+(roughly 60 kanji / 20 vocab / 20 grammar) and cross-check them against the
+static reference columns (onyomi/kunyomi, pinyin, meanings_en); definite
+errors get marked `status='error'` so `scripts/blast-generate.ts` regenerates
+them on the next run. The full prompt was given in the backlog session
+(2026-07-18); the gist is above, the bar for "definite error" is high,
+anything uncertain is just listed as "suspicious," UPDATEs happen while the
+blast is paused.
 
-Sonuca bağlı karar (backlog session'ında konuşulacak): hata oranı yüksekse
-(a) hatalıları haiku ile yeniden üretmek yerine `LLM_MODEL_FAST=sonnet`
-ile blast koşturmak, (b) örneklemi büyütmek, (c) prompt'ları sıkılaştırmak.
+Decision contingent on the outcome (to be discussed in the backlog session):
+if the error rate is high, either (a) regenerate the errors with
+`LLM_MODEL_FAST=sonnet` instead of haiku for the blast run, (b) grow the
+sample, (c) tighten the prompts.
 
-Sıralama: blast'ın içerik koşuları bittikten SONRA koş (yarım içerikte
-örneklem çarpık olur); `seed:grammar`/`seed:vocab` re-export'ları QA
-temiz çıkınca yapılır — bozuk içeriği seed'e paketlememek için.
+Sequencing: run this AFTER blast's content runs finish (the sample would be
+skewed on partial content); the `seed:grammar`/`seed:vocab` re-exports happen
+once QA comes back clean, to avoid packaging broken content into the seed.
 
-**parked (2026-07-18)**: Kanji+grammar ayağı koşuldu (rapor:
-scratchpad-kanji-audit-report.md — 78 kanji'de 2 kesin hata, ikisi TR gloss;
-okunuşlar/gramer temiz). Vocab üretimi bitince SADECE vocab örneklemiyle
-tekrar koşulacak; sonra seed export'lar.
+**Parked (2026-07-18)**: the kanji+grammar leg was run (report:
+`docs/kanji-content-audit-2026-07-18.md`, 2 definite errors across 78 kanji,
+both TR glosses; readings/grammar clean). Once vocab generation finishes,
+rerun with the vocab sample ONLY; then the seed exports.
 
-**todo (2026-07-31, kapsam revize)**: İçerik tamamlandı (vocab 4991,
-kanji 2211, grammar 298/184/72), seed'ler export edilip deploy edildi.
-Burak kararları (2026-07-31): (1) denetim **SALT-OKUNUR** — DB'de,
-seed'lerde, kodda HİÇBİR değişiklik yok; `status='error'` işaretleme
-YOK, otomatik yeniden üretim tetiklenmez. (2) Kapsam sadece kanji/vocab
-değil: tüm dillerin tüm içerik yüzeyleri (nl dahil; grammar + çekim
-sayfaları da). (3) Tek çıktı = rapor dosyası
-`tickets/T-023-audit-report.md`; hatalar orada notlanır, ne yapılacağına
-sonra birlikte karar verilir.
+**Todo (2026-07-31, scope revised)**: content is complete (vocab 4991, kanji
+2211, grammar 298/184/72), seeds exported and deployed. Burak's decisions
+(2026-07-31): (1) the audit is **READ-ONLY**: no changes to the DB, seeds, or
+code; NO `status='error'` marking, no automatic regeneration triggered.
+(2) Scope isn't just kanji/vocab: all content surfaces for all languages
+(including nl; grammar + conjugation pages too). (3) The only output is a
+report file `tickets/T-023-audit-report.md`; errors get noted there, what to
+do about them gets decided together afterward.
 
-Session promptu (yeni opus session'a ver):
+Session prompt (give to a new opus session):
 
-> Çok dilli içerik kalite denetimi (T-023). **SALT-OKUNUR**: DB'ye, seed
-> dosyalarına, koda hiçbir yazma yok; tek çıktı
-> `tickets/T-023-audit-report.md` rapor dosyası (bir de INDEX'e dokunma).
-> Kaynak: `data/app.db`. LLM içerik kolonları `{tr: payload}`
-> dil-anahtarlı (`src/lib/llm/lang-content.ts`); şemalar
-> `src/lib/llm/schemas.ts`.
+> Multilingual content quality audit (T-023). **READ-ONLY**: no writes to the
+> DB, seed files, or code; the only output is the report file
+> `tickets/T-023-audit-report.md` (also don't touch INDEX). Source:
+> `data/app.db`. LLM content columns are `{tr: payload}` language-keyed
+> (`src/lib/llm/lang-content.ts`); schemas in `src/lib/llm/schemas.ts`.
 >
-> Örneklem (rastgele, seviyelere dengeli):
-> - **zh vocab** (`vocab_entries`, ~4991 ready): 80 kelime. content.tr'yi
->   statik referanslarla (`reading` ton işaretli pinyin, `meanings_en`,
->   `classifiers`) çapraz kontrol et: meanings_tr anlam kayması, örnek
->   cümle bracket pinyin'i doğru mu + cümle kelimeyi içeriyor mu +
->   translation_tr doğru mu, classifier notu kolonla çelişiyor mu, chars
->   kırılımı ve collocations uydurma mı.
-> - **ja kanji** (`kanji_entries`, ~2211 ready): 40 karakter. Onyomi/
->   kunyomi doğruluğu, anlam glossları, örnek kelimelerin okunuşları,
->   furigana bracket'ları (`漢字[かんじ]`).
-> - **grammar** (`grammar_topics`): ja 25 + zh 25 + **nl 15** konu.
->   Açıklama doğruluğu, örnek cümlelerin gramere gerçekten örnek olması,
->   çeviriler, ja furigana / zh pinyin bracket doğruluğu; nl'de örnek
->   cümle dilbilgisi.
-> - **çekim** (`src/lib/conjugation/{ja,zh,nl}.ts` — statik kod, LLM
->   değil): tablolardaki çekim formlarını dil bilginle doğrula (ja
->   masu/te/nai zincirleri, nl ayrılabilir fiiller + sterke werkwoorden,
->   zh partikel kullanımları).
+> Sample (random, balanced across levels):
+> - **zh vocab** (`vocab_entries`, ~4991 ready): 80 words. Cross-check
+>   content.tr against the static references (`reading` tone-marked pinyin,
+>   `meanings_en`, `classifiers`): meanings_tr semantic drift, does the
+>   example sentence's bracket pinyin match + does the sentence contain the
+>   word + is translation_tr correct, does the classifier note contradict the
+>   column, are the character breakdown and collocations made up.
+> - **ja kanji** (`kanji_entries`, ~2211 ready): 40 characters. Onyomi/
+>   kunyomi accuracy, meaning glosses, readings of example words, furigana
+>   brackets (`漢字[かんじ]`).
+> - **grammar** (`grammar_topics`): ja 25 + zh 25 + **nl 15** topics.
+>   Explanation accuracy, whether example sentences actually illustrate the
+>   grammar point, translations, ja furigana / zh pinyin bracket correctness;
+>   sentence grammaticality for nl examples.
+> - **conjugation** (`src/lib/conjugation/{ja,zh,nl}.ts`, static code, not
+>   LLM): verify the conjugated forms in the tables with your own linguistic
+>   knowledge (ja masu/te/nai chains, nl separable verbs + sterke werkwoorden,
+>   zh particle usage).
 >
-> Sınıflandırma: **kesin hata** (yanlış okunuş/pinyin, yanlış anlam,
-> kelimeyi içermeyen örnek, yanlış çekim formu) ve **şüpheli** (emin
-> olunamayan) ayrı listeler. Rapor formatı: yüzey başına örneklem boyutu,
-> kesin hata oranı, hata tablosu (kayıt anahtarı `word`/`char`/`slug` +
-> alan + mevcut değer + doğrusu + kısa gerekçe), şüpheliler, sonuç özeti.
-> Oran bir yüzeyde %5'i geçerse öneri yaz (yeniden üretim modeli /
-> örneklem büyütme / prompt sıkılaştırma) ama HİÇBİRİNİ uygulama —
-> karar Burak'ın. Raporu yaz, commit ET-ME, turu bitir.
+> Classification: **definite error** (wrong reading/pinyin, wrong meaning, an
+> example that doesn't contain the word, wrong conjugated form) and
+> **suspicious** (uncertain), as separate lists. Report format: sample size
+> per surface, definite error rate, error table (record key `word`/`char`/
+> `slug` + field + current value + correct value + brief rationale),
+> suspicious items, summary conclusion. If the rate exceeds 5% on any surface,
+> write a recommendation (regeneration model / grow the sample / tighten the
+> prompts) but implement NONE of them, that decision is Burak's. Write the
+> report, do NOT commit, end the turn.
+</content>

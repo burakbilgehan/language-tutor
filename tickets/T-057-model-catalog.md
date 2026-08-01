@@ -1,6 +1,6 @@
 ---
 id: T-057
-title: Model kataloğu tek kaynak — Eko/Denge/En iyi profilleri + bayat id temizliği
+title: Single-source model catalog - Eco/Balanced/Best profiles + stale-id cleanup
 status: done
 priority: p2
 effort: M
@@ -8,38 +8,40 @@ confidence: high
 depends: []
 created: 2026-07-27
 ---
-LLM bağlantı UX redesign'ının (T-060) zemini. Bugünkü sorunlar:
+Groundwork for the LLM connection UX redesign (T-060). Today's problems:
 
-- Model id'leri 3+ yere saçılmış: `presets.ts` tablosu, `LlmProviderSection.tsx:91`
-  ve `LlmSetupWizard.tsx:409`'da elle kopyalanmış Anthropic üçlüsü, wizard'ın
-  Ollama/bridge yollarında inline literaller.
-- Default'lar bayat: openai preset `gpt-4o-mini/gpt-4o` (2024), openrouter
-  `claude-3.5-haiku/claude-sonnet-4/claude-opus-4` (ölü sluglar), ollama
-  `llama3.2/3.1`.
-- Tier→model çözümlemesi ÜÇ paralel kopya: `modelForTierConfigured` (config.ts),
-  `modelForTier` (provider.ts, CLI aliasları), browser `modelFor`
-  (browser-provider.ts). Boş config'de literal `"fast"` string'i model adı
-  olarak API'ye gidebiliyor (gerçek bug).
+- Model ids are scattered across 3+ places: the `presets.ts` table, a
+  hand-copied Anthropic trio in `LlmProviderSection.tsx:91` and
+  `LlmSetupWizard.tsx:409`, and inline literals in the wizard's Ollama/bridge
+  paths.
+- Defaults are stale: the openai preset's `gpt-4o-mini/gpt-4o` (2024), the
+  openrouter preset's `claude-3.5-haiku/claude-sonnet-4/claude-opus-4` (dead
+  slugs), the ollama preset's `llama3.2/3.1`.
+- Tier->model resolution has THREE parallel copies: `modelForTierConfigured`
+  (config.ts), `modelForTier` (provider.ts, CLI aliases), and the browser's
+  `modelFor` (browser-provider.ts). On an empty config, the literal string
+  `"fast"` can go to the API as a model name (an actual bug).
 
-## Kapsam
-1. Yeni `src/lib/llm/catalog.ts` — TEK kaynak. Sağlayıcı başına:
-   - `profiles: { eco, balanced, best }` — her profil somut bir
-     fast/balanced/deep üçlüsü + insan-okur görünen ad ("DeepSeek V3 —
-     hızlı işler" gibi).
-   - Kaba fiyat metadata'sı ($/Mtok in/out) — T-060'taki bütçe ipucu bundan
-     beslenir. Yerel/bridge sağlayıcılarda fiyat = 0/abonelik.
-   - Güncel id'lerle doldur (2026 nesli; OpenRouter sluglarını canlı
-     /models'a karşı elle doğrula).
-2. `presets.ts`, wizard, `LlmProviderSection`, `ANTHROPIC_DEFAULT_MODELS`
-   hepsi katalogdan beslenir; inline model literalleri silinir.
-3. Tier çözümlemesini tekilleştir: env-agnostik tek helper (server üç yolu ve
-   browser'ı aynı fonksiyona bağla; CLI kısa-alias davranışı korunur).
-   Literal-tier fallback'i kaldır — model çözülemiyorsa anlamlı hata.
-4. Config şekli DEĞİŞMEZ (`models: {fast,balanced,deep}` kalır — kayıtlı
-   config'ler ve save'ler bozulmaz); katalog yalnızca bu şekli DOLDURAN
-   üst katman.
+## Scope
+1. New `src/lib/llm/catalog.ts`, the SINGLE source. Per provider:
+   - `profiles: { eco, balanced, best }`: each profile a concrete
+     fast/balanced/deep trio + a human-readable name ("DeepSeek V3, fast
+     tasks" and similar).
+   - Rough pricing metadata ($/Mtok in/out); T-060's budget hint feeds off
+     this. Local/bridge providers: price = 0/subscription.
+   - Filled with current ids (2026-generation; manually verify OpenRouter
+     slugs against the live /models).
+2. `presets.ts`, the wizard, `LlmProviderSection`, `ANTHROPIC_DEFAULT_MODELS`
+   all feed from the catalog; inline model literals are deleted.
+3. Unify tier resolution: one env-agnostic helper (route the server's three
+   paths and the browser to the same function; the CLI short-alias behavior
+   is preserved). Remove the literal-tier fallback; a meaningful error
+   instead if the model can't be resolved.
+4. Config shape UNCHANGED (`models: {fast,balanced,deep}` stays, existing
+   configs and saves aren't broken); the catalog is only an upper layer that
+   FILLS this shape.
 
-Fence: `src/lib/llm/*` + iki settings komponentinde yalnız import/sabit
-satırları. `src/core`/DB yok → parity harness gerekmez. Doğrulama: tsc,
-`npm test`, `LLM_PROVIDER=fixture` smoke, statik build'de browser yolu.
-Tazelik otomasyonu AYRI ticket: T-058.
+Fence: `src/lib/llm/*` + only import/constant lines in two settings
+components. No `src/core`/DB, so no parity harness needed. Verification:
+tsc, `npm test`, `LLM_PROVIDER=fixture` smoke, browser path in the static
+build. Freshness automation is a SEPARATE ticket: T-058.

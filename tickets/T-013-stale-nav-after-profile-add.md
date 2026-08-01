@@ -1,6 +1,6 @@
 ---
 id: T-013
-title: Yeni dil ekleyince header/nav eski profilde kalıyor
+title: Header/nav stays on the old profile after adding a new language
 status: done
 priority: p3
 effort: S
@@ -8,22 +8,24 @@ confidence: high
 depends: []
 created: 2026-07-18
 ---
-Canlıda (statik mod) gözlendi: Settings → yeni dil (zh) eklenince nav
-sekmeleri (Sözlük, Pinyin) refresh atılana kadar gelmiyor; refresh sonrası
-her şey normal.
+Observed live (static mode): after adding a new language (zh) via Settings,
+the nav tabs (Dictionary, Pinyin) don't show up until a refresh; everything
+is normal after refresh.
 
-Kök neden bilinen: `src/lib/use-profile-meta.ts` profil metasını
-module-level cache'liyor ve "aktif profil değişimi her zaman full page
-reload'la olur" varsayımına yaslanıyor (dosyadaki yorum). Yeni dil ekleme /
-onboarding dönüşü akışı reload'sız navigate edince cache bayat kalıyor.
+Known root cause: `src/lib/use-profile-meta.ts` caches profile meta at module
+level and relies on the assumption that "active profile changes always happen
+via a full page reload" (per the comment in the file). The add-language /
+onboarding-return flow navigates without a reload, so the cache goes stale.
 
-Fix yönü: profil oluşturma/switch sonrası cache'i invalidate et (module
-cache'i sıfırlayan bir `invalidateProfileMeta()` export'u + ilgili akışların
-çağırması) YA DA switch akışındaki `window.location` kalıbını yeni-dil
-akışına da uygula. İkincisi daha ucuz ve mevcut varsayımı korur.
+Fix direction: either invalidate the cache after profile creation/switch (an
+`invalidateProfileMeta()` export that resets the module cache + the relevant
+flows call it) OR apply the switch flow's `window.location` pattern to the
+new-language flow too. The latter is cheaper and preserves the existing
+assumption.
 
-Fix: `OnboardingWizard.tsx`'teki iki `router.push("/map")` (inline üretim
-biten statik mod + `GeneratingScreen.onDone`) `window.location.href =
-withBase("/map")`'e çevrildi — switch akışıyla aynı kalıp, full reload
-cache'i tazeler. `useRouter` artık kullanılmadığı için import/decl silindi.
-T-014 ile aynı commit'te (basePath fix'i zaten `withBase` import ediyordu).
+Fix: the two `router.push("/map")` calls in `OnboardingWizard.tsx` (inline
+generation finishing in static mode + `GeneratingScreen.onDone`) were changed
+to `window.location.href = withBase("/map")`, the same pattern as the switch
+flow, a full reload refreshes the cache. `useRouter` was removed since it's
+no longer used. Same commit as T-014 (the basePath fix already imported
+`withBase`).

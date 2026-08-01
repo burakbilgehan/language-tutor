@@ -1,6 +1,6 @@
 ---
 id: T-016
-title: İdeogramlı dillerde okuma-farkında arama (hikari → 光, çoklu sonuç)
+title: Reading-aware search in ideogram-based languages (hikari -> 光, multiple results)
 status: done
 priority: p2
 effort: M
@@ -9,46 +9,48 @@ depends: []
 created: 2026-07-18
 closed: 2026-07-18
 ---
-## Çözüm (MVP — katman 1)
-Global cmd+K komut paleti. Katman 2 (sayfa-içi cmd+F intercept) yapılmadı;
-gerekirse ayrı ticket.
+## Solution (MVP, layer 1)
+Global cmd+K command palette. Layer 2 (in-page cmd+F intercept) not done;
+separate ticket if needed.
 
-- `src/lib/search-index.ts` — deterministik, okuma-farkında arama; statik
-  kanji/vocab/grammar index'leri üstünde çalışır (LLM/DB/network yok, statik
-  modda da çalışır). Okuma katlama: ja → `toRomajiReading` (kun işaretleri
-  `.`/`-` soyulur), zh → `foldPinyin`; iki taraf da katlanıp substring eşleşir.
-  Sonuç ~24 ile sınırlı, `buildSearchIndex` çağrı yerinde `useMemo` ile bir kez
-  kurulur (~7500 giriş, keystroke başına katlama yok).
-- `src/components/shared/CommandPalette.tsx` — `layout.tsx`'e SelectionTooltip
-  yanına mount. cmd/ctrl-K toggle + header 🔍 butonu (`palette:open` custom
-  event). Ok tuşu/Enter/Escape navigasyonu, tip+seviye etiketi.
-- `/stroke?char=<kanji>` deep-link eklendi (StrokeTrainer `initialChar` prop,
-  page Suspense-wrapped): kanji sonuçları tıklayınca yazım sayfasına gidip o
-  kanjiyi açar (ayrı kanji detay route'u yok). vocab → `/vocab?word=`,
-  grammar → `/grammar?topic=`.
+- `src/lib/search-index.ts`: deterministic, reading-aware search; operates
+  over the static kanji/vocab/grammar indexes (no LLM/DB/network, also works
+  in static mode). Reading folding: ja -> `toRomajiReading` (kun markers
+  `.`/`-` stripped), zh -> `foldPinyin`; both sides are folded and matched by
+  substring. Results capped at ~24, `buildSearchIndex` is built once with
+  `useMemo` at the call site (~7500 entries, no folding per keystroke).
+- `src/components/shared/CommandPalette.tsx`: mounted in `layout.tsx` next to
+  SelectionTooltip. cmd/ctrl-K toggle + header search button 🔍 (`palette:open`
+  custom event). Arrow key/Enter/Escape navigation, type+level label.
+- `/stroke?char=<kanji>` deep-link added (StrokeTrainer `initialChar` prop,
+  page Suspense-wrapped): clicking a kanji result goes to the stroke page and
+  opens that kanji (no separate kanji detail route). vocab -> `/vocab?word=`,
+  grammar -> `/grammar?topic=`.
 
-Kapsam: sadece dizinler (MVP kararı). Ders içeriği araması yapılmadı — ayrı
-ticket olur. E2E doğrulandı (ja profili): hikari→光 tıkla→/stroke, "fiil"→gramer
-listesi, zh pinyin (pengyou→朋友) modül testinde doğrulandı.
+Scope: indexes only (MVP decision). Lesson content search not done, would be
+a separate ticket. E2E verified (ja profile): hikari->光 click->/stroke, "fiil"
+("verb") -> grammar list, zh pinyin (pengyou->朋友) verified in a module test.
 
-Browser cmd+F ideogramlarda işe yaramıyor: "hikari" yazınca 光 bulunmalı.
-Kanji/okunuş eşleşmesi çoğa-çok (aynı okunuş → birden çok kanji, aynı kanji
-→ birden çok okunuş), o yüzden tek sonuç yetmez — sonuç listesi şart.
+Browser cmd+F doesn't work on ideograms: typing "hikari" should find 光.
+Kanji/reading matching is many-to-many (same reading -> multiple kanji, same
+kanji -> multiple readings), so a single result isn't enough, a result list is
+required.
 
-İki katman düşünülebilir, ticket ikisini de kapsar (ilki MVP):
-1. **Global arama (MVP)**: header'a arama kutusu / cmd+K palette. Romaji veya
-   kana girdisini wanakana ile katla (`src/lib/jp.ts` altyapısı hazır),
-   kanji sözlüğü + vocab index + grammar index başlıklarında ara, sonuçları
-   tip etiketiyle (kanji/kelime/gramer) listele, tıklayınca ilgili sayfaya
-   (`/vocab?word=`, `/grammar?topic=`, kanji detayı) git. zh tarafında
-   pinyin katlama `src/lib/zh.ts`'de mevcut (ton işareti/rakam/ü-v).
-2. **Sayfa-içi bulma (opsiyonel ileri adım)**: cmd+F'i intercept edip
-   sayfadaki CJK metinde okuma-eşleşmeli highlight. Riskli/pahalı; ancak
-   MVP yetmezse.
+Two layers were considered, the ticket covers both (the first is the MVP):
+1. **Global search (MVP)**: search box / cmd+K palette in the header. Fold
+   romaji or kana input with wanakana (infrastructure ready in `src/lib/jp.ts`),
+   search across the kanji dictionary + vocab index + grammar index titles,
+   list results with a type label (kanji/word/grammar), clicking goes to the
+   relevant page (`/vocab?word=`, `/grammar?topic=`, kanji detail). On the zh
+   side, pinyin folding (tone mark/digit/u-v) already exists in `src/lib/zh.ts`.
+2. **In-page find (optional further step)**: intercept cmd+F and highlight
+   reading-matched CJK text on the page. Risky/expensive; only if the MVP
+   isn't enough.
 
-Veri kaynakları hazır: ja kanji sözlüğü, zh `src/lib/vocab-index/zh-data.json`
-(4991 kelime, pinyin+gloss), grammar index'ler. Yeni LLM çağrısı gerekmez —
-tamamen deterministik, statik modda da çalışır.
+Data sources are ready: ja kanji dictionary, zh `src/lib/vocab-index/zh-data.json`
+(4991 words, pinyin+gloss), grammar indexes. No new LLM call needed, fully
+deterministic, also works in static mode.
 
-Açık tasarım kararı: arama kapsamı (sadece sözlük/dizinler mi, ders içerikleri
-de mi?). MVP: dizinler. Ders içeriği araması ayrı ticket olur.
+Open design decision: search scope (indexes/dictionary only, or lesson content
+too?). MVP: indexes. Lesson content search would be a separate ticket.
+</content>

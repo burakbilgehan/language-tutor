@@ -1,6 +1,6 @@
 ---
 id: T-043
-title: Gerçek multi-tenant izolasyon (per-user DB / profil sahipliği)
+title: Real multi-tenant isolation (per-user DB / profile ownership)
 status: backlog
 priority: p3
 effort: XL
@@ -8,28 +8,30 @@ confidence: low
 depends: [T-040]
 created: 2026-07-26
 ---
-T-040'tan ayrıldı (2026-07-26). T-040 env-token gate ile server modunu
-localhost dışı erişime karşı KAPATIYOR (tek operatör = owner). Bu ticket
-onun ötesi: **gerçek çok-kullanıcılı** senaryo — her kullanıcı kendi
-verisini görsün, birbirinin job'unu iptal edemesin, save export yalnız
-kendi verisini döndürsün.
+Split off from T-040 (2026-07-26). T-040's env-token gate CLOSES server
+mode to non-localhost access (single operator = owner). This ticket goes
+beyond that: the **real multi-user** scenario; every user should see
+only their own data, be unable to cancel another user's job, and save
+export should return only their own data.
 
-**Yeniden kapsamlandı (2026-07-26):** "monetization belirsiz" gate'i
-değişti — backend/kimlik işine (T-045–T-048) karar verildi (Cloudflare +
-better-auth + R2). **Cloud-save tenant izolasyonu artık O işe ait**
-(login'li kullanıcı yalnız kendi `saves/{userId}`'ine erişir; T-046/T-047
-güvenlik kriterleri). Bu ticket'ın KALAN kapsamı: **server-mode**
-(localhost/self-host Next.js) çok-kullanıcı izolasyonu — tek global
-`data/app.db`'yi per-user'a bölmek. Bu hâlâ deferred: server modu bugün
-tek-kullanıcı (T-040 env-token gate yeterli); gerçek self-host multi-user
-talebi gelmeden dokunulmaz. Yani T-043 = "backend değil, self-host Next.js
-multi-tenancy".
+**Rescoped (2026-07-26):** the "monetization is undecided" gate that
+justified deferring this has changed; the backend/identity work
+(T-045–T-048) has been decided (Cloudflare + better-auth + R2).
+**Cloud-save tenant isolation now belongs to that work** (a logged-in
+user only accesses their own `saves/{userId}`; T-046/T-047 security
+criteria). This ticket's REMAINING scope: **server-mode**
+(localhost/self-host Next.js) multi-user isolation; splitting the
+single global `data/app.db` per user. This is still deferred: server mode
+is single-user today (T-040's env-token gate is sufficient); untouched
+until a real self-host multi-user demand shows up. So T-043 = "not the
+backend, self-host Next.js multi-tenancy."
 
-Kapsam (model kararınca): (1) job route IDOR — `generation_jobs`'a tenant
-kolonu + scope (`core/jobs.ts:78` bugün "NO profile scoping"); (2) save
-export/import tenant-scoped; (3) tüm read/mutating route'lar tenant filtresi;
-(4) DB katmanı per-tenant izolasyon. T-026 dalga 5'te "kabul edilen risk"
-olarak işaretlenen job IDOR bu ticket'ta kapanır.
+Scope (per the design decision): (1) job route IDOR; add a tenant
+column + scope to `generation_jobs` (`core/jobs.ts:78` today is "NO
+profile scoping"); (2) tenant-scoped save export/import; (3) tenant
+filtering on all read/mutating routes; (4) per-tenant isolation at the DB
+layer. The job IDOR flagged as an "accepted risk" in T-026 wave 5 gets
+closed by this ticket.
 
-Önkoşul: public/monetize kararı (INDEX lisans notu — FSL öneri eşiği).
-Bu eşik gelmeden dokunulmaz.
+Precondition: the public/monetize decision (INDEX license note; the FSL
+proposal threshold). Untouched until that threshold is reached.

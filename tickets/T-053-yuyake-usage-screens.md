@@ -1,6 +1,6 @@
 ---
 id: T-053
-title: Yūyake kullanım kuralları — 5 ekrana uygula (vermilyon=aksiyon, indigo=bilgi/başarı/durum, amber=ödül)
+title: Yūyake usage rules - apply to 5 screens (vermilion=action, indigo=info/success/state, amber=reward)
 status: done
 priority: p2
 effort: M
@@ -8,45 +8,48 @@ confidence: medium
 depends: [T-052]
 created: 2026-07-27
 ---
-T-052 palet göçü bitince README "Renk kullanım kuralları" + DS v2 bölüm 04
-(bileşen renk rolleri) mevcut ekranlara uygulanır. v2'de v1'deki gibi ayrı
-before/after mock DOSYASI YOK — token göçü + T-052 taraması mekaniği
-halleder; bu ticket yargı işi (kör find-replace değil):
+Once T-052's palette migration is done, the README's "Color usage rules" +
+DS v2 section 04 (component color roles) get applied to the existing
+screens. Unlike v1, v2 has no separate before/after mock FILE; the token
+migration + T-052's sweep mechanics already handle that. This ticket is
+judgment work (not blind find-replace):
 
-- **Vermilyon = yalnız eylem:** birincil buton, aktif sekme, açılabilir ders
-  düğümü, ünite etiketi, kutlama. Sayfa başına max **BİR** baskın vermilyon
-  odak — fazlası bilgi/durum işiyse indigo'ya çekilir.
-- **İndigo = bilgi+başarı+durum:** tamamlanma işaretleri, progress, linkler,
-  ipucu/info kutuları, seçili/focus hâli (1.5px `var(--indigo)` border + 4px
-  `rgb(47 74 112 / .15)` ring), Kumo maskotu.
-- **Amber = ödül:** XP, seri, rozet; açık zeminde metin `--amber-text`.
-- Yeşil yok. Soluk pastel mavi yok.
+- **Vermilion = action only:** primary button, active tab, an openable lesson
+  node, unit badge, celebration. **ONE** dominant vermilion focus max per
+  page; anything more that is actually info/state work gets pulled to indigo.
+- **Indigo = info+success+state:** completion marks, progress, links,
+  hint/info boxes, selected/focus state (1.5px `var(--indigo)` border + 4px
+  `rgb(47 74 112 / .15)` ring), the Kumo mascot.
+- **Amber = reward:** XP, streak, badges; use `--amber-text` on light
+  backgrounds.
+- No green. No pale pastel blue.
 
-Ekranlar (fence): Roadmap (`/map`), Lesson (`LessonPlayer`), Grammar
+Screens (fence): Roadmap (`/map`), Lesson (`LessonPlayer`), Grammar
 (`GrammarTopicView`/`GrammarTable`), Onboarding (`OnboardingWizard`),
-Settings. T-052'nin dosyalarına (globals/CozyButton/StatsHeader) yalnız
-kural gerektirirse ve T-052 merge edildikten sonra dokunulur. Kapsam dışı
-ekranlar (vocab/çekim/SRS/kana/stroke/sınav/sohbet/about) token'lardan
-otomatik güncellenir — orada kural ihlali görürsen DOKUNMA, raporla
-(T-055 emsali: ayrı küçük ticket olur).
+Settings. T-052's files (globals/CozyButton/StatsHeader) are only touched if
+a rule requires it, and only after T-052 is merged. Out-of-scope screens
+(vocab/conjugation/SRS/kana/stroke/exam/chat/about) get auto-updated from the
+tokens; if you see a rule violation there, DO NOT TOUCH it, report it instead
+(precedent T-055: becomes its own small ticket).
 
-Referans: `design/okumo-yuyake/README.md` + DS v2 html bölüm 01/04.
-Doğrulama: 5 ekran dark/light iki temada kural denetimi + `tsc` + test +
-build. Görsel kontrol manuel kalır.
+Reference: `design/okumo-yuyake/README.md` + DS v2 html sections 01/04.
+Verification: rule audit on 5 screens in both dark/light + `tsc` + tests +
+build. Visual check remains manual.
 
-## Geçmiş
-- v1 "sky" uygulaması 2026-07-27 merge + aynı gün revert (`244ec86`). v2
-  Yūyake handoff'uyla yeniden kapsamlandı (mock-eşleme yerine kural-tabanlı).
-- **Done 2026-07-28**: `25d813f`, 14 dosya. 5 ekranda rol denetimi: focus
-  formülü (border-indigo + ring-indigo/15) tüm inputlarda (CloudAccount'ta
-  hiç yoktu — eklendi), seçili/selected durumlar indigo, info banner'ları
-  indigo-soft, linkler text-indigo, loading dots indigo, XP amber-text;
-  `text-white`→`text-surface` + `text-red-500`→`text-danger` token
-  düzeltmeleri. Ekran başına baskın vermilyon: map=oynanabilir node,
-  lesson=Kontrol et/Devam, grammar=aktif seviye pili, onboarding=Devam,
-  settings=primary CozyButton'lar. Kanıt: tsc temiz, 111/111 test, build
-  worktree'de yeşil, derlenmiş CSS'te focus formülü + `--color-indigo`
-  runtime'da doğrulandı. Açık yargı: MCQ şık hover'ı accent-soft KALDI
-  (cevaplamak sayfanın birincil aksiyonu — orkestratör onayladı; tersini
-  istersen tek satır). Görsel dark/light kontrolü manuel. Kapsam dışı
-  kalıntılar → T-065.
+## History
+- The v1 "sky" implementation was merged 2026-07-27 and reverted the same day
+  (`244ec86`). Rescoped with the v2 Yūyake handoff (rule-based instead of
+  mock-matching).
+- **Done 2026-07-28**: `25d813f`, 14 files. Role audit across 5 screens: the
+  focus formula (border-indigo + ring-indigo/15) on all inputs (CloudAccount
+  had none at all, added), selected states are indigo, info banners are
+  indigo-soft, links are text-indigo, loading dots are indigo, XP is
+  amber-text; `text-white`->`text-surface` and `text-red-500`->`text-danger`
+  token fixes. Dominant vermilion per screen: map=playable node,
+  lesson=Check/Continue, grammar=active level pill, onboarding=Continue,
+  settings=primary CozyButtons. Evidence: tsc clean, 111/111 tests, build
+  green in the worktree, focus formula + `--color-indigo` verified at runtime
+  in compiled CSS. Explicit judgment call: MCQ option hover STAYED
+  accent-soft (answering is the page's primary action, orchestrator approved;
+  one line to reverse if wanted). Manual visual dark/light check remains.
+  Out-of-scope leftovers -> T-065.

@@ -1,6 +1,6 @@
 ---
 id: T-037
-title: Vocab index eager bundle — her profil ~1.8 MB sözlük JSON'u yüklüyor
+title: Vocab index eager bundle, every profile loads ~1.8 MB of dictionary JSON
 status: done
 priority: p2
 effort: M
@@ -8,31 +8,37 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-T-030 açtı. `src/lib/vocab-index/index.ts` hem zh-data.json (~692 KB) hem
-ja-data.json (~1.1 MB) statik import ediyor. `vocabIndexFor` +
-`buildSearchIndex` bu index'e ulaşıyor; `buildSearchIndex` global
-`CommandPalette`'ten (layout.tsx, her sayfada mount) çağrılıyor. Sonuç: dil
-ne olursa olsun (nl profili dahil, kelime sözlüğü olmayan diller) ilk boyada
-~1.8 MB sözlük payload'u client'a gidiyor. grammar/kanji index'leri de aynı
-kalıpta — sorun genel ama vocab en büyük iki dosya.
+Opened by T-030. `src/lib/vocab-index/index.ts` statically imports both
+zh-data.json (~692 KB) and ja-data.json (~1.1 MB). `vocabIndexFor` +
+`buildSearchIndex` reach into this index; `buildSearchIndex` is called
+from the global `CommandPalette` (layout.tsx, mounted on every page).
+Result: regardless of language (including an nl profile, which has no
+vocabulary dictionary), ~1.8 MB of dictionary payload ships to the client
+on first paint. The grammar/kanji indexes follow the same pattern;
+the problem is general, but vocab is the two biggest files.
 
-Önerilen yön: `buildSearchIndex(lang)` / `vocabIndexFor(lang)` içinde
-dile-özel dinamik `import()` (lazy loader) — sadece aktif profilin dili
-yüklenir. **CommandPalette sync→async imada**: `buildSearchIndex` şu an
-`useMemo` ile senkron kuruluyor; lazy import onu async yapar → palette'in
-index kurulumu Promise'e döner, "yükleniyor" durumu + ilk açılışta await
-gerekir. Aynı lazy kalıp grammar/kanji index'lerine de uygulanabilir
-(ayrı adım). Ölçüt: nl profilinde first-load JS'ten iki sözlük JSON'u düşsün.
+Suggested direction: a per-language dynamic `import()` (lazy loader)
+inside `buildSearchIndex(lang)` / `vocabIndexFor(lang)`; only the active
+profile's language loads. **CommandPalette sync->async implication**:
+`buildSearchIndex` is currently set up synchronously via `useMemo`; a lazy
+import turns it async -> the palette's index setup becomes a Promise, a
+"loading" state + an await on first open are needed. The same lazy
+pattern can be applied to the grammar/kanji indexes (separate step).
+Metric: on an nl profile, first-load JS should drop both dictionary JSON
+files.
 
-Not: statik export (NEXT_PUBLIC_STATIC_BUILD) dinamik import'ları ayrı
-chunk'lara böler mi doğrula — böler, ama palette'in await'i static modda da
-çalışmalı.
+Note: verify whether static export (NEXT_PUBLIC_STATIC_BUILD) splits
+dynamic imports into separate chunks; it does, but the palette's await
+still needs to work in static mode too.
 
 ---
-Statü (2026-07-22, dalga 4.5): yapıldı — first-load JS shared 451→239 kB (zh-data ~708 KB
-ayrı chunk'a düştü, hiçbir sayfa HTML'inde yok; static export'ta da doğrulandı).
-Kritik bulgu: dinamik import'u sync `vocabIndexFor` ile AYNI modüle koymak işe yaramıyor —
-webpack statik importu görüp inline'lıyor; sync/async iki ayrı modül şart
-(`vocab-index/index.ts` + `vocab-index/async.ts`). Grammar/kanji lazification (ayrı adım)
-aynı iki-modül kalıbını gerektirecek. Not: ticket'taki "~1.8 MB iki JSON" bayat —
-ja vocab index T-030 revert'iyle zaten gitmişti, sadece zh kalmıştı.
+Status (2026-07-22, wave 4.5): done; shared first-load JS 451->239 kB
+(zh-data ~708 KB dropped into its own chunk, not present in any page's
+HTML; also verified in the static export). Critical finding: putting the
+dynamic import in the SAME module as the sync `vocabIndexFor` doesn't
+work; webpack sees the static import and inlines it; sync/async need two
+separate modules (`vocab-index/index.ts` + `vocab-index/async.ts`).
+Grammar/kanji lazification (a separate step) will need the same
+two-module pattern. Note: the ticket's "~1.8 MB of two JSON files" claim
+was stale; the ja vocab index was already gone via the T-030 revert,
+only zh remained.

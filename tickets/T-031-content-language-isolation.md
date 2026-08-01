@@ -1,6 +1,6 @@
 ---
 id: T-031
-title: İçerik dil izolasyonu — en'e geçince Türkçe içerik görünmemeli
+title: Content language isolation, switching to en must not still show Turkish
 status: done
 priority: p2
 effort: M
@@ -9,78 +9,88 @@ depends: []
 created: 2026-07-22
 closed: 2026-07-22
 ---
-## Kapanış (2026-07-22)
-Branch `t-031-content-language-isolation`, 3 commit. Plan: `T-031-PLAN.md`.
+## Closing (2026-07-22)
+Branch `t-031-content-language-isolation`, 3 commits. Plan: `T-031-PLAN.md`.
 
-**Layer 2 (içerik):** JSON içerikli 4 yüzey (lesson/grammar/kanji/vocab)
-dil-anahtarlı map `{tr,en}` — yerinde üretim ÜZERİNE yazmaz, MERGE eder →
-tr↔en↔tr geçişinde eski içerik aynen döner (fable-verifier CONFIRMED, 14
-assertion). Egzersizler yan-tablo olduğu için `exercises.lang` kolonu eklendi
-(gövde map, egzersizler dil-scoped delete/insert; diğer dilin attempt'leri
-korunur). İş kuyrukları (ensureLessonJob/queueMissingLessons/queueKanjiLevel/
-batch route'lar) mevcut-dilde-hazır olmayan satırları kuyruklar. Paketli
-seed'ler tr → `applyX` seed `nativeLanguage==="tr"` gate'li, `{tr:...}` damgalı.
-translations cache key'ine native_language eklendi (pre-existing tr/en çakışma
-bug'ını da kapattı). Müfredat başlıkları düz kolon: `curricula.content_lang`
-damgası + roadmap payload'ında yanlış-dil başlıkları SUNUCUDA null'lanır +
-yerinde "bu dile çevir" (ilerleme/SRS korunur). Settings dil değişiminde
-maliyet uyarısı. Kısmi çeviri reddedilir (leak guard).
+**Layer 2 (content):** The 4 JSON-content surfaces (lesson/grammar/kanji/vocab)
+became a lang-keyed map `{tr,en}`; an in-place generation does NOT overwrite
+but MERGEs, so a tr->en->tr transition returns the old content exactly
+(fable-verifier CONFIRMED, 14 assertions). Since exercises are a side table, an
+`exercises.lang` column was added (body stays a map, exercises are
+lang-scoped delete/insert; the other language's attempts are preserved). Job
+queues (ensureLessonJob/queueMissingLessons/queueKanjiLevel/batch routes)
+queue rows that aren't ready in the current language. Packaged seeds are tr,
+so `applyX` seed is gated on `nativeLanguage==="tr"`, stamped `{tr:...}`.
+Native_language was added to the translations cache key (this also closed a
+pre-existing tr/en collision bug). Curriculum titles are a plain column: a
+`curricula.content_lang` stamp + wrong-language titles are nulled OUT on the
+SERVER in the roadmap payload + a "translate to this language" action in place
+(progress/SRS preserved). A cost warning on Settings language change. Partial
+translation is rejected (leak guard).
 
-**Layer 1 (hardcoded tr):** JSX temizdi; sızıntı hata string'lerindeydi. Stable
-error-code contract (`src/lib/errors.ts` + `i18n/errors.ts` + `useLocalizeError`)
-— route'lar `{error: code}` döner, UI sınırında lokalize edilir, bilinmeyen kod
-generic'e düşer (ham tr asla render olmaz). 27 route + client-api + 18 catch
-site + SaveImportError.
+**Layer 1 (hardcoded tr):** JSX was clean; the leak was in error strings.
+Stable error-code contract (`src/lib/errors.ts` + `i18n/errors.ts` +
+`useLocalizeError`); routes return `{error: code}`, localized at the UI
+boundary, unknown codes fall back to generic (raw tr never renders). 27
+routes + client-api + 18 catch sites + SaveImportError.
 
-**Şema:** SAVE_SCHEMA_VERSION 6→7 (translations.native_language,
+**Schema:** SAVE_SCHEMA_VERSION 6->7 (translations.native_language,
 curricula.content_lang, exercises.lang) + browser ADD COLUMN self-heal + DDL
-regen. Doğrulama: tsc temiz, 58 test, sql.js parite harness yeşil, fixture build.
+regen. Verification: tsc clean, 58 tests, sql.js parity harness green,
+fixture build.
 
-**Bilinçli kapsam dışı (aynı sınıf, ayrı ticket'a değer — Burak kararı):**
-- `srs_cards.back`: native metin, dil damgası yok; dedupe `(profileId,
-  itemType, front)` üzerinde. tr'de kart biriktirip en'e geçen kullanıcı
-  /review'da Türkçe arka yüz görür (`onConflictDoNothing` üzerine yazmaz).
-- `chat_messages.content`: geçmiş hoca mesajları üretildiği dilde kalır.
-Bunlar ticket'ın sıralı kapsamında değildi; damga eklemek SRS/chat şema
-değişikliği ister. Takip ticket'ına aday.
+**Deliberately out of scope (same class, worth a separate ticket; Burak's
+call):**
+- `srs_cards.back`: native text, no language stamp; dedupe is on
+  `(profileId, itemType, front)`. A user who accumulates cards in tr and
+  switches to en sees a Turkish back side on /review
+  (`onConflictDoNothing` doesn't overwrite).
+- `chat_messages.content`: past teacher messages stay in the language they
+  were generated in.
+These weren't in the ticket's sequenced scope; adding a stamp would need an
+SRS/chat schema change. Candidate for a follow-up ticket.
 
-overview.ts kontrol edildi: sadece agregat + seviye etiketi (levelDisplay,
-dil-nötr) döner — başlık sızıntısı YOK.
+overview.ts checked: returns only aggregates + level label (levelDisplay,
+language-neutral); NO title leak.
 ---
-Semptom (Burak, canlı): dili İngilizce yapınca hâlâ Türkçe şeyler
-görünüyor. İki ayrı katman var, ikisi de ele alınmalı:
+Symptom (Burak, live): switching to English still shows Turkish things.
+There are two separate layers, both need handling:
 
-1. **Hardcoded Türkçe** (S tablosu dışında kalanlar): ör. `client-api.ts`
-   hata mesajları ("Profil yok", "Müfredat hazır değil"), route hataları,
-   muhtemel başka kaçaklar. Sweep: repo genelinde string literal Türkçe
-   taraması → hepsi co-located S tablosuna ya da server `pick()`'e.
+1. **Hardcoded Turkish** (things left out of the S table): e.g.
+   `client-api.ts` error messages ("Profil yok" [No profile], "Müfredat hazır değil"
+   [Curriculum not ready]), route errors, likely other leaks. Sweep: a
+   repo-wide Turkish string-literal scan -> all of it into the co-located S
+   table or server `pick()`.
 
-2. **Cache'lenmiş LLM içeriği**: `_tr` alanları "öğrencinin ana dilinde"
-   demek; içerik üretildiği andaki nativeLanguage ile yazılıyor ama
-   ÜZERİNE DİL DAMGASI YOK. nativeLanguage tr→en değişince eski Türkçe
-   içerik aynen servis ediliyor. Karar (Burak): üretilmiş içerik dil
-   koduyla damgalansın; dil değişince o dilde kaynak YOKMUŞ gibi
-   davranılsın (pending'e düş / yeniden üret).
+2. **Cached LLM content**: `_tr` fields mean "in the student's native
+   language"; content is written with the nativeLanguage that was active AT
+   GENERATION TIME but carries NO LANGUAGE STAMP. When nativeLanguage
+   changes tr->en, the old Turkish content is served as-is. Decision
+   (Burak): generated content should be stamped with a language code; when
+   the language changes, treat that language's content as if it doesn't
+   exist (drop to pending / regenerate).
 
-Tasarım notları (implement'te netleşecek):
-- Damga yeri: ayrı kolon = şema değişikliği = SAVE_SCHEMA_VERSION bump.
-  Alternatif: içerik JSON'unun içine `lang` alanı (json kolonlar esnek,
-  şema bump'sız). Damgasız eski satırlar = "tr" varsay (tr default'tu).
-  Hangisi seçilirse zod şemalarına (schemas.ts) işlenmeli.
-- Kapsam: lesson içerikleri, grammar_topics.content, kanji_entries
-  (Türkçe anlam/örnekler), vocab_entries content, translations cache,
-  curriculum başlık/açıklamaları (units.titleTr vb. — bunlar json değil
-  kolon; en zor vaka, belki sadece "yeniden üret" butonu).
-- **Packaged seed'ler Türkçe**: grammar/kanji/vocab seed JSON'ları tr
-  içerik taşıyor. Seed dosyaları da dil damgalı olmalı ve en-native
-  profile UYGULANMAMALI (yoksa "İngilizce profilde Türkçe içerik"
-  hatası seed yolundan geri gelir). en kullanıcı içeriği LLM'den üretir.
-- UX: nativeLanguage değişimi Settings'te — değişim anında kullanıcıya
-  maliyet uyarısı ("cache'li içerik bu dilde yok, yeniden üretilecek").
-  İçerik silinmez — tr'ye dönünce eski içerik geri görünür (damga
-  eşleşince).
+Design notes (to be settled during implementation):
+- Stamp location: a separate column = schema change = SAVE_SCHEMA_VERSION
+  bump. Alternative: a `lang` field inside the content JSON (json columns
+  are flexible, no schema bump). Unstamped legacy rows = assume "tr" (tr
+  was the default). Whichever is chosen must be reflected in the zod
+  schemas (schemas.ts).
+- Scope: lesson content, grammar_topics.content, kanji_entries (Turkish
+  meanings/examples), vocab_entries content, translations cache,
+  curriculum titles/descriptions (units.titleTr etc.; these are not json,
+  they're columns; the hardest case, maybe just a "regenerate" button).
+- **Packaged seeds are Turkish**: grammar/kanji/vocab seed JSON carries tr
+  content. Seed files also need a language stamp and must NOT be applied to
+  an en-native profile (otherwise an "English content shows Turkish
+  content" error would come back through the seed path). An en user
+  generates content from the LLM.
+- UX: nativeLanguage change is in Settings; the user should get a cost
+  warning at the moment of the change ("cached content doesn't exist in
+  this language, it will be regenerated"). Content is not deleted; going
+  back to tr shows the old content again (once the stamp matches).
 
-Doğrulama: tr profille üretilmiş grammar/kanji/lesson → nativeLanguage
-en yap → içerik "hazırlanmadı" durumuna düşer, LLM ile en üretilir; tr'ye
-geri dön → eski Türkçe içerik aynen geri gelir; seed'ler en profile
-uygulanmaz.
+Verification: content generated with a tr profile -> switch nativeLanguage to
+en -> content falls to "not prepared" state, generated in en via LLM; switch
+back to tr -> old Turkish content comes back exactly as it was; seeds are not
+applied to an en profile.

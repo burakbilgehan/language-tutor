@@ -1,6 +1,6 @@
 ---
 id: T-024
-title: Save dosyasına job kuyruğu sızmasın (import edilen save token yakıyor)
+title: Job queue must not leak into save files (imported save burns tokens)
 status: done
 priority: p1
 effort: S
@@ -8,46 +8,46 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-Kök neden (2026-07-22 backlog session'ında bulundu): batch üretim ("tümünü
-indir") ortasında save export alınırsa `generation_jobs` tablosundaki
-`queued`/`running` satırlar snapshot'a gömülüyor. Save'i import eden her
-session `recoverStaleJobs`'un sahipsiz-queued-iş evlat edinme adımına
-(`src/lib/jobs.ts:76`) takılıyor ve kuyruğu kendiliğinden koşturmaya
-başlıyor — kullanıcının haberi olmadan LLM token'ı yanıyor. Crash
-recovery için doğru olan davranış, import edilmiş save için yanlış.
+Root cause (found in the 2026-07-22 backlog session): if a save export is
+taken mid-batch generation ("download all"), the `queued`/`running` rows in
+the `generation_jobs` table get embedded in the snapshot. Every session that
+imports the save hits `recoverStaleJobs`'s orphaned-queued-job adoption step
+(`src/lib/jobs.ts:76`) and starts running the queue on its own, burning the
+user's LLM tokens without their knowledge. The behavior that's correct for
+crash recovery is wrong for an imported save.
 
-Not: canlı (statik) modda job tablosu kullanılmıyor — batch tarayıcı
-belleğinde inline koşuyor, sekme kapanınca durur. Sızıntı yalnızca server
-modu export'larından gelir.
+Note: in the live (static) mode the job table isn't used, batch runs inline
+in browser memory and stops when the tab closes. The leak only comes from
+server-mode exports.
 
-Karar (Burak): bilgi save dosyasına hiç yazılmasın — temizlik export
-tarafında.
+Decision (Burak): the information should never be written to the save file at
+all, the cleanup happens on the export side.
 
-Statü (2026-07-22): 1+2 yapıldı (export strip + import belt). Bu **geçici
-yeterli** — sürpriz kuyruğun ana vektörünü (import edilen save) kapatır.
-Açık kalan boşluk: kullanıcı tekrar import'a basmadan (localStorage/
-IndexedDB'den) devam ederse boot'taki `recoverStaleJobs` bekleyen queued
-işleri hâlâ otomatik koşturur. Bunun kalıcı çözümü + kullanıcıya cancel/
-görünürlük **T-034**'e taşındı. Sub-decision 3 (kanji auto-fill GET) da
-orada tekrar değerlendirilecek.
+Status (2026-07-22): 1+2 done (export strip + import belt). This is a
+**temporary but adequate** fix, it closes the main vector (imported saves) for
+surprise queues. Remaining gap: if the user continues without hitting import
+again (from localStorage/IndexedDB), boot's `recoverStaleJobs` still
+auto-runs pending queued jobs. The permanent fix for this + user-facing
+cancel/visibility was moved to **T-034**. Sub-decision 3 (kanji auto-fill GET)
+will also be reconsidered there.
 
-İş:
-1. **Export'ta temizlik** (`src/lib/save/export.ts`): `serialize()` sonrası
-   buffer'ı ikinci bir better-sqlite3 bağlantısıyla aç (buffer'dan
-   deserialize; gerekirse temp dosya üzerinden), `DELETE FROM
-   generation_jobs WHERE status IN ('queued','running')`, yeniden
-   serialize et. Canlı DB'ye DOKUNMA — süren batch ölmesin.
-2. **Import'ta kemer** (`src/lib/save/import.ts`): tek UPDATE ile gelen
-   dosyadaki queued/running işleri iptal işaretle. Vahşi doğada temizlik
-   öncesi alınmış save'ler var; export fix'i onları kurtarmaz. Bedava
-   sigorta.
-3. **Alt karar (implement'te netleştir)**: kanji liste GET'indeki
-   auto-fill kuyruğu, seed kapsamayan seviyelerde import edilmiş save'le de
-   kendiliğinden LLM'e gidebiliyor. Vocab/grammar gibi user-triggered'a
-   çekmek tutarlı olur; ama bilinçli bir özellik — kaldırmadan önce
-   davranış değişikliğini not düş.
+Work:
+1. **Cleanup on export** (`src/lib/save/export.ts`): after `serialize()`,
+   open the buffer with a second better-sqlite3 connection (deserialize from
+   the buffer; via a temp file if needed), `DELETE FROM
+   generation_jobs WHERE status IN ('queued','running')`, re-serialize. Do
+   NOT touch the live DB, an in-progress batch shouldn't die.
+2. **Belt on import** (`src/lib/save/import.ts`): a single UPDATE marks any
+   queued/running jobs in the incoming file as canceled. There are saves out
+   in the wild taken before the cleanup fix; the export fix doesn't save
+   them. Free insurance.
+3. **Sub-decision (clarify during implementation)**: the auto-fill queue in
+   the kanji list GET can also go to the LLM on its own with an imported save,
+   on levels not covered by the seed. Pulling it to user-triggered like
+   vocab/grammar would be consistent; but it's a deliberate feature, note the
+   behavior change before removing it.
 
-Doğrulama: batch ortasında export al → dosyayı sqlite3 ile aç,
-generation_jobs'ta queued/running satır olmadığını gör; eski (kirli) bir
-save'i import et → boot'ta hiçbir job'ın kendiliğinden koşmadığını logdan
-doğrula.
+Verification: take an export mid-batch, open the file with sqlite3, confirm no
+queued/running rows in generation_jobs; import an old (dirty) save, confirm
+from the log that no job auto-runs on boot.
+</content>

@@ -1,6 +1,6 @@
 ---
 id: T-025
-title: Onboarding'e "Kayıt yükle / Yeni başla" giriş ekranı
+title: "Load save / Start new" entry screen for onboarding
 status: done
 priority: p2
 effort: M
@@ -8,24 +8,26 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-Save import şu an sadece Settings'te. Kayıtlı bir save'i olan kullanıcı
-boş session açınca önce wizard'ın bütün sorularını cevaplıyor, LLM
-bağlantısı yoksa uzun süre bekliyor — sonra import'u bulup her şeyi eziyor.
-Oyunlardaki gibi olmalı: boş session'ın İLK ekranı iki kart:
+Save import currently only lives in Settings. A user who has a saved save
+opens an empty session, answers all of the wizard's questions first, waits a
+long time if there's no LLM connection, then finds import and overwrites
+everything. It should be like in games: the FIRST screen of an empty session
+is two cards:
 
-- **Kayıt yükle (Load)**: dosya seçici → mevcut import akışı (replace-all,
-  version check). Başarılıysa wizard komple atlanır, /map'e düş.
-- **Yeni başla (New game)**: mevcut wizard step 0'dan devam.
+- **Load save**: file picker -> existing import flow (replace-all, version
+  check). On success the wizard is skipped entirely, drop into /map.
+- **New game**: continue from wizard step 0 as-is.
 
-Notlar:
-- İki modda da çalışmalı (server `/api/save/import`, statik tarayıcı image
-  replace) — Settings'teki akışın aynısını çağır, kod kopyalama.
-- Ekran copy'si onboarding gibi `pick(S, draft.uiLanguage)` ile — henüz
-  profil yok.
-- "Boş session" tespiti: hiç profil yoksa. Profil varken bu ekran
-  görünmez.
-- T-024 ile birlikte düşün: import edilen save job kuyruğu taşımamalı.
+Notes:
+- Should work in both modes (server `/api/save/import`, static browser image
+  replace), call the same flow as Settings, don't copy code.
+- Screen copy via `pick(S, draft.uiLanguage)` like onboarding, no profile yet.
+- "Empty session" detection: no profile exists at all. This screen doesn't
+  show when a profile exists.
+- Consider together with T-024: an imported save must not carry over the job
+  queue.
 
-Doğrulama: temiz profil (statik modda temiz IndexedDB) → ilk açılışta
-Load/New ekranı; save yükle → wizard'sız haritaya; Yeni başla → mevcut
-wizard aynen.
+Verification: clean profile (clean IndexedDB in static mode) -> Load/New
+screen on first open; load a save -> straight to the map without the wizard;
+Start new -> the existing wizard unchanged.
+</content>

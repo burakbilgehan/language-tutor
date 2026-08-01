@@ -51,8 +51,9 @@ public/strokes-data
 # loaded by the app, never committed.
 public/grammar-seed/*.stub.json
 
-# claude code local state (settings + worktrees)
-.claude/
+# claude code local state (settings + worktrees); .claude/skills/ IS tracked
+.claude/*
+!.claude/skills/
 .wrangler/
 .static-build-aside/
 

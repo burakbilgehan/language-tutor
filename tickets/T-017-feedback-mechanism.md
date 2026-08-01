@@ -1,6 +1,6 @@
 ---
 id: T-017
-title: Kullanıcı feedback mekanizması (sorun tarifi + öneri + screenshot)
+title: User feedback mechanism (problem description + suggestion + screenshot)
 status: done
 priority: p2
 effort: M
@@ -8,73 +8,80 @@ confidence: medium
 depends: []
 created: 2026-07-18
 ---
-Site canlıda; kullanıcı feedback'leri bir yere düşmeli. İki tür girdi:
-sorun bildirimi (screenshot'la tarif edebilmeli) ve öneri (kullanıcıya
-product management yaptırma). UI: her sayfadan erişilebilir küçük bir
-"feedback" butonu → modal (tür seçimi, açıklama, opsiyonel screenshot).
+The site is live; user feedback needs somewhere to land. Two kinds of input:
+problem reports (should be describable with a screenshot) and suggestions
+(let the user do product management). UI: a small "feedback" button
+accessible from every page -> modal (type selection, description, optional
+screenshot).
 
-Kısıt: statik deploy (GitHub Pages) — backend yok. Seçenekler:
-1. **GitHub Issues prefill URL**: `github.com/.../issues/new?title=&body=`
-   ile aç. Sıfır altyapı ama screenshot upload yok (kullanıcı issue'ya
-   kendisi sürükler) ve GitHub hesabı gerektirir.
-2. **Form servisi (Formspree/Getform benzeri)**: anonim çalışır, dosya eki
-   destekler, e-postaya düşer. Ücretsiz tier limitleri var.
-3. **Kendi endpoint'i (Cloudflare Worker + repo'ya issue açan token)**:
-   en temiz UX (anonim + screenshot → issue'ya base64/asset), ama ilk kez
-   sunucu tarafı bileşen demek.
+Constraint: static deploy (GitHub Pages), no backend. Options:
+1. **GitHub Issues prefill URL**: open via
+   `github.com/.../issues/new?title=&body=`. Zero infrastructure but no
+   screenshot upload (the user has to drag it into the issue themselves) and
+   requires a GitHub account.
+2. **Form service (something like Formspree/Getform)**: works anonymously,
+   supports file attachments, lands in email. Free tier has limits.
+3. **Own endpoint (Cloudflare Worker + a token that opens an issue in the
+   repo)**: cleanest UX (anonymous + screenshot -> issue as base64/asset),
+   but the first server-side component in the project.
 
-Öneri: MVP = 1 + screenshot'ı kullanıcının panosuna/indirmesine hazırlama
-(html2canvas ile sayfa görüntüsü çek, kullanıcı issue'ya yapıştırır);
-hacim artarsa 3'e geç. Karar implement eden session'da verilecek —
-seçenekler arası fark UX, mimari değil.
+Recommendation: MVP = option 1 + preparing the screenshot for the user's
+clipboard/download (capture the page with html2canvas, user pastes it into the
+issue); move to option 3 if volume grows. Decision to be made in the
+implementing session, the difference between the options is UX, not
+architecture.
 
-Not: screenshot çekimi (html2canvas veya `getDisplayMedia`) statik modda
-çalışır; LLM konfigürasyonu/kişisel veri sızmasın diye ekran görüntüsünde
-settings sayfası uyarısı göster.
+Note: screenshot capture (html2canvas or `getDisplayMedia`) works in static
+mode; since LLM configuration/personal data could leak into the screenshot,
+show a settings-page warning.
 
 ---
-Uygulama (2026-07-18): seçenek 1 (GitHub Issues prefill).
-`FeedbackButton.tsx` (layout'ta global, sol alt): tür seçimi + açıklama +
-viewport screenshot → panoya (clipboard yoksa PNG indirme fallback) →
-prefill'li issue sayfası. `html2canvas-pro` kullanıldı — Tailwind 4'ün
-color-mix()/oklch çıktıları klasik html2canvas'ı kırıyor. Modal/buton
-`data-feedback-ignore` ile capture dışı; /settings'te kişisel veri uyarısı.
-Metadata: sayfa, mod (static/server), hedef dil, UA. Repo'da `feedback`
-label'ı oluşturuldu (URL'deki labels= sadece yazma yetkisi olanda otomatik
-uygulanır; anonim kullanıcıda düşer, sorun değil). Next dev indicator
-sol alttan sağ alta taşındı (next.config `devIndicators.position`).
-Hacim artarsa Cloudflare Worker'a geçiş hâlâ açık seçenek.
+Implementation (2026-07-18): option 1 (GitHub Issues prefill).
+`FeedbackButton.tsx` (global in the layout, bottom left): type selection +
+description + viewport screenshot -> clipboard (PNG download fallback if no
+clipboard) -> prefilled issue page. Used `html2canvas-pro`, Tailwind 4's
+color-mix()/oklch output breaks classic html2canvas. Modal/button excluded
+from capture via `data-feedback-ignore`; personal-data warning on /settings.
+Metadata: page, mode (static/server), target language, UA. A `feedback` label
+was created in the repo (the `labels=` in the URL is only auto-applied for
+users with write access; it's dropped for anonymous users, not a problem).
+Next dev indicator moved from bottom-left to bottom-right (next.config
+`devIndicators.position`). Moving to a Cloudflare Worker if volume grows is
+still an open option.
 
-Revizyon (aynı gün): prefill MVP'si yetersiz bulundu (GitHub hesabı şartı,
-screenshot elle, title=desc tekrarı) → seçenek 3 eklendi:
-`workers/feedback/` Cloudflare Worker'ı POST'u alır, sahibin fine-grained
-PAT'iyle (secret GITHUB_TOKEN) issue'yu repoya AÇAR (anonim kullanıcı, hesap
-gerekmez) ve screenshot'ı `feedback-assets` branch'ine contents API ile
-commit'leyip body'ye raw URL olarak gömer. Client: `NEXT_PUBLIC_FEEDBACK_URL`
-set ise Worker'a JSON POST (screenshot jpeg dataURL), değilse eski prefill
-fallback'i. Modala ayrı opsiyonel "Başlık" alanı eklendi; title artık
-`[Sorun] başlık|sayfa`, açıklama sadece body'de. Deploy: wrangler login +
-`secret put GITHUB_TOKEN` + deploy; Worker URL'i repo variable
-NEXT_PUBLIC_FEEDBACK_URL olarak pages.yml'e akar (ayrıca kodda default —
-env sadece override, "off" = prefill'e zorla). Anti-abuse: origin
-allow-list + boyut limitleri (spam olursa Turnstile eklenir).
+Revision (same day): the prefill MVP was judged insufficient (requires a
+GitHub account, manual screenshot, title=desc duplication) -> option 3 added:
+the `workers/feedback/` Cloudflare Worker takes the POST, OPENS the issue in
+the repo with the owner's fine-grained PAT (secret GITHUB_TOKEN, anonymous
+user, no account needed), and commits the screenshot to the `feedback-assets`
+branch via the contents API and embeds it in the body as a raw URL. Client: if
+`NEXT_PUBLIC_FEEDBACK_URL` is set, JSON POST to the Worker (screenshot as jpeg
+dataURL), otherwise falls back to the old prefill. A separate optional
+"Title" field was added to the modal; the title is now
+`[Sorun] title|page` ("[Issue] title|page"), the description is body-only.
+Deploy: wrangler login + `secret put GITHUB_TOKEN` + deploy; the Worker URL
+flows into pages.yml as the repo variable NEXT_PUBLIC_FEEDBACK_URL (also has a
+default in code, env only overrides, "off" forces the prefill). Anti-abuse:
+origin allow-list + size limits (Turnstile added if it turns into spam).
 
-**PAT süresi dolarsa (belirti: feedback göndermek "Gönderilemedi" hatası
-verir, Worker `github_401` döner):**
-1. https://github.com/settings/personal-access-tokens → yeni fine-grained
-   PAT: sadece `language-tutor` repo'su, Issues: Read+Write,
+**If the PAT expires (symptom: sending feedback returns a "Gönderilemedi"
+("failed to send") error, Worker returns `github_401`):**
+1. https://github.com/settings/personal-access-tokens -> new fine-grained
+   PAT: only the `language-tutor` repo, Issues: Read+Write,
    Contents: Read+Write.
 2. `cd workers/feedback && npx wrangler secret put GITHUB_TOKEN`
-   → yeni token'ı prompt'a yapıştır. Deploy gerekmez, secret anında geçer.
-   (wrangler oturumu da düşmüşse önce `npx wrangler login`.)
-3. Test: siteden bir feedback gönder ya da
+   -> paste the new token at the prompt. No deploy needed, the secret takes
+   effect immediately.
+   (if the wrangler session also expired, run `npx wrangler login` first.)
+3. Test: send a feedback report from the site, or
    `curl -X POST https://kumo-feedback.burakbilgehan-p.workers.dev
    -H 'Content-Type: application/json'
    -H 'Origin: https://burakbilgehan.github.io'
-   -d '{"kind":"bug","desc":"token test"}'` → `{"ok":true,...}` dönmeli;
-   açılan test issue'yu kapat.
+   -d '{"kind":"bug","desc":"token test"}'` should return `{"ok":true,...}`;
+   close the resulting test issue.
 
-Bilinen ikincil riskler (kabul edildi): CF free 10ms CPU limiti çok büyük
-(2MB+) screenshot'larda nadiren 1102 verebilir — sıklaşırsa client'ta jpeg
-kalitesi/boyut kısılır; `feedback-assets` branch'i zamanla şişer —
-silinip yeniden açılabilir (eski issue görselleri kırılır).
+Known secondary risks (accepted): the CF free tier's 10ms CPU limit can rarely
+return 1102 on very large (2MB+) screenshots, if this becomes frequent, cap
+jpeg quality/size client-side; the `feedback-assets` branch will grow over
+time, can be deleted and reopened (breaks images in old issues).
+</content>

@@ -1,6 +1,6 @@
 ---
 id: T-046
-title: Auth — better-auth (Google + magic-link) Worker'da, güvenlik gate'li
+title: Auth - better-auth (Google + magic-link) on the Worker, security-gated
 status: done
 priority: p1
 effort: L
@@ -8,65 +8,70 @@ confidence: medium
 depends: [T-045]
 created: 2026-07-26
 ---
-Spike (T-045) stack'i doğruladıktan sonra auth'u prod-kalite kur. Kapsam:
-**kimlik**, save-sync değil (o T-047).
+Once the spike (T-045) verified the stack, build auth to production quality.
+Scope: **identity**, not save-sync (that's T-047).
 
-- **Sağlayıcılar:** Google OAuth + magic-link (email). Apple/Facebook v2'ye
-  ertelendi (Apple $99/yıl dev hesabı, Facebook app-review — başlangıçta yük).
-- **Session/kullanıcı:** D1'de (better-auth D1 adapter). User ↔ hesap eşlemesi.
-- **Magic-link sender:** T-045'te seçilen email sağlayıcı (CF Email Sending /
-  Resend) prod'a bağlanır.
+- **Providers:** Google OAuth + magic-link (email). Apple/Facebook deferred to
+  v2 (Apple's $99/year dev account, Facebook app review; too much overhead to
+  start).
+- **Session/user:** in D1 (better-auth D1 adapter). User <-> account mapping.
+- **Magic-link sender:** the email provider chosen in T-045 (CF Email Sending /
+  Resend) gets wired to prod.
 
-**Cookie/domain kararı (advisor, çözülmesi ZORUNLU — ertelenemez):**
-site public origin + Worker farklı registrable domain = third-party session
-cookie (Safari ITP bloklar, Chrome bozuyor). Seçenekler: (a) custom domain,
-app+API aynı registrable domain (`app.x.com`/`api.x.com`, `SameSite=Lax`
-çalışır) — advisor önerisi, en ucuz, monetize öncesi zaten istenir; (b) CF
-Pages + Worker aynı origin route'ta; (c) bearer-token-in-localStorage (XSS-okunur,
-KAÇIN). Karar Burak'a: **custom domain alınacak mı?**
+**Cookie/domain decision (advisor, MUST be resolved, cannot be deferred):**
+site public origin + Worker on a different registrable domain = third-party
+session cookie (Safari ITP blocks it, Chrome is tightening too). Options: (a)
+custom domain, app+API on the same registrable domain (`app.x.com`/`api.x.com`,
+`SameSite=Lax` works); advisor's recommendation, cheapest, and desirable before
+monetization anyway; (b) CF Pages + Worker on the same origin route; (c)
+bearer-token-in-localStorage (XSS-readable, AVOID). Decision goes to Burak:
+**will a custom domain be bought?**
 
-**Güvenlik acceptance criteria (T-039'un tehdit sınıfı — review-later DEĞİL):**
-Worker, public browser origin'den çağrılan authenticated API = bridge CSRF'in
-aynı şekli. (1) Strict origin allowlist; (2) session cookie'de `SameSite`;
-(3) state-changing route'lar auth check'ten ÖNCE çalışmasın (T-039 bug'ı tam
-buydu: "handler auth'tan önce koştu"); (4) `src/lib/auth.test.ts` yalnız Next
-`route.ts`'leri yürüyor — **Worker'ın kendi test-gate'i gerekir** (her
-mutating Worker route'u auth kontrolü yapmalı, test'le kilitli).
+**Security acceptance criteria (same threat class as T-039, NOT review-later):**
+the Worker is an authenticated API called from a public browser origin, the
+same shape as the bridge CSRF issue. (1) Strict origin allowlist; (2)
+`SameSite` on the session cookie; (3) state-changing routes must not run
+before the auth check (T-039's bug was exactly this: "handler ran before
+auth"); (4) `src/lib/auth.test.ts` only walks Next `route.ts` files, so the
+**Worker needs its own test gate** (every mutating Worker route must do an
+auth check, locked by a test).
 
-Fence (T-047 ile aynı Worker codebase): `worker/` (T-045 iskeleti — top-level
-`worker/` dizini, `src/worker` DEĞİL; kendi package.json/lockfile'ı var).
-T-047 ile SERİ ya da fence-ayrık paralel + **auth önce merge**.
+Fence (same Worker codebase as T-047): `worker/` (T-045's skeleton; top-level
+`worker/` directory, NOT `src/worker`; has its own package.json/lockfile).
+Run SERIALLY with T-047 or fence-split in parallel with **auth merged first**.
 
-**T-046 uygulama kararları (2026-07-26, sahip kararı + uygulama):**
-- **Google-only.** Magic-link kapsam dışı (custom domain yok → hiçbir email
-  sağlayıcı gönderemiyor). `emailAndPassword` de kaldırıldı (spike'ta açık
-  kayıt endpoint'iydi).
-- **Cookie/domain sorusu same-origin ile çözüldü:** Worker hem statik siteyi
-  hem `/api/*`'ı tek origin'den servis ediyor (Workers static assets +
-  `run_worker_first: ["/api/*"]`). Session cookie first-party → `SameSite=Lax`
-  yetiyor; third-party cookie / ITP problemi ortadan kalktı. Custom domain
-  gerekmedi. GitHub Pages anonim-only ayna olarak kalıyor.
-- **Auth-before-execute tipe gömüldü:** `src/routes.ts` route tablosu; authed
-  handler'ın context tipi çözülmüş `session` İÇERİYOR, yani session olmadan
-  çağrılamıyor. T-047'nin save route'ları bu özelliği tabloya katılarak
-  otomatik miras alır.
-- **Worker test gate** (`worker/test/`, vitest-pool-workers, gerçek workerd):
-  Next'teki metinsel taramadan güçlü — route tablosunu gezip gerçek
-  unauthenticated istek atıyor, 401 + **R2'de yan etki yok** doğruluyor;
-  `index.ts`'te tablo-bypass route'u da yakalıyor. İkisi de kırmızı
-  gösterildi.
-- **Bulunan+düzeltilen bug:** `/api/auth/*` origin gate'inden muaf tutulunca
-  OPTIONS preflight 404 dönüyordu → tarayıcı dev sign-in'i bloklardı. OPTIONS
-  artık muaf değil (preflight'ta cookie/body yok, callback GET etkilenmiyor).
-- Şema yeniden üretildi: **byte-identical** (verification = core OAuth state,
-  magic-link'e ait değil) → `0001` değişmedi.
+**T-046 implementation decisions (2026-07-26, owner decision + implementation):**
+- **Google-only.** Magic-link is out of scope (no custom domain means no email
+  provider can send). `emailAndPassword` was also removed (it was an open
+  signup endpoint in the spike).
+- **Cookie/domain question resolved via same-origin:** the Worker serves both
+  the static site and `/api/*` from a single origin (Workers static assets +
+  `run_worker_first: ["/api/*"]`). The session cookie is first-party, so
+  `SameSite=Lax` is enough; the third-party cookie / ITP problem disappears.
+  No custom domain needed. GitHub Pages stays as an anonymous-only mirror.
+- **Auth-before-execute baked into the type system:** `src/routes.ts` is a
+  route table; an authed handler's context type INCLUDES a resolved `session`,
+  so it can't be called without one. T-047's save routes inherit this
+  automatically by joining the table.
+- **Worker test gate** (`worker/test/`, vitest-pool-workers, real workerd):
+  stronger than Next's textual scan; it walks the route table and fires an
+  actual unauthenticated request, verifying 401 + **no side effect in R2**;
+  it also catches a table-bypass route in `index.ts`. Both were shown red
+  before the fix.
+- **Bug found + fixed:** exempting `/api/auth/*` from the origin gate caused
+  OPTIONS preflight to return 404, which blocked the browser's dev sign-in.
+  OPTIONS is no longer exempt (preflight carries no cookie/body, so the
+  callback GET is unaffected).
+- Schema regenerated: **byte-identical** (verification = core OAuth state,
+  not magic-link-specific), so `0001` didn't change.
 
-T-045 sonrası notlar (2026-07-26): (1) better-auth ≥1.6 raw D1 binding'i
-doğrudan kabul ediyor — `kysely`/`kysely-d1` deps kullanılmıyor, kaldır.
-(2) `emailAndPassword: { enabled: true }` spike-only açık kayıt endpoint'i —
-kaldır. (3) Worker'da CORS/preflight YOK (curl'de görünmez, browser'da
-zorunlu — credentials'lı CORS her domain seçeneğinde şart). (4)
-`schema-gen.config.ts` `src/auth.ts`'in plugin/provider setini elle
-aynalıyor — drift riski, senkron tut. (5) **Custom domain magic-link'in ön
-şartı çıktı** (hiçbir sağlayıcı domain'siz keyfi alıcıya göndermiyor);
-domain yoksa kapsam Google-only'ye düşer.
+Notes after T-045 (2026-07-26): (1) better-auth >= 1.6 accepts a raw D1
+binding directly; the `kysely`/`kysely-d1` deps are unused, remove them. (2)
+`emailAndPassword: { enabled: true }` was a spike-only open signup endpoint,
+remove it. (3) There's NO CORS/preflight on the Worker (invisible via curl,
+mandatory in a browser; credentialed CORS is required under every domain
+option). (4) `schema-gen.config.ts` manually mirrors `src/auth.ts`'s
+plugin/provider set, a drift risk, keep them in sync. (5) **A custom domain
+turned out to be a prerequisite for magic-link** (no provider sends to an
+arbitrary recipient without a domain); without a domain, scope falls back to
+Google-only.

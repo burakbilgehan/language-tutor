@@ -1,6 +1,6 @@
 ---
 id: T-065
-title: Yūyake kalıntıları — T-053 fence'i dışındaki ekranlarda focus/selected/token temizliği
+title: Yuyake leftovers: focus/selected/token cleanup on screens outside the T-053 fence
 status: done
 priority: p3
 effort: S
@@ -8,23 +8,20 @@ confidence: high
 depends: [T-053]
 created: 2026-07-28
 ---
-T-053 rol denetimi 5 ekranla sınırlıydı; agent taraması kapsam dışı
-ekranlarda şu kural ihlallerini raporladı (dokunulmadı). Hepsi mekanik —
-T-053'ün yerleşik kalıplarını uygula (satır numaraları kayabilir, grep'le):
+The T-053 role audit was limited to 5 screens; an agent sweep reported the following rule violations on out-of-scope screens (untouched). All are mechanical: apply T-053's established patterns (line numbers may have drifted, use grep):
 
-1. **Focus formülü** (`focus:border-indigo focus:ring-4 focus:ring-indigo/15`):
+1. **Focus formula** (`focus:border-indigo focus:ring-4 focus:ring-indigo/15`):
    - `focus:border-accent`: ChatPanel:169, ConjugatorView:166+182,
      NlConjugatorView:79
    - `focus:ring-accent-soft`: VocabSidebar:249+291
-2. **Flash/selected → indigo** (T-053'te GrammarSidebar emsali):
+2. **Flash/selected -> indigo** (GrammarSidebar precedent in T-053):
    - flash `ring-accent`: StrokeTrainer:437, VocabSidebar:206
-   - seçili satır/pill `bg-accent-soft`: VocabSidebar:209, StrokeTrainer:369+440,
+   - selected row/pill `bg-accent-soft`: VocabSidebar:209, StrokeTrainer:369+440,
      CommandPalette:230
-3. **Token düzeltmeleri**: `bg-accent text-white` → `text-surface`:
+3. **Token fixes**: `bg-accent text-white` -> `text-surface`:
    StrokeTrainer:322, ConjugatorView:145, NlConjugatorView:59;
    FloatingOverview:84 `text-white`.
 
-Not: bu ekranlardaki aktif-tab/primary-aksiyon vermilyonları KALIR (kural:
-vermilyon=aksiyon) — yalnız yukarıdaki focus/selected/token vakaları döner.
-Doğrulama: tsc + test + build; ekran başına dark/light göz kontrolü manuel.
-Referans: `design/okumo-yuyake/README.md` kuralları + T-053 diff'i (`25d813f`).
+Note: the active-tab/primary-action vermilions on these screens STAY (rule: vermilion = action only) - only the focus/selected/token cases above get reverted.
+Verification: tsc + test + build; manual dark/light eyeball per screen.
+Reference: `design/okumo-yuyake/README.md` rules + the T-053 diff (`25d813f`).

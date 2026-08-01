@@ -1,6 +1,6 @@
 ---
 id: T-015
-title: Mobil uyumluluk geçişi (responsive pass)
+title: Mobile-friendly pass (responsive pass)
 status: done
 priority: p2
 effort: L
@@ -9,49 +9,53 @@ depends: []
 created: 2026-07-18
 closed: 2026-07-18
 ---
-Şimdiye kadar hiç bakılmadı; site canlıda ve mobilden açan herkes için
-kırık/daralmış olabilir. Hedef: telefonda rahat kullanılabilir uygulama.
+Never looked at until now; the site is live and may be broken/cramped for
+anyone opening it from a phone. Goal: an app that's comfortable to use on a
+phone.
 
-Kapsam (denetlenecek yüzeyler):
-- Nav/header (StatsHeader + sekmeler — dar ekranda taşma muhtemel)
-- Roadmap/map görünümü
-- Lesson + egzersiz akışı (input'lar, klavye açılınca layout)
-- Grammar / Sözlük (vocab) / Kanji master-detail ikilileri — mobilde
-  sidebar+detay yan yana sığmaz, stack veya drawer gerekir
-- Çekim, Pinyin, Kana, Tekrar (review), Sohbet, Settings, Onboarding
+Scope (surfaces to audit):
+- Nav/header (StatsHeader + tabs, overflow likely on narrow screens)
+- Roadmap/map view
+- Lesson + exercise flow (inputs, layout when the keyboard opens)
+- Grammar / Vocab / Kanji master-detail pairs, sidebar+detail side by side
+  won't fit on mobile, needs stack or drawer
+- Conjugation, Pinyin, Kana, Review, Chat, Settings, Onboarding
 
-Yaklaşım önerisi: tek dev PR yerine sayfa sayfa ilerle (önce nav + lesson +
-master-detail kalıbı; kalıp bir kez çözülünce grammar/vocab/kanji üçü de
-aynı fix'i alır). Tailwind breakpoint'leriyle (`sm:` altı hedef) çöz;
-ayrı mobil layout yazma. `CenteredPage` gibi paylaşılan layout bileşenleri
-kaldıraç noktası.
+Suggested approach: instead of one big PR, go page by page (nav + lesson +
+master-detail pattern first; once the pattern is solved once, grammar/vocab/
+kanji all get the same fix). Solve with Tailwind breakpoints (target below
+`sm:`); don't write a separate mobile layout. Shared layout components like
+`CenteredPage` are the leverage point.
 
-Doğrulama: Chrome devtools device emulation (390px) + gerçek telefonda
-Pages canlısı. Effort L çünkü yüzey çok; tek tek sayfalar S.
+Verification: Chrome devtools device emulation (390px) + a real phone against
+the Pages live site. Effort L because the surface is large; individual pages
+are S.
 
-## Sonuç (2026-07-18)
+## Outcome (2026-07-18)
 
-Plan öncesi fable-planner ile kod okundu: premise'in çoğu yanlış çıktı —
-grammar/vocab layout zaten `?topic=`/`?word=` URL-gate ile mobilde stack
-oluyor (drawer değil, doğru karar), stroke trainer zaten `lg:flex-row`,
-map lesson paneli zaten mobilde `w-full`. Conjugate/pinyin tabloları
-`overflow-x-auto` içinde, sayfa taşmıyor.
+Before planning, code was read with fable-planner: most of the premise turned
+out wrong. Grammar/vocab layout already stacks on mobile via the `?topic=`/
+`?word=` URL-gate (not a drawer, the right call), stroke trainer already uses
+`lg:flex-row`, the map lesson panel is already `w-full` on mobile.
+Conjugation/pinyin tables are inside `overflow-x-auto`, the page doesn't
+overflow.
 
-Gerçek kırık tek nokta: **map bubble'lar** — `translateX(sin*90)` sabit
-genlik 320-375px ekranlarda label'ı taşırıyordu (analitik: 386px'te
-margin 31px, 320px'te negatife düşüyordu). Fix: genliği `min(90px, 18vw)`
-ile viewport'a göre ölçekledim (`RoadmapView.tsx`).
+The actually broken point: **map bubbles**, `translateX(sin*90)` with a fixed
+amplitude was overflowing the label at 320-375px screens (analysis: at 386px
+the margin was 31px, at 320px it went negative). Fix: scaled the amplitude to
+the viewport with `min(90px, 18vw)` (`RoadmapView.tsx`).
 
-Diğer küçük iyileştirme: onboarding kart padding'i `p-8` → `p-5 sm:p-8`
-(320px'te sıkışıktı, kırık değil).
+Another minor improvement: onboarding card padding `p-8` -> `p-5 sm:p-8`
+(cramped at 320px, not broken).
 
-Doğrulanan/dokunulmayan: header-h (101px, mobilde tutarlı), lesson input
-akışı (normal flow, klavye sorunu yok), chat composer (`sticky bottom-4`
-+ `dvh`, kod okuması sorunsuz görünüyor ama **gerçek cihazda
-doğrulanmadı** — Chrome resize_window tool'u bu oturumda viewport'u
-gerçekten değiştirmedi, sadece ilk denemede tutarlı sonuç verdi; kalan
-adımlar kod okuması + matematiksel doğrulamayla yapıldı), settings/
-onboarding grid'leri (metin wrap ediyor, clip yok).
+Verified/untouched: header height (101px, consistent on mobile), lesson input
+flow (normal flow, no keyboard issue), chat composer (`sticky bottom-4` +
+`dvh`, code read looks fine but **not verified on a real device**, the
+Chrome resize_window tool didn't actually change the viewport in this
+session, it just gave a consistent result on the first attempt; the
+remaining steps were done via code reading + mathematical verification),
+settings/onboarding grids (text wraps, no clipping).
 
-Açık kalan: gerçek telefonda canlı (Pages) doğrulaması yapılmadı —
-kullanıcı adımı.
+Still open: no verification on a real phone against the live site (Pages) was
+done, that's a user step.
+</content>

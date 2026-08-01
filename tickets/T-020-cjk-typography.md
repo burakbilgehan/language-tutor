@@ -1,6 +1,6 @@
 ---
 id: T-020
-title: CJK tipografi — hanzi küçük ve font tutarsız
+title: CJK typography, hanzi too small and inconsistent font
 status: done
 priority: p2
 effort: S
@@ -8,25 +8,26 @@ confidence: medium
 depends: []
 created: 2026-07-18
 ---
-Gözlem: Çince karakterler hem küçük kalıyor hem de "fontları sürekli
-değişiyor" hissi var. Muhtemel neden: UI fontları (Fraunces/Nunito Sans)
-CJK glifi içermiyor → tarayıcı sistem fallback'ine düşüyor; hangi fonta
-düştüğü elemente/karaktere göre değişince tutarsız görünüyor. Ayrıca
-`lang` attribute'u yoksa aynı kod noktası ja/zh varyantı arasında da
-yanlış glif alabilir (Han unification).
+Observation: Chinese characters are both too small and give a "the font keeps
+changing" feeling. Likely cause: the UI fonts (Fraunces/Nunito Sans) don't
+contain CJK glyphs, so the browser falls back to a system font; which font it
+falls back to varies by element/character, which looks inconsistent. Also,
+without a `lang` attribute, the same code point can get the wrong glyph
+between the ja/zh variant (Han unification).
 
-Fix yönü:
-- CJK için açık font stack'i tanımla: zh → `"Noto Sans SC", "PingFang SC",
-  ...`, ja → `"Noto Sans JP", "Hiragino Sans", ...` (globals.css `@theme`
-  token'ı olarak, ör. `--font-cjk-*`). Web font gömmek (Noto subset)
-  ağır olabilir — önce sistem fontlarıyla tutarlılık dene, yetmezse
-  next/font ile subset.
-- CJK metin taşıyan bileşenlere (`Furigana`, vocab/kanji listeleri, örnek
-  cümleler) `lang="zh-Hans"` / `lang="ja"` attribute'u — doğru glif
-  varyantı için.
-- Boyut: gövde CJK metnine Latin'den bir kademe büyük ölçek (karakter
-  yoğunluğu yüksek, aynı px'te okunmaz) — ör. örnek cümleler ve
-  liste başı karakterler için ortak utility class.
+Fix direction:
+- Define an explicit CJK font stack: zh -> `"Noto Sans SC", "PingFang SC",
+  ...`, ja -> `"Noto Sans JP", "Hiragino Sans", ...` (as a globals.css
+  `@theme` token, e.g. `--font-cjk-*`). Embedding a web font (Noto subset)
+  could be heavy, try consistency with system fonts first, subset with
+  next/font if that's not enough.
+- Add a `lang="zh-Hans"` / `lang="ja"` attribute to components carrying CJK
+  text (`Furigana`, vocab/kanji lists, example sentences), for the correct
+  glyph variant.
+- Size: bump body CJK text one step larger than Latin (character density is
+  higher, unreadable at the same px), e.g. a shared utility class for example
+  sentences and list-heading characters.
 
-Doğrulama: ja + zh sayfalarını yan yana görsel kontrol (macOS + bir
-Windows/Android cihazda fallback farkı büyük).
+Verification: side-by-side visual check of ja and zh pages (macOS + a Windows/
+Android device, fallback differences are large there).
+</content>

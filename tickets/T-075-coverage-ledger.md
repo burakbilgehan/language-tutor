@@ -1,6 +1,6 @@
 ---
 id: T-075
-title: Kapsama defteri — ders prompt'una ham soru listesi yerine deterministik özet
+title: Coverage ledger: a deterministic summary in the lesson prompt instead of a raw question list
 status: todo
 priority: p1
 effort: M
@@ -9,40 +9,28 @@ depends: []
 created: 2026-08-01
 ---
 
-## Sorun
+## Problem
 
-Ders prompt'u tekrar önlemek için öğrencinin önceki sorularını HAM METİN
-olarak gömüyor (`recentExercisePrompts`, son 30) + tamamlanan ders adlarını
-listeliyor (son 12). Tavanlar var, prompt sınırsız büyümüyor; ama yaklaşım
-üç yerden sızdırıyor:
+To avoid repetition, the lesson prompt embeds the student's previous questions as RAW TEXT (`recentExercisePrompts`, last 30) plus a list of completed lesson names (last 12). There are caps, so the prompt doesn't grow unbounded; but the approach leaks in three places:
 
-1. 30 soruluk pencere dolunca daha eski sorular dedupe dışına düşüyor,
-   tekrar sorulabiliyor.
-2. Ham soru metinleri (furigana parantezli) prompt'a gürültü basıyor ve
-   modeli o kalıpları taklit etmeye itiyor.
-3. "Neyi ne kadar öğrendi" bilgisini en kaba vekille (soru metni) taşıyor;
-   öge/yön (tanıma-üretim) düzeyinde kapsama bilgisi yok.
+1. Once the 30-question window fills up, older questions fall out of the dedupe
+   and can be asked again.
+2. Raw question text (with bracketed furigana) adds noise to the prompt and
+   nudges the model to imitate those patterns.
+3. It carries "what and how much the student has learned" through the crudest
+   possible proxy (question text); there's no coverage information at the item/direction level (recognition vs. production).
 
-## İş
+## Work
 
-Deterministik kapsama defteri: `exercises` + `attempts` (+ SRS kartları)
-tablolarından KODLA çıkarılan kompakt özet — öge başına kaç kez, hangi
-yönde (tanıma/üretim) sınandı, son skorlar. Ders prompt'una ham soru
-listesi yerine bu özet girer ("şu ögeler zaten 2+ kez soruldu, yeni açı
-bul: ..."). Sıfır LLM maliyeti, ölçek sınırsız, dedupe pencere değil tüm
-geçmiş üzerinden.
+A deterministic coverage ledger: a compact summary derived by CODE from the
+`exercises` + `attempts` (+ SRS card) tables - per item, how many times and in which direction (recognition/production) it was tested, and recent scores. The lesson prompt gets this summary instead of a raw question list ("these items have already been asked 2+ times, find a new angle: ..."). Zero LLM cost, unlimited scale, dedupe spans the entire history rather than a window.
 
-- Çekirdek: `src/core/*` (env-agnostik, iki modda da aynı), struggles.ts'in
-  yanına; `getStrugglesLine` ile birleşik tek "öğrenci bağlamı" bloğu
-  düşünülebilir.
-- `recentExercisePrompts` ham listesi kaldırılır (prompt sadeleşir).
-- Ölçüm: aynı node için üretilen iki dersin soru tekrarı gözle
-  karşılaştırılır; prompt token sayısı düşmeli.
+- Core: `src/core/*` (env-agnostic, identical in both modes), next to
+  struggles.ts; consider merging into a single "student context" block together with `getStrugglesLine`.
+- The raw `recentExercisePrompts` list is removed (the prompt gets simpler).
+- Measurement: eyeball-compare question repetition across two lessons generated for the same node; prompt token count should drop.
 
-## İlişki
+## Relationship
 
-T-071 (hızlı iskelet + arkadan alıştırmalar) ile tamamlayıcı: T-075 NEYİ
-soracağını besler, T-071 NE ZAMAN üretileceğini böler. Müfredat üretiminde
-tüm derslerin iskeletini önden çıkarma fikri bilinçli olarak REDDEDİLDİ:
-müfredat üretimini şişirir ve iskeletler öğrencinin ilerleyişine
-(struggles, feedback) kör kalıp bayatlar.
+Complementary to T-071 (fast skeleton + background-completed exercises):
+T-075 feeds WHAT to ask, T-071 splits WHEN it gets generated. The idea of pre-generating skeletons for all lessons during curriculum generation was deliberately REJECTED: it would bloat curriculum generation and leave the skeletons blind (and stale) to the student's actual progress (struggles, feedback).

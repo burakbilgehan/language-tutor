@@ -1,6 +1,6 @@
 ---
 id: T-042
-title: Save export'tan provider hata gövdesini (raw_output) scrub'la
+title: Scrub the provider error body (raw_output) from save export
 status: done
 priority: p3
 effort: S
@@ -8,27 +8,29 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-T-026 dalga 5 bulgusu (K1). **Tehdit çerçevesi A/B — LOW, PLAUSIBLE.**
-Bulgu fable-verifier'dan geçti; üç load-bearing halka da doğrulandı.
+T-026 wave 5 finding (K1). **Threat frame A/B; LOW, PLAUSIBLE.** The
+finding passed fable-verifier; all three load-bearing links were
+verified.
 
-Zincir: `src/lib/jobs.ts:473-478` provider'ın ham HTTP hata gövdesini
-(`err.rawOutput`, 20k cap) `generation_jobs.raw_output`'a yazıyor
-(`http-provider.ts:78-86` / `anthropic-http-provider.ts` full response body'yi
-`rawOutput`'a geçiriyor). `src/lib/save/export.ts:30-34`
-`snapshotWithoutJobQueue` yalnız `queued`/`running` satırlarını siliyor;
-`error` satırları rawOutput'uyla paylaşılabilir save snapshot'ına GİRİYOR.
-Bu, `config.ts:5-9`'ın tasarım niyetini (key'i DB dışında tut ki paylaşılan
-save'e sızmasın) delip geçiyor.
+Chain: `src/lib/jobs.ts:473-478` writes the provider's raw HTTP error body
+(`err.rawOutput`, capped at 20k) into `generation_jobs.raw_output`
+(`http-provider.ts:78-86` / `anthropic-http-provider.ts` pass the full
+response body into `rawOutput`). `src/lib/save/export.ts:30-34`'s
+`snapshotWithoutJobQueue` only strips `queued`/`running` rows; `error`
+rows, with their rawOutput, END UP in the shareable save snapshot. This
+defeats the design intent of `config.ts:5-9` (keep the key out of the DB
+so it can't leak into a shared save).
 
-Neden LOW: sızma için kullanıcının *custom/bridge* endpoint'inin
-`Authorization` header'ını hata gövdesine yansıtması gerekir. Mainstream
-sağlayıcılar (OpenAI/Anthropic/DeepSeek) yapılandırılmış hata JSON'u döner,
-gönderilen key'i echo'lamaz — precondition yalnız naif self-hosted bridge /
-yanlış yapılandırılmış proxy'de tutar. Ayrıca rawOutput client'a CANLI
-ulaşmıyor (`jobs/[id]/route.ts:16-20` yalnız id/status/error döner) — yalnız
-save export yoluyla kaçıyor.
+Why LOW: leaking requires the user's *custom/bridge* endpoint to echo the
+`Authorization` header back into the error body. Mainstream providers
+(OpenAI/Anthropic/DeepSeek) return structured error JSON and don't echo
+back the sent key; the precondition only holds for a naive self-hosted
+bridge / a misconfigured proxy. Also, rawOutput never reaches the client
+LIVE (`jobs/[id]/route.ts:16-20` only returns id/status/error); it only
+leaks via the save export path.
 
-Önerilen fix (ucuz): export snapshot'ında mevcut job-queue scrub'ının yanına
-`error` satırlarının `raw_output`'unu da NULL'la (veya `error` satırlarını da
-export'tan çıkar). Alternatif: rawOutput'u en baştan persist ederken
-`Authorization`/`Bearer` desenlerini redact et.
+Suggested fix (cheap): in the export snapshot, alongside the existing
+job-queue scrub, also NULL the `raw_output` of `error` rows (or exclude
+`error` rows from the export entirely). Alternative: redact
+`Authorization`/`Bearer` patterns when persisting rawOutput in the first
+place.

@@ -1,6 +1,6 @@
 ---
 id: T-045
-title: Backend spike + iskelet (Cloudflare Worker + R2 + D1 + auth uçtan uca)
+title: Backend spike + skeleton (Cloudflare Worker + R2 + D1 + auth end-to-end)
 status: done
 priority: p1
 effort: M
@@ -8,29 +8,30 @@ confidence: medium
 depends: []
 created: 2026-07-26
 ---
-Backend/kimlik işinin İLK adımı — infra değil **spike** (Burak + advisor,
-2026-07-26). Amaç: üç load-bearing varsayımı kod değil kanıtla doğrulamak,
-4 downstream ticket'ı de-risk etmek. Başarısızsa mimariyi burada değiştir,
-üç ticket yazıldıktan sonra değil.
+The FIRST step of the backend/auth work; not infra, a **spike** (Burak + advisor,
+2026-07-26). Goal: verify three load-bearing assumptions with evidence, not code,
+to de-risk 4 downstream tickets. If it fails, change the architecture here,
+not after three tickets are already written.
 
-**Uçtan uca hedef (yarım-gün):** "Google ile login ol → session al → R2'ye
-1 byte yaz → geri oku." Bu çalışıyorsa stack doğrulanmış demektir.
+**End-to-end target (half a day):** "Log in with Google → get a session → write
+1 byte to R2 → read it back." If this works, the stack is verified.
 
-Doğrulanacak varsayımlar:
-1. **better-auth Cloudflare Workers runtime'da + D1 adapter** ile çalışıyor mu?
-   Workers düz Node değil; adapter desteği kırılan yer burası. Güncel
-   better-auth dokümanına karşı doğrula (Cloudflare skill'leri: `wrangler`,
+Assumptions to verify:
+1. **Does better-auth work on the Cloudflare Workers runtime + D1 adapter?**
+   Workers isn't plain Node; adapter support is where it typically breaks. Verify
+   against current better-auth docs (Cloudflare skills: `wrangler`,
    `durable-objects`, `agents-sdk`).
-2. **Magic-link SENDER** var mı? Cloudflare Email Routing **inbound-only** —
-   giden email için Cloudflare Email Sending (`cloudflare-email-service`
-   skill) ya da Resend/Postmark gerekir. Sender kurulmadan magic-link yok.
-3. **Cookie/domain hikayesi** (bkz. T-046 kararı): site GitHub Pages'te,
-   Worker `*.workers.dev`'de olursa session cookie'si **third-party** →
-   Safari ITP bloklar. Spike'ta same-origin/custom-domain kurulumunu dene,
-   bearer-token-in-localStorage'a düşmeden çözülüyor mu gör (o yol XSS-okunur,
-   dalga 5'te doğruladığımız "XSS yok" özelliğine bağımlı hale getirir).
+2. **Is there a magic-link SENDER?** Cloudflare Email Routing is **inbound-only**;
+   outbound email needs Cloudflare Email Sending (`cloudflare-email-service`
+   skill) or Resend/Postmark. No magic-link without a sender set up.
+3. **Cookie/domain story** (see T-046 decision): if the site is on GitHub Pages
+   and the Worker on `*.workers.dev`, the session cookie becomes **third-party**
+   and Safari ITP blocks it. In the spike, try a same-origin/custom-domain setup
+   and see if it resolves without falling back to bearer-token-in-localStorage
+   (that path is XSS-readable, making it dependent on the "no XSS" property we
+   verify in wave 5).
 
-Çıktı: çalışan minimal Worker + `wrangler.toml` + D1 şema iskeleti + R2
-bucket + "hangi varsayım tuttu/tutmadı" raporu. Kod prod-kalite olmak
-zorunda değil (spike); T-046 bunu sertleştirir. **Kapsam dışı:** save-sync
-mantığı, seed-strip, UI — sonraki ticket'lar.
+Output: a working minimal Worker + `wrangler.toml` + D1 schema skeleton + R2
+bucket + a report of "which assumption held / which didn't." Code doesn't need
+to be production quality (it's a spike); T-046 hardens it. **Out of scope:**
+save-sync logic, seed-strip, UI; those are later tickets.

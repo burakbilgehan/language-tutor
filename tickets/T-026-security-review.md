@@ -1,6 +1,6 @@
 ---
 id: T-026
-title: Kapsamlı security review (public/monetize öncesi)
+title: Full security review (before going public/monetizing)
 status: done
 priority: p1
 effort: L
@@ -8,89 +8,91 @@ confidence: medium
 depends: [T-032, T-034, T-035, T-036, T-037]
 created: 2026-07-22
 ---
-Proje bir noktada public'e açılıp monetize edilebilir hale gelmeli (Burak,
-2026-07-22). O eşikten önce baştan sona güvenlik taraması. Bu batch'teki
-diğer ticket'lar bittikten SONRA koşmalı ki tarama son hali görsün —
-depends ondan.
+At some point the project should be able to go public and be monetized
+(Burak, 2026-07-22). A full end-to-end security sweep before that threshold.
+Should run AFTER the other tickets in this batch finish so the sweep sees the
+final state, hence the depends.
 
-Yöntem: `/security-review` + bulguları fable-verifier'dan geçir
-(adversarial doğrulama — plausible-but-wrong bulgu istemiyoruz). Bulgular
-severity sıralı; her bulgu için somut saldırı senaryosu şart.
+Method: `/security-review` + run findings through fable-verifier (adversarial
+verification, we don't want plausible-but-wrong findings). Findings ranked by
+severity; every finding needs a concrete attack scenario.
 
-Şimdiden bilinen sıcak noktalar (tarama bunlarla sınırlı kalmasın):
-- **Save import**: kullanıcıdan gelen ham SQLite dosyası. Version check
-  var, içerik doğrulaması yok. Kötücül şema/tetikleyici/dev boyut/zip-bomb
-  benzeri imajlar; better-sqlite3 + sql.js iki ayrı parser yüzeyi.
-- **API route'larında auth yok**: tek-kullanıcılı lokal varsayım. Server
-  modu internete açılırsa her endpoint (save export dahil!) herkese açık.
-  Public deploy senaryosu için en az bir kimlik katmanı tasarımı gerek.
-- **LLM config**: `data/llm-config.json` (server, düz dosya) +
-  localStorage (statik) API key saklama; GET maskeleme; key'in log/hata
-  mesajı/feedback screenshot'ına sızma ihtimali.
-- **Bridge** (`scripts/llm-bridge.mjs`): CORS `--origin`, localhost'a
-  bağlanan sayfanın kimliği, DNS rebinding, bridge'in Max sub'ı proxy'leme
-  yüzeyi (LLM_CLI_DISABLED mantığının tersi).
-- **XSS**: LLM üretimi içerik UI'a nasıl giriyor — JpMarkdown/Furigana/
-  ruby render'ları, dangerouslySetInnerHTML var mı, bracket-notation
-  parser'ları. Fixture'a kötücül payload koyup dene.
-- **Feedback mekanizması** (T-017): html2canvas screenshot + GitHub issue
-  prefill — ekranda key/kişisel veri varken screenshot'a girer mi?
-- **Drive sync (T-032 sonrası)**: OAuth token'ın tutulduğu yer, scope
-  genişliği, save imajının üçüncü taraf origin'lere sızmaması.
-- **Bağımlılıklar**: `npm audit` + kritik paketlerin (better-sqlite3,
-  sql.js, wanakana, html2canvas-pro) supply-chain durumu.
-- **Statik deploy**: Pages'e giden `out/` içinde sızıntı (ör. yanlışlıkla
-  data/, .env, llm-config) olmadığının build-time garantisi.
+Known hot spots already (the sweep shouldn't be limited to these):
+- **Save import**: raw SQLite file from the user. There's a version check, no
+  content validation. Malicious schema/trigger/huge size/zip-bomb-like
+  images; better-sqlite3 + sql.js are two separate parser surfaces.
+- **No auth on API routes**: single-user local assumption. If server mode is
+  exposed to the internet, every endpoint (including save export!) is open to
+  anyone. A public deploy scenario needs at least one auth layer design.
+- **LLM config**: `data/llm-config.json` (server, plain file) + localStorage
+  (static) API key storage; GET masking; chance of the key leaking into
+  logs/error messages/feedback screenshots.
+- **Bridge** (`scripts/llm-bridge.mjs`): CORS `--origin`, identity of pages
+  connecting to localhost, DNS rebinding, the surface where the bridge
+  proxies the Max sub (the reverse of the LLM_CLI_DISABLED logic).
+- **XSS**: how LLM-generated content enters the UI, JpMarkdown/Furigana/ruby
+  renders, any dangerouslySetInnerHTML, bracket-notation parsers. Put a
+  malicious payload in a fixture and try it.
+- **Feedback mechanism** (T-017): html2canvas screenshot + GitHub issue
+  prefill, does key/personal data on screen end up in the screenshot?
+- **Drive sync (post T-032)**: where the OAuth token is kept, scope breadth,
+  making sure the save image doesn't leak to third-party origins.
+- **Dependencies**: `npm audit` + supply-chain status of critical packages
+  (better-sqlite3, sql.js, wanakana, html2canvas-pro).
+- **Static deploy**: build-time guarantee that nothing leaks (e.g. data/,
+  .env, llm-config) into the `out/` that goes to Pages.
 
-Çıktı: severity-sıralı bulgu listesi + her biri için fix ticket'ı ya da
-"kabul edilen risk" kaydı. Auth katmanı gibi büyük işler ayrı ticket'a
-bölünür.
+Output: severity-ranked finding list + a fix ticket or an "accepted risk"
+record for each. Big items like an auth layer get split into their own
+ticket.
 
 ---
-## Sonuç (2026-07-22, done)
+## Outcome (2026-07-22, done)
 
-6 paralel read-only keşif agent'ı + orchestrator'da 2 empirik test +
-her actionable bulgu fable-verifier adversarial doğrulaması. Detay:
-INDEX "Dalga 5 sonucu". Actionable bulgular → **T-039..T-042**.
+6 parallel read-only discovery agents + 2 empirical tests by the orchestrator
++ fable-verifier adversarial verification for every actionable finding.
+Details: INDEX "Wave 5 result". Actionable findings -> **T-039..T-042**.
 
-### Kabul edilen riskler (ticket açılmadı)
+### Accepted risks (no ticket opened)
 
-- **Job route IDOR (frame B):** `generation_jobs`'ta `profileId` yok;
-  cancel/cancel-all/resume-pending profil scope'suz (`core/jobs.ts:78,128-220`).
-  Shipped build'lerde EXPLOIT DEĞİL — statik build hiç route taşımıyor,
-  server modu tek-kullanıcı localhost. Bilinçli mimari karar
-  (`core/jobs.ts:78` "jobs aren't profile-owned"). Server multi-user
-  pivot'unda tenant'laşması gerekir → T-040 kapsamına bırakıldı. Ayrı fix
-  ticket'ı açılmadı.
-- **Feedback screenshot key uyarısı yalnız /settings'e scoped**
-  (`FeedbackButton.tsx:364`): bugün güvenli — key input'ları `type="password"`
-  (html2canvas nokta render eder), GET yalnız maskeli key ship'liyor, sihirbaz/
-  sağlayıcı bölümü sadece /settings'te render oluyor. Defense-in-depth; başka
-  route'a key alanı eklenirse uyarı sessizce fire etmez. Bugün somut sızma yok
-  → kabul edilen risk, tiny not.
+- **Job route IDOR (frame B):** `generation_jobs` has no `profileId`;
+  cancel/cancel-all/resume-pending are unscoped by profile
+  (`core/jobs.ts:78,128-220`). NOT EXPLOITABLE in shipped builds, the static
+  build carries no routes at all, server mode is single-user localhost.
+  Deliberate architectural decision (`core/jobs.ts:78` "jobs aren't
+  profile-owned"). Needs tenanting if server mode ever pivots to multi-user,
+  left in T-040's scope. No separate fix ticket opened.
+- **Feedback screenshot key warning is scoped only to /settings**
+  (`FeedbackButton.tsx:364`): safe today, key inputs are `type="password"`
+  (html2canvas renders dots), GET only ships the masked key, the wizard/
+  provider section only renders on /settings. Defense-in-depth; if a key
+  field is ever added to another route, the warning won't silently fire
+  there. No concrete leak today -> accepted risk, tiny note.
 - **npm audit high/moderate (8):** `drizzle-orm` SQLi (unescaped identifiers)
-  ERİŞİLEMEZ — kod hiç `sql.identifier`/`sql.raw` kullanmıyor; tek dinamik
-  parça `overview.ts`'teki `${pid}` (parametreli binding, integer profil id,
-  kullanıcı-kontrollü identifier değil). `esbuild` dev-server CVE erişilemez
-  (Turbopack kullanılıyor, esbuild yalnız transitive TS-compile, `esbuild
-  serve` hiç çalışmıyor). `sharp`/`postcss`/`drizzle-kit` build/dev-only,
-  shipped statik yüzeyde yok. Hepsi kabul edilen risk; `npm audit fix`
-  fırsat oldukça (major bump'sız) uygulanabilir, güvenlik blocker'ı değil.
+  UNREACHABLE, the code never uses `sql.identifier`/`sql.raw`; the only
+  dynamic piece is `${pid}` in `overview.ts` (parameterized binding, integer
+  profile id, not a user-controlled identifier). `esbuild` dev-server CVE
+  unreachable (Turbopack is used, esbuild is only a transitive TS-compile
+  dependency, `esbuild serve` never runs). `sharp`/`postcss`/`drizzle-kit` are
+  build/dev-only, not present on the shipped static surface. All accepted
+  risk; `npm audit fix` can be applied opportunistically (without major
+  bumps), not a security blocker.
 
-### Bulgu YOK (doğrulandı, temiz)
+### No finding (verified clean)
 
-- **Statik deploy sızıntısı:** `out/`'ta `.db`/`.env`/`llm-config`/API-key/
-  Google-secret yok (bundle grep + import-graph); Pages clean-checkout'tan
-  build ediyor → yalnız git-tracked dosyalar ship'leniyor. **Owner-sub wiring
-  yok** (en yüksek riskli kontrol): server provider yalnız stash'lenen
-  `/api/*` üzerinden `jobs.ts`'e import ediliyor, `core/*` DI kullanıyor,
-  statik client yalnız kullanıcının kendi key/bridge'ini çağırıyor
-  (`browser-provider.ts`).
-- **LLM çıktısı → UI XSS:** her LLM alanı React-escaped ya da react-markdown
-  (rehype-raw/allowDangerousHtml YOK). Payload testi empirik: `<img onerror>`,
-  `<script>`, `javascript:` link — hepsi entity-escaped/inert. Tek izleme
-  noktası: JpMarkdown'a ileride `rehype-raw` eklenirse stored-XSS açılır.
-- **Drive OAuth (T-032):** token memory-only (~1h, refresh token yok),
-  `drive.appdata` scope, client-id/secret gömülü değil (kullanıcı sağlıyor),
-  save image yalnız googleapis.com'a gidiyor, popup/postMessage flow (redirect/
-  token-in-URL yok).
+- **Static deploy leak:** no `.db`/`.env`/`llm-config`/API key/Google secret
+  in `out/` (bundle grep + import-graph check); Pages builds from a clean
+  checkout, so only git-tracked files ship. **No owner-sub wiring** (the
+  highest-risk check): the server provider is only imported into `jobs.ts`
+  via the stashed `/api/*`, `core/*` uses DI, the static client only calls the
+  user's own key/bridge (`browser-provider.ts`).
+- **LLM output -> UI XSS:** every LLM field is either React-escaped or goes
+  through react-markdown (no rehype-raw/allowDangerousHtml). Empirical
+  payload test: `<img onerror>`, `<script>`, `javascript:` link, all
+  entity-escaped/inert. One thing to watch: stored-XSS would open up if
+  `rehype-raw` is ever added to JpMarkdown.
+- **Drive OAuth (T-032):** token is memory-only (~1h, no refresh token),
+  `drive.appdata` scope, client-id/secret not embedded (user supplies it),
+  the save image only goes to googleapis.com, popup/postMessage flow
+  (no redirect/token-in-URL).
+</content>

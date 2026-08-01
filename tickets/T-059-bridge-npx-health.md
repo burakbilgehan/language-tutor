@@ -1,6 +1,6 @@
 ---
 id: T-059
-title: Bridge blackbox'lama — npx paketi + /health + opencode kararı
+title: Bridge blackboxing - npx package + /health + opencode decision
 status: done
 priority: p2
 effort: M
@@ -8,35 +8,39 @@ confidence: high
 depends: []
 created: 2026-07-27
 ---
-> **REVİZE (2026-07-31, Burak kararı):** npm paketi PUBLISH EDİLMEYECEK.
-> Paket hiç publish edilmemişti ve wizard'daki `npx okumo-bridge` komutu
-> herkes için 404'tü (28 Temmuz saha bulgusu #1). Karar: birincil kurulum
-> curl/iwr + `node llm-bridge.mjs` (siteden, kullanıcının zaten güvendiği
-> origin; npm ikinci bir supply-chain yüzeyi + ayrı release adımı eklerdi).
-> `packages/okumo-bridge/` iskeleti ARŞİV olarak repoda duruyor; okumo
-> üçüncü parti dokümanlarda anılacak kadar büyürse publish o gün yeniden
-> değerlendirilir. Aşağıdaki kapsamın 1. maddesi bu revizyonla geçersiz;
-> /health ve opencode kısımları geçerli kaldı.
+> **REVISED (2026-07-31, Burak decision):** the npm package will NOT be
+> published. The package was never published, and the wizard's
+> `npx okumo-bridge` command was a 404 for everyone (2026-07-28 field finding
+> #1). Decision: the primary setup path is curl/iwr + `node llm-bridge.mjs`
+> (from the site, an origin the user already trusts; npm would add a second
+> supply-chain surface + a separate release step). `packages/okumo-bridge/`
+> stays in the repo as an ARCHIVE skeleton; if okumo grows large enough to be
+> referenced in third-party docs, publishing gets reconsidered that day.
+> Item 1 of the scope below is invalidated by this revision; the /health and
+> opencode parts stayed valid.
 
-Burak kararı (2026-07-27): bridge kalıyor (kendisi kullanıyor), ama akış
-"curl indir + node çalıştır" yerine tek komut olacak ve site köprüyü canlı
-algılayabilecek (algılama UI'ı T-060'ta; bu ticket altyapı).
+Burak decision (2026-07-27): the bridge stays (he uses it himself), but the
+flow becomes a single command instead of "curl download + node run," and the
+site will be able to live-detect the bridge (detection UI is T-060, this
+ticket is the infrastructure).
 
-## Kapsam
-1. **npm paketi `okumo-bridge`**: `scripts/llm-bridge.mjs` bin entry'li
-   pakete sarılır → kullanıcı komutu `npx okumo-bridge` (+ `--backend`,
-   `--origin` aynen). Sürüm pinli; siteden servis edilen `llm-bridge.mjs`
-   fallback olarak KALIR (npm registry'ye erişemeyen/istemeyen için).
-   Ops: npm publish Burak hesabından — release adımı README'ye.
-2. **`GET /health`**: `{ ok, backend, cliFound }` döner (`cliFound` =
-   backend CLI'ı PATH'te var mı — ucuz `which`; CLI login durumu çağrı
-   yapmadan bilinemez, iddia edilmez). T-039 kuralları AYNEN uygulanır:
-   Host allowlist + origin gate + PNA header'ı /health için de — probe
-   siteden gelecek, allowlist dışı origin'e sızıntı yok.
-3. **opencode kararı**: bridge 5 backend destekliyor, wizard 4 gösteriyor.
-   Karar: opencode bridge'te kalır, ana akışa ÇIKMAZ; T-060'ın gelişmiş
-   panelinde "diğer backend'ler" satırıyla belgelenir.
+## Scope
+1. **npm package `okumo-bridge`**: `scripts/llm-bridge.mjs` wrapped in a
+   package with a bin entry, so the user's command becomes
+   `npx okumo-bridge` (+ `--backend`, `--origin` unchanged). Version-pinned;
+   `llm-bridge.mjs` served from the site STAYS as a fallback (for those
+   without or unwilling to use npm registry access). Ops: npm publish from
+   Burak's account, a release step added to the README.
+2. **`GET /health`**: returns `{ ok, backend, cliFound }` (`cliFound` = is
+   the backend CLI on PATH, a cheap `which`; CLI login state can't be known
+   without making a call, and isn't claimed). T-039's rules apply UNCHANGED:
+   host allowlist + origin gate + PNA header also for /health; the probe
+   comes from the site, no leak to origins outside the allowlist.
+3. **opencode decision**: the bridge supports 5 backends, the wizard shows
+   4. Decision: opencode stays in the bridge, doesn't surface in the main
+   flow; documented as an "other backends" line in T-060's advanced panel.
 
-Fence: `scripts/llm-bridge.mjs` + yeni paket dizini (`packages/okumo-bridge/`
-ya da script'i paketleyen minimal yapı — session'da seç) + build-static'in
-kopyalama adımı korunur. App koduna dokunmaz → T-057 ile paralel güvenli.
+Fence: `scripts/llm-bridge.mjs` + a new package directory
+(`packages/okumo-bridge/` or a minimal structure wrapping the script, chosen
+during the session) + build-static's copy step is preserved. Doesn't touch
+app code, so safe to run in parallel with T-057.

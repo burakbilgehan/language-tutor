@@ -1,4 +1,319 @@
-# Agent rules
+# AGENTS.md
 
-- EM DASH (—) YASAK. Hiçbir çıktıda kullanma: UI copy (tr ve en), doküman, commit mesajı, kod yorumu. Noktalı virgül, iki nokta ya da ayrı cümle kullan.
-- Geri kalan her şey için `CLAUDE.md` geçerli.
+Canonical instructions for AI agents and contributors working on this repo.
+This is the single source of truth; `CLAUDE.md` only points here. When the two
+ever disagree, this file wins; fix the drift immediately.
+
+## Ground rules
+
+- **No em dashes (—).** Never, in any output: UI copy (tr and en), docs,
+  commit messages, code comments. Use a semicolon, a colon, or a separate
+  sentence.
+- **Language policy.** Everything committed to this repo is written in
+  English: docs, tickets, commit messages, code comments. The maintainer
+  (Burak) may prefer Turkish in conversation; that is fine, but anything
+  that lands in the repo or ships to production must be English. The
+  product itself stays bilingual: UI copy and learner-facing content remain
+  Turkish + English (tr is the canonical string table; see UI i18n below).
+- **Amendment convention (no silent history).** Decisions get revised; the
+  record must say so. When a documented decision no longer applies, do not
+  delete or rewrite it: mark it "No longer applies; superseded by [X]" with a
+  link to whatever replaced it. If a decision was amended repeatedly
+  (A -> B -> C -> D), each stage links forward to the next, linked-list
+  style, so an agent that lands on any stage is routed to the current one.
+  Ticket files under `tickets/` are the usual anchors for these links.
+- **Backlog.** Work is tracked in `tickets/`: one ticket per file
+  (frontmatter: status/priority/effort/confidence/depends + context),
+  `tickets/INDEX.md` is the summary table. Keep the index in sync when
+  opening or closing tickets; when idle, pull work from here. Every
+  half-finished conversation topic should become a ticket.
+
+## What this is
+
+Okumo (https://okumo.dev): a personal gamified language tutor for Japanese,
+Chinese and Dutch (other languages fall back to a CEFR curriculum). UI
+language follows the profile's `uiLanguage` (tr/en catalogs, tr default).
+A deterministic Next.js app; the LLM is only the content engine.
+
+## Stack
+
+Next.js 15 (App Router, `src/`) + TS + Tailwind 4 + SQLite (Drizzle +
+better-sqlite3, WAL, `data/app.db`).
+
+## LLM engine; IMPORTANT
+
+- Uses the **Max subscription via the local `claude` CLI**
+  (`claude -p --output-format json --json-schema ...`), NOT an API key.
+  `src/lib/llm/claude-cli.ts` strips `ANTHROPIC_API_KEY` from the child env
+  on purpose; an API key would shadow subscription auth and bill per-token.
+  Never add `--bare`.
+- Provider seam: `src/lib/llm/provider.ts`. `LLM_PROVIDER=fixture` = canned
+  JSON from `src/lib/llm/fixtures/` (default dev loop, zero tokens).
+  Tier-to-model env: `LLM_MODEL_FAST|BALANCED|DEEP` (defaults
+  haiku/sonnet/opus).
+- **BYO provider (multi-provider seam)**: `getProvider()` resolution order =
+  fixture env, then `data/llm-config.json` (NOT in the DB, on purpose: save
+  export/import must never carry or clobber API keys), then CLI default.
+  Config modes: `cli` | `openai` (OpenAI-compat: DeepSeek/Ollama/LM
+  Studio/OpenRouter, `src/lib/llm/http-provider.ts` + `presets.ts`) |
+  `anthropic` (native `/v1/messages`, `anthropic-http-provider.ts`) | `none`.
+  Shared retry/extractJson/recordCall live in `src/lib/llm/shared.ts`; new
+  providers must use them. Settings UI: `LlmSetupWizard.tsx` (T-060: three
+  doors + quality profile; the old `LlmProviderSection` melted into its
+  "Gelişmiş" accordion = `LlmAdvancedPanel.tsx`) paired with GET/PUT
+  `/api/llm-config` (key masked, empty input keeps the stored key).
+  **`LLM_CLI_DISABLED=1` on deployments**: the CLI provider is never
+  constructed, so guests can't bill the owner's Max subscription.
+- **No-LLM degrade**: `llmConfigured()` (`src/lib/llm/config.ts`) gates
+  everything. Background enqueues (ensureLessonJob, prefetch, batch queues,
+  auto-extend) silently no-op; user-triggered LLM routes return 503
+  `llm_unconfigured` via `requireLlm()` (`src/lib/llm/require-llm.ts`);
+  the client gates via `useLlmStatus` (`src/lib/llm-status.ts`, GET
+  `/api/health/llm`; no LLM call). Grading falls back to **self-check**: the
+  attempt route returns `needsSelfCheck` + the expected answer, a second POST
+  with `selfVerdict` records `gradedBy:"self"` (type-level enum only; no DB
+  shape change, no SAVE_SCHEMA_VERSION bump). Cached content
+  (lessons/grammar/kanji/translations) keeps working without any LLM.
+- All LLM outputs are zod-validated (`src/lib/llm/schemas.ts` = single source
+  of truth for prompts, DB json columns, UI types). LLM calls are serialized
+  via `src/lib/llm/queue.ts` (limit: config `concurrency`, else
+  `LLM_CONCURRENCY`, else 1) because Max limits are shared with interactive
+  Claude Code sessions.
+
+## Commands
+
+- `LLM_PROVIDER=fixture npm run dev`: token-free dev
+- `npm run dev`: real LLM
+- `npm run llm:smoke`: provider canary (one haiku call); fixture mode
+  validates fixtures
+- `npm run llm:bridge`: local CLI-to-OpenAI-compat bridge
+  (`scripts/llm-bridge.mjs`, backends: claude/codex/copilot/gemini/opencode;
+  the app connects via the "Yerel köprü" preset, `--origin` for static
+  deploys)
+- `npm run db:push` / `db:studio`, `npm test` (SM-2 unit tests)
+- `npm run build:static`: serverless static site to `out/` (production
+  serves this via the Worker). **Deploy = push to main**:
+  `.github/workflows/deploy.yml` builds and deploys okumo.dev automatically
+  (tickets/ and *.md-only pushes are skipped). Do NOT run `wrangler deploy`
+  manually; just commit + push.
+- `npx tsx --tsconfig tsconfig.json scripts/test-sqljs-parity.ts`:
+  core-on-sql.js parity harness against the real `data/app.db` (run after
+  touching `src/core/*` or the browser DB layer)
+
+## Static mode (local-first); Phase 2b
+
+- `NEXT_PUBLIC_STATIC_BUILD=1` (set by `scripts/build-static.mjs`) flips the
+  app to **local-first**: ALL data lives in the browser (sql.js SQLite image
+  persisted to IndexedDB, `src/db/browser.ts`), the LLM is called **from the
+  browser** (`src/lib/llm/browser-provider.ts`, config in localStorage; the
+  user's own key/bridge/Ollama, never the owner's subscription). Live
+  deploy: **https://okumo.dev** (Worker static assets, same origin as
+  `/api/*`; the old GitHub Pages mirror + `pages.yml` were removed
+  2026-07-27). Nothing sets `NEXT_PUBLIC_BASE_PATH` anymore; production
+  builds are root-relative. The `withBase()` machinery
+  (`src/lib/base-path.ts`) stays: hand-written public/ fetches must still go
+  through it so a path-prefixed host keeps working if one ever returns.
+- **Seam**: `src/lib/client-api.ts`; every data access checks `IS_STATIC`:
+  server mode fetches `/api/*`, static mode runs `src/core/*` against the
+  browser DB. New features must add their logic to `src/core/*`
+  (env-agnostic, takes `db: AppDb` + optionally `gen: Gen`) and keep
+  routes/jobs as thin shells; never put business logic in a route again.
+- **CRITICAL sql.js rule**: drizzle's sql-js driver breaks the relational
+  query API (`db.query.*` returns raw snake_case rows, unparsed JSON). Core
+  modules use the query-builder API only (`db.select().from()...`); rule
+  documented in `src/core/db-types.ts`, locked by the parity harness.
+- No per-content static pages (deliberate): root pages only; content
+  addressed by query params (`/lesson?node=`, `/grammar?topic=`);
+  `useSearchParams` needs a `<Suspense>` wrapper in static export.
+- LLM setup for end users: `LlmSetupWizard.tsx` (T-060 IA: three equal
+  doors; no-LLM / "AI on my computer" [Ollama + subscription bridge, two
+  lanes, live `/health` + `/api/tags` detection via `useLocalLlmProbe.ts`] /
+  API key; then ONE model choice, the Eco-Balanced-Best quality profile fed
+  by the T-057 catalog. Casual-flow logic is in `llm-setup-logic.ts`, tested
+  from `src/lib/llm-setup-logic.test.ts`). The primary bridge command is
+  curl/iwr + `node llm-bridge.mjs` (served from the site root, the same
+  origin the user already trusts); the npm package was never published,
+  deliberately (2026-07-31: a second supply-chain surface + a separate
+  release step for zero gain; `packages/okumo-bridge/` stays as archive, see
+  T-059). Long generations run inline in static mode (no job table);
+  `curriculumGenerate` returns no `jobId` there and callers must handle both
+  shapes.
+
+## Architecture notes
+
+- Long generations (curriculum ~2-5 min) run as fire-and-forget jobs
+  (`src/lib/jobs.ts`, `generation_jobs` table) polled via `/api/jobs/[id]`;
+  stale-running jobs are recovered on boot. Parse failures persist raw
+  output to `generation_jobs.raw_output`.
+- Lessons are generated on first open, then cached, and **prefetched**:
+  completing a node fires a background lesson job for the just-unlocked
+  successor (`ensureLessonJob` in jobs.ts), so the next open is usually
+  instant. Grammar topics generate on demand ("Hazırla").
+- LLM frugality: `createJob` dedupes on (jobType, refId); an in-flight
+  job's id is returned instead of enqueuing a duplicate, so the same
+  resource is never generated twice. Grading: mcq/fill_blank are
+  deterministic; translate/free_response hit the LLM only when the
+  romaji-tolerant compare misses, and an identical resubmitted answer reuses
+  the prior LLM verdict from `attempts`. Lesson generation receives a
+  "struggles" line (high-lapse SRS cards + low-score attempt topics,
+  `src/lib/struggles.ts`). Per-purpose call counts: `/api/stats` `byPurpose`
+  + settings.
+- Exercise grading: deterministic compare first (answer + accept_also), LLM
+  fallback for translate/free_response. Comparison dispatches by language
+  via `src/lib/answers.ts` `answersMatchFor`: ja uses `src/lib/jp.ts`
+  (wanakana; romaji/kana, particle は/wa + long-vowel folds), zh uses
+  `src/lib/zh.ts` (pinyin tone-mark/tone-digit/ü-v folds; hanzi never goes
+  through wanakana). Don't call `answersMatch` directly from routes.
+- CJK text conventions: the LLM emits readings as bracket notation; furigana
+  `漢字[かんじ]` (ja) or pinyin `学生[xuésheng]` (zh); rendered by `Furigana`
+  (ruby; infers ruby lang from the reading script). `SelectionTooltip`
+  (global, in layout) is **ja-only** (gated on targetLanguage): romaji +
+  kanji lookup would produce garbage for hanzi. Kanji/hanzi are introduced
+  early by prompt design.
+- Grammar is a **deterministic cheatsheet**: the language-wide topic index is
+  static code (`src/lib/grammar-index/`; ja ~300 entries N5-N1, zh ~184
+  HSK1-HSK6, nl A1-B1; level-major), seeded at curriculum creation (and
+  self-healing in `/api/grammar`); topic content is LLM-generated once, then
+  cached. Don't move the index back into the curriculum prompt.
+  `ensureSeeded` is an **incremental diff-seed** (adds missing slugs,
+  re-syncs position/title/category/level, never touches content/status) so
+  index growth reaches existing profiles; keep it incremental, not
+  early-return. **Packaged content seed**: `npm run seed:grammar` exports all
+  `ready` topics from the owner's `data/app.db` to
+  `public/grammar-seed/<lang>.json` (zod-validated, committed);
+  `applyGrammarSeed` (core) fills only pending/error rows from it; wired
+  into the grammar list (both modes) and the static topic deep-link, so new
+  profiles get the full library with zero LLM calls. Re-run the export after
+  generating new topic content locally. Kanji has the same packaged seed
+  (`npm run seed:kanji` writes `public/kanji-seed/<lang>.json`,
+  `applyKanjiSeed` in `core/kanji.ts`); on the server list GET the seed is
+  applied BEFORE the auto-fill LLM queue so seedable levels never enqueue
+  jobs.
+- **Vocab dictionary** (zh-only for now, T-012): word-based (词, not
+  per-character; Chinese pedagogy is HSK word-list based, unlike JLPT kanji
+  study). Same cheatsheet pattern as grammar/kanji: static index
+  `src/lib/vocab-index/` (`zh-data.json`, 4991 HSK 2.0 words with
+  pinyin/glosses/classifiers, regenerate via
+  `node scripts/build-vocab-index.mjs`), `vocab_entries` table (static half
+  diff-synced by `ensureVocabSeeded`, LLM half = `VocabContentSchema`:
+  meanings_tr + note + 量词 note + examples + collocations + char breakdown,
+  fast tier). Core `src/core/vocab.ts`, routes `/api/vocab*` (list GET never
+  auto-queues LLM; generation is user-triggered only, grammar-style, NOT
+  kanji-style), UI `/vocab?word=` (grammar master-detail quartet clone;
+  closed level groups don't render rows; that's what keeps a 5k-row list
+  usable). Nav gated `langs: ["zh"]`. Browser DDL replays with try/catch on
+  stored images (additive table self-heal) so old IndexedDB images gain new
+  tables. Packaged content seed done in T-019 (`npm run seed:vocab` writes
+  `public/vocab-seed/<lang>.json`, `applyVocabSeed` wired into list GET both
+  modes + static detail). Deferred deliberately: SRS "add to deck".
+- **Level schemes are per-language** (`src/lib/curriculum/levels.ts`, the
+  single source): ja=JLPT N5-N1, zh=HSK 1-6, nl and any future
+  language=CEFR A1-C2. Use the lang-aware API
+  (`schemeFor/firstLevel/isLevelOf/levelOrdinalFor/nextLevelFor/levelDisplay`);
+  the bare JLPT helpers remain only for ja-exclusive surfaces (kanji routes,
+  stroke trainer). Level strings are globally unique across schemes, so flat
+  maps keyed by level are safe. UI derives visible level lists from data
+  order, never hardcodes a scheme.
+- Curriculum is **extendable across levels** of the profile's scheme: one
+  `curricula` row per profile, each level = a `curriculum_chapters` row + a
+  contiguous block of `units` (`units.chapterId`/`level`).
+  `generateChapter(db, gen, profileId, level|null)` in
+  `src/core/curriculum-gen.ts` (null = the scheme's first level;
+  `runChapterJob` in jobs.ts is the server shell) generates one level and
+  appends it to the flat `nodes.prereqNodeId` chain (the new head's prereq =
+  the old chain tail, found by walking the chain, not position-sort).
+  Auto-extend fires from `/api/nodes/[id]/complete` when the tail is
+  cleared; manual via `POST /api/curriculum/extend`. Legacy pre-chapters
+  curricula are backfilled to one N4 chapter lazily
+  (`ensureChaptersBackfilled`), which also remaps pre-scheme non-ja chapters
+  ("N5" as fake A1) onto the real scheme (`ensureLevelSchemeMigrated`).
+- **Side quests were removed (T-018)**; main pages + review practice already
+  cover that ground. `nodes.side_quest_payload` / quest-typed `nodes` rows
+  remain in the DB schema untouched (dead data; a column DROP would force a
+  SAVE_SCHEMA_VERSION bump and reject old saves for no benefit);
+  `getRoadmap` filters quest-typed nodes out of its listing so legacy
+  profiles don't render broken UI.
+- Save export/import (`src/lib/save/`, `/api/save/{export,import}`, Settings
+  UI): raw SQLite snapshot via `db.$client.serialize()` + WAL checkpoint,
+  stamped with `save_meta` (schema version). Import is **replace-all**
+  (wipes local, keeps one `.bak`), refuses on version mismatch. `db` in
+  `src/db/index.ts` is a **lazy Proxy** + `resetDb()` so import can swap the
+  file under the live connection. **Bump `SAVE_SCHEMA_VERSION`
+  (`src/lib/save/version.ts`) whenever `schema.ts` changes shape.**
+- **Cloud save-sync** (T-047/T-048, static mode only): the ONE remote
+  backup; Google Drive (T-032) was removed in T-050, so `src/lib/backup/`
+  now holds only the local half (lesson counter + throttled IndexedDB
+  snapshot + nag-bar bookkeeping in `controller.ts`/`state.ts`) plus
+  `cloud.ts`. Manual push/pull against our Worker
+  (`saves/{userId}/latest.db` on R2), never automatic: a multi-MB blob per
+  write burns R2 ops and the user's uplink. Upload seed-strips
+  (`src/lib/save/seed-strip.ts`) and restore re-applies `apply*Seed`
+  eagerly. Client seam `cloudPush`/`cloudPull`/`cloudInfo` in
+  `client-api.ts`; session via `useAuthStatus` (`src/lib/auth-status.ts`,
+  backend presence probed with the open `GET /api/health`;
+  `cloudAvailable()` can NOT gate the sign-in UI, it implies a session).
+  Surfaces: `CloudAccountSection` (Settings) + the onboarding third door /
+  OAuth return leg. Anonymous file export/import stays the untouched default
+  path.
+- **Server-mode auth gate** (T-040, `src/lib/auth.ts`): server mode has ONE
+  global DB and no user model, so exposing it beyond localhost means anyone
+  can `GET /api/save/export` (the whole DB) or `POST /api/save/import`
+  (replace it). `APP_AUTH_TOKEN` gates it. **Unset/empty = complete no-op**
+  (the localhost single-user flow stays byte-for-byte unchanged); this
+  invariant is load-bearing, don't add behavior to the off path. Set = every
+  route method needs the token as `Authorization: Bearer` or the `lt_auth`
+  cookie, minted once via `GET /api/auth?token=...` (HttpOnly,
+  SameSite=Strict, Secure only on https). `requireAuth(req)` must be the
+  FIRST statement in a handler (before `requireLlm()`/body parse). Only
+  `GET /api/health/llm` and `GET /api/strokes/[char]` are open. **New
+  routes: `src/lib/auth.test.ts` walks every `route.ts` and fails the suite
+  unless the method calls `requireAuth` or is justified in its `OPEN_ROUTES`
+  allowlist.** Static mode has no server routes, so none of this exists
+  there. Not multi-tenant isolation; that's T-043.
+- LLM cost tracking: every real CLI call records `total_cost_usd` + tokens
+  into `llm_calls`; `/api/stats` aggregates; header badge + settings show
+  it. Informational only (the Max sub isn't billed per-token).
+- **Multi-profile / language switching**: one profile per target language,
+  exactly one active (`profiles.is_active`). All routes resolve the user via
+  `getActiveProfile()` (`src/lib/profile.ts`, self-heals legacy rows); never
+  `db.query.profiles.findFirst()`. Switch: `POST /api/profile/switch`; edit:
+  `PATCH /api/profile` (targetLanguage immutable; language change = profile
+  switch); new language: Settings, "Yeni dil ekle", onboarding (used
+  languages disabled, `POST /api/profile` 409s on duplicates).
+  Wizard/settings share option lists (`src/lib/profile-options.ts`) and UI
+  controls (`ProfileControls.tsx`). `selfLevel` + `interests` feed every
+  lesson/chat/grammar prompt; `goals`/`minutesPerWeek`/`motivation` only
+  curriculum (re)generation.
+- **Native language** (`profiles.nativeLanguage`, tr/en, default tr):
+  collected in onboarding step 0 (preselected from `navigator.language`),
+  editable in settings. Drives the output language of EVERY LLM prompt via
+  `nativeLanguageName()`; no prompt may hardcode "Türkçe"/"Turkish
+  learners". `_tr` field/column names (`explanation_tr`, `titleTr`...) are
+  historical and mean "in the learner's native language"; do NOT rename them
+  (a save-format break for zero gain).
+- **UI i18n** (`profiles.uiLanguage`, follows nativeLanguage): no central
+  catalog; each component co-locates `const S = { tr: {...}, en: {...} }`
+  and resolves with `useStrings(S)` (client,
+  `src/lib/i18n/use-strings.ts`) or `pick(S, uiLanguage)` (server,
+  `src/lib/i18n/index.ts`). tr is the source of truth; en must mirror its
+  shape. Option VALUES (goals/interests) stay Turkish in the DB/prompts;
+  only display labels translate (`optionLabel`, `levelsFor`,
+  `minuteOptionsFor`, `languageLabel` in profile-options).
+- The onboarding wizard has no profile yet; it resolves copy with
+  `pick(S, draft.uiLanguage)` so language follows the step-0 choice live.
+- New target language: add to `LANGUAGES` (profile-options), the zod enum in
+  `/api/profile`, the `ProfileMeta` union, a grammar index file + a
+  `grammarIndexFor` case, and (if not CEFR) a scheme in `levels.ts`;
+  language-specific prompt rules live behind `targetLanguage === "xx"`
+  branches in the prompt files.
+
+## Style
+
+Cozy warm palette, **Yūyake v2**: cream/vermilion/aizome-indigo/amber
+(tokens in `globals.css` `@theme`). Design source of truth:
+`design/okumo-yuyake/` (README + DS v2 html); all future visuals base on it.
+Color roles: vermilion = action only (max ONE dominant focus per page),
+indigo = info + success + state (links, hints, progress, focus ring, Kumo
+mark), amber = reward (XP/streak/badges; `--amber-text` on light bg). No
+green, no pale pastel blue, no purple gradients, no dashboard aesthetic.
+Fraunces + Nunito Sans. UI copy via the i18n string tables (tr canonical).

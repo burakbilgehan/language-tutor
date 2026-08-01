@@ -1,6 +1,6 @@
 ---
 id: T-002
-title: Lineer path yerine skill-tree (dallı ders grafiği)
+title: Skill tree (branching lesson graph) instead of a linear path
 status: backlog
 priority: p3
 effort: XL
@@ -8,12 +8,14 @@ confidence: low
 depends: []
 created: 2026-07-17
 ---
-Bugünkü model tek zincir (nodes.prereqNodeId). Fikir: oyunlardaki skill
-tree — bazı dersler paralel/bağımsız, bir ders birden fazlasını açabilir,
-bir dersi açmak birden fazla dersin bitmesini isteyebilir (n-of-m).
+Today's model is a single chain (nodes.prereqNodeId). Idea: a game-style skill
+tree, where some lessons are parallel/independent, a lesson can unlock more than
+one lesson, and unlocking a lesson can require finishing more than one lesson
+(n-of-m).
 
-Öneri (tam serbest DAG değil): seviye içinde 2-3 paralel dal, seviye
-sonunda birleşme (elmas). Gerekenler: node_prereqs join tablosu (+SAVE
-bump), unlock kuralı, curriculum promptuna dal yapısı, RoadmapView'a
-dallı çizim (asıl efor), auto-extend'in çoklu-uç kavraması.
-Burak: "şimdilik kalsın, sadece fikir olarak düşünelim."
+Proposal (not a fully free DAG): 2-3 parallel branches within a level, merging
+(diamond) at the end of the level. Needed: a node_prereqs join table (+ a SAVE
+bump), an unlock rule, branch structure in the curriculum prompt, branching
+rendering in RoadmapView (the main effort), and multi-tail awareness in
+auto-extend.
+Burak: "leave it for now, let's just keep it as an idea."

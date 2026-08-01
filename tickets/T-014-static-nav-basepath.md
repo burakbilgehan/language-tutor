@@ -1,6 +1,6 @@
 ---
 id: T-014
-title: Statik modda navigasyonlar basePath kaybediyor (import + dil değiştirme sonrası /map'e düşüş)
+title: Static-mode navigations lose basePath (drops to /map after import + language switch)
 status: done
 priority: p1
 effort: S
@@ -8,32 +8,36 @@ confidence: high
 depends: []
 created: 2026-07-18
 ---
-Canlıda gözlendi: save import sonrası ve dil (profil) değiştirince tarayıcı
-`https://burakbilgehan.github.io/map` adresine gidiyor — basePath
-(`/language-tutor`) düşüyor, kullanıcı siteden atılmış oluyor.
 
-Kök neden doğrulandı: hard navigasyonlar `withBase()` kullanmıyor —
-- `src/app/settings/page.tsx:131` → `window.location.href = "/map"` (import sonrası)
-- `src/components/settings/ProfileSection.tsx:177` → `window.location.href = "/map"` (profil switch)
+> **Deploy target note (amended 2026-07-27):** this ticket predates the okumo.dev migration; GitHub Pages references below no longer apply. The Pages mirror was removed 2026-07-27; okumo.dev (Cloudflare Worker) is the only deploy. See [T-045](T-045-backend-spike-skeleton.md) / [T-054](T-054-okumo-landing.md).
 
-Next `router.push` basePath'i otomatik ekler ama `window.location` eklemez;
-bu akışlar full reload istediği için bilerek `window.location` kullanıyor
-(use-profile-meta cache varsayımı, bkz T-013).
+Observed live: after a save import, and after switching language (profile),
+the browser goes to `https://burakbilgehan.github.io/map`, the basePath
+(`/language-tutor`) is dropped, the user gets kicked off the site.
 
-Fix: bu iki noktayı (ve grep'le bulunacak benzerlerini) `withBase("/map")`
-(`src/lib/base-path.ts`) üzerinden geçir. `client-api.ts:502`'deki
-`/api/save/export` de aynı sınıfta — statik modda zaten farklı yol
-izleniyorsa dokunma, değilse onu da düzelt. Doğrulama: `npm run build:static`
-+ Pages'te (veya `npx serve out` ile base path simüle ederek) import ve dil
-değiştirme akışını uçtan uca dene.
+Root cause confirmed: hard navigations don't use `withBase()`:
+- `src/app/settings/page.tsx:131` -> `window.location.href = "/map"` (after import)
+- `src/components/settings/ProfileSection.tsx:177` -> `window.location.href = "/map"` (profile switch)
 
-Not: T-013 (bayat nav) ile aynı bölgede — birlikte implement edilebilir ama
-bağımsız da yapılabilir.
+Next's `router.push` adds the basePath automatically but `window.location`
+does not; these flows deliberately use `window.location` because they need a
+full reload (the use-profile-meta cache assumption, see T-013).
 
-Fix: iki nokta `withBase("/map")`'e çevrildi. `client-api.ts:502`
-(`/api/save/export`) dokunulmadı — `!IS_STATIC` dalında, sunucu modunda
-basePath yok. `client-api.ts:502` altındaki statik-mod dalı zaten farklı
-(blob indirme) yol izliyor. `npm run build:static` temiz; `npx serve out`
-ile gerçek Pages alt-path davranışı simüle edilemedi (serve kökten servis
-ediyor) — kod seviyesinde grep + typecheck + build ile doğrulandı, gerçek
-Pages ortamında deploy sonrası elle teyit önerilir.
+Fix: route these two spots (and any similar ones found via grep) through
+`withBase("/map")` (`src/lib/base-path.ts`). `client-api.ts:502`'s
+`/api/save/export` is in the same class, leave it alone if static mode
+already follows a different path there, fix it too otherwise. Verification:
+`npm run build:static` + try the import and language-switch flows end to end
+on Pages (or simulate the base path with `npx serve out`).
+
+Note: same area as T-013 (stale nav); can be implemented together but can
+also be done independently.
+
+Fix: the two spots were changed to `withBase("/map")`. `client-api.ts:502`
+(`/api/save/export`) left untouched, it's in the `!IS_STATIC` branch, no
+basePath in server mode. The static-mode branch below `client-api.ts:502`
+already follows a different path (blob download) anyway. `npm run build:static`
+is clean; real Pages sub-path behavior couldn't be simulated with `npx serve
+out` (serve serves from root), verified at the code level via grep +
+typecheck + build; a manual check in the real Pages environment after deploy
+is recommended.

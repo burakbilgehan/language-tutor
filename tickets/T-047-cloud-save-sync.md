@@ -1,6 +1,6 @@
 ---
 id: T-047
-title: Bulut save-sync (R2 blob + seed-strip + client seam, manuel push/pull)
+title: Cloud save-sync (R2 blob + seed-strip + client seam, manual push/pull)
 status: done
 priority: p1
 effort: L
@@ -8,88 +8,96 @@ confidence: medium
 depends: [T-046]
 created: 2026-07-26
 ---
-Login'li kullanıcı kendi save'ini buluta yedekler / geri getirir. **T-032
-Drive controller'ının R2 ikizi** — mimari aynı (blob-as-is), hedef Drive
-yerine bizim R2.
+A logged-in user backs up / restores their own save to the cloud. **The R2
+twin of the T-032 Drive controller**: same architecture (blob-as-is), R2
+instead of Drive as the target.
 
-- **Blob-as-is:** SQLite snapshot R2'ye (`saves/{userId}/latest.db` +
-  opsiyonel versiyonlu geçmiş). Backend save formatını BİLMEZ, sadece saklar.
-  Mevcut export/import kontratı korunur. `schemaVersion` metadata'da (D1) →
-  uyumsuz sürüm reddedilir.
-- **Seed-strip on upload (T-045 ölçümünden — 5-10x tasarruf):** 19 MB'lık
-  save'in ~13 MB'ı seed-türevi content (vocab_entries/grammar_topics/
-  kanji_entries, hepsi CDN'deki `public/*-seed`'de). Upload'tan önce seed'den
-  gelen `ready` içerik satırlarını strip et; restore'da `applyGrammarSeed`/
-  `applyKanjiSeed`/`applyVocabSeed` (mevcut altyapı) CDN'den geri doldurur.
-  generation_jobs geçmişi de export'ta zaten kırpılıyor. Buluta giden blob
-  ~2-4 MB'a iner. (Alternatif basit yol: sadece kullanıcı-üretimi tabloları
-  export et — ama seed-strip mevcut restore altyapısını kullandığı için tercih.)
-- **Client seam:** `src/lib/client-api.ts`'e üçüncü yol — `IS_STATIC` +
-  authed → Worker API'sine sync (mevcut `src/lib/backup/controller.ts` Drive
-  ikizi). Auth durumu T-046'dan.
-- **Manuel push/pull (advisor: auto-on-change DEĞİL):** multi-MB blob her
-  yazımda R2 Class A ops + kullanıcı uplink yakar. Drive gibi kullanıcı-tetikli
-  "buluta gönder / buluttan getir". `updatedAt` ile last-write-wins;
-  multi-device gerçek-sync sonraki iş.
+- **Blob-as-is:** SQLite snapshot to R2 (`saves/{userId}/latest.db` + optional
+  versioned history). The backend doesn't know the save format, it just
+  stores it. The existing export/import contract is preserved. `schemaVersion`
+  lives in metadata (D1), so mismatched versions are rejected.
+- **Seed-strip on upload (from T-045 measurement, a 5-10x saving):** of a 19 MB
+  save, about 13 MB is seed-derived content (vocab_entries/grammar_topics/
+  kanji_entries, all present in the CDN's `public/*-seed`). Before upload,
+  strip the `ready` content rows that came from the seed; on restore,
+  `applyGrammarSeed`/`applyKanjiSeed`/`applyVocabSeed` (existing
+  infrastructure) refill them from the CDN. `generation_jobs` history is
+  already trimmed on export too. The blob sent to the cloud shrinks to about
+  2-4 MB. (Simpler alternative considered: export only user-generated tables,
+  but seed-strip was preferred because it reuses the existing restore
+  infrastructure.)
+- **Client seam:** a third path in `src/lib/client-api.ts`: `IS_STATIC` +
+  authed -> sync to the Worker API (the Drive twin of the existing
+  `src/lib/backup/controller.ts`). Auth state comes from T-046.
+- **Manual push/pull (advisor: NOT auto-on-change):** a multi-MB blob on
+  every write burns R2 Class A ops and the user's uplink. Like Drive, it's a
+  user-triggered "push to cloud / pull from cloud." Last-write-wins via
+  `updatedAt`; real multi-device sync is future work.
 
-**Güvenlik:** T-046'nın CSRF/origin/auth-before-execute kriterleri bu
-route'lar için de geçerli — save upload/download authed + tenant-scoped
-(kullanıcı yalnız kendi `saves/{userId}`'ine erişir).
+**Security:** T-046's CSRF/origin/auth-before-execute criteria also apply to
+these routes; save upload/download is authed + tenant-scoped (a user can only
+access their own `saves/{userId}`).
 
-Fence: `worker/` (top-level, T-045 iskeleti — `src/worker` DEĞİL) +
+Fence: `worker/` (top-level, T-045's skeleton, NOT `src/worker`) +
 `src/lib/client-api.ts` + `src/lib/backup/*`.
-T-046 ile aynı Worker → **auth önce merge**, sonra bu.
+Same Worker as T-046, so **auth merges first**, then this.
 
-**T-047 uygulama kararları (2026-07-26):**
+**T-047 implementation decisions (2026-07-26):**
 
-- **Strip kriteri = payload eşitliği, anahtar varlığı DEĞİL.** Satır ancak
-  `status='ready'` + seed'de o slug/char/word VAR + saklanan `tr` payload'ı
-  seed'inkiyle (aynı zod şemasından geçirilerek) DERİN EŞİT ise strip edilir.
-  Yalnız anahtar bakmak, kullanıcının yeniden ürettiği içeriği (T-022) sessizce
-  yok ederdi: slug seed'de var ama içerik ONUN. Restore CDN'deki jenerik
-  sürümü geri koyar, emeği kalıcı gider, hiçbir yerde hata görünmez.
-- **Dil-başına seed araması (düz map DEĞİL).** `basic-word-order`,
-  `personal-pronouns`, `written-vs-spoken` hem ja hem zh gramer seed'inde
-  FARKLI içerikle var; düz birleştirilmiş map ja satırını zh içeriğiyle
-  kıyaslardı.
-- **native-language kapısı (bulunan+düzeltilen VERİ KAYBI hatası).** Üç
-  `apply*Seed` de `if (nativeLanguage !== "tr") return 0` ile başlıyor —
-  paketlenmiş içerik Türkçe. Strip başta bunu aynalamıyordu: en-native bir
-  profilde `{tr: <seed>, en: <kullanıcı içeriği>}` satırının `tr` yarısı
-  siliniyor, restore'da `apply*Seed` doldurmayı REDDEDİYOR → kalıcı kayıp.
-  Artık strip yalnız profili tr-native olan dillerde çalışıyor. Harness'ta
-  düşman senaryo: ja en-native yapılınca gramer strip 554→256 düşüyor, 298 ja
-  konusunun hepsi korunuyor.
-- **Modül yeri:** `src/lib/save/seed-strip.ts` (`limits.ts` emsali), drizzle
-  değil küçük bir `StripExec` portu üzerinden ham SQL. Böylece hem
-  better-sqlite3 hem sql.js aynı kodu kullanıyor, `src/core/*`'a ve oradaki
-  sql.js/query-builder kuralına hiç dokunulmuyor.
-- **VACUUM zorunlu.** SQLite boşalan sayfaları tutuyor; VACUUM'suz dosya hiç
-  küçülmüyor (ölçüldü: 17.5 MB → 17.5 MB). sql.js'te de çalıştığı doğrulandı.
-- **schemaVersion R2 `customMetadata`'da (D1 değil):** tek yazım, blob ile
-  sürüm arasında tutarsızlık penceresi yok, `head()` ile gövdeyi çekmeden
-  okunuyor. D1 yalnız manuel push/pull'un ihtiyacı olmayan kullanıcılar-arası
-  sorgu kazandırırdı. Backend formatı BİLMİYOR: sürüm etiketi opak, uyumu
-  istemci beyan ediyor, Worker yalnız uyumsuzsa vermeyi reddediyor (409).
-- **API tabanı:** varsayılan aynı-origin göreli `/api/*` (T-046 siteyi ve
-  API'yi tek origin'den veriyor → üretimde ayar yok). `readDriveClientId()`
-  kalıbında localStorage override yalnız iki ortam için: dev :3000→:8787 ve
-  anonim-only GitHub Pages aynası (orada ayarsız kalır, `/api/save` 404 verir,
-  controller "bulut yok" der — o aynada doğru davranış).
-- **Pull'da seed'ler EAGER yeniden uygulanıyor.** Doğrulandı (varsayılmadı):
-  `apply*Seed` yalnız grammar/kanji/vocab LİSTE yollarından çağrılıyor;
-  `saveImportApi`/`restoreFromDrive` çağırmıyor. Drive'ın blob'u tam olduğu
-  için sorun olmuyordu; bizimki kasten eksik — eager çağrı olmasa kütüphane
-  kullanıcı üç sayfayı da gezene kadar boş görünürdü. Hata-toleranslı:
-  çevrimdışıysa satırlar pending kalır (bugünkü tembel davranış).
+- **Strip criterion = payload equality, NOT key presence.** A row is stripped
+  only if `status='ready'` AND the seed has that slug/char/word AND the stored
+  `tr` payload is DEEPLY EQUAL to the seed's (run through the same zod schema).
+  Checking only the key would have silently destroyed content the user
+  regenerated (T-022): the slug exists in the seed but the content is theirs.
+  Restore would put back the generic CDN version, the effort would be
+  permanently lost, and nothing anywhere would show an error.
+- **Per-language seed lookup (NOT a flat map).** `basic-word-order`,
+  `personal-pronouns`, `written-vs-spoken` exist in BOTH the ja and zh grammar
+  seeds with DIFFERENT content; a flat merged map would compare a ja row
+  against zh content.
+- **native-language gate (a found + fixed DATA LOSS bug).** All three
+  `apply*Seed` functions start with `if (nativeLanguage !== "tr") return 0`;
+  the packaged content is Turkish. Strip initially didn't mirror this: on an
+  en-native profile, the `tr` half of a `{tr: <seed>, en: <user content>}` row
+  would get deleted, and on restore `apply*Seed` REFUSES to refill it, causing
+  permanent loss. Strip now only runs on profiles that are tr-native. Adversarial
+  scenario in the harness: making ja en-native drops grammar strip from 554 to
+  256, and all 298 ja topics are preserved.
+- **Module location:** `src/lib/save/seed-strip.ts` (precedent: `limits.ts`),
+  not drizzle but raw SQL through a small `StripExec` port. That way both
+  better-sqlite3 and sql.js use the same code, and `src/core/*` and its
+  sql.js/query-builder rule are never touched.
+- **VACUUM is mandatory.** SQLite retains freed pages; without VACUUM the file
+  never shrinks (measured: 17.5 MB -> 17.5 MB). Verified it also works under
+  sql.js.
+- **schemaVersion lives in R2 `customMetadata` (not D1):** a single write,
+  no inconsistency window between blob and version, readable via `head()`
+  without pulling the body. D1 would only have gained cross-user querying,
+  which manual push/pull doesn't need. The backend doesn't know the format:
+  the version tag is opaque, the client declares compatibility, the Worker
+  only refuses to serve on mismatch (409).
+- **API base:** default is same-origin relative `/api/*` (T-046 serves the
+  site and the API from one origin, so no setting is needed in production).
+  A localStorage override in the `readDriveClientId()` pattern exists only
+  for two environments: dev (:3000 -> :8787) and the anonymous-only GitHub
+  Pages mirror (unconfigured there, `/api/save` 404s, the controller says
+  "no cloud", which is correct behavior on that mirror).
+- **Seeds are re-applied EAGERLY on pull.** Verified (not assumed):
+  `apply*Seed` is only called from the grammar/kanji/vocab LIST routes;
+  `saveImportApi`/`restoreFromDrive` don't call it. This wasn't a problem for
+  Drive because its blob was complete; ours is deliberately incomplete, so
+  without the eager call the library would appear empty until the user
+  visited all three pages. Error-tolerant: rows stay pending if offline
+  (today's lazy behavior).
 
-**Boyut tahmini tutmadı — ticket'ın öngörüsü yanlış varsayıma dayanıyordu.**
-Gerçek: 17.54 MB → **8.55 MB** (2.05x), tahmin ~2-4 MB'dı. Sebep ölçüldü:
-ÜÇ tablonun içeriği %100 silinse bile dosya 7.5 MB'da kalıyor. Kalanın büyük
-kısmı statik index satırları (13k+ vocab satırı) ve **`generation_jobs`
-geçmişi (8.430 satır, 2.4 MB — stripped blob'un %28'i)**. Ticket "generation_jobs
-geçmişi de export'ta zaten kırpılıyor" diyor ama `export.ts` yalnız
-`queued`/`running` siliyor; `done`/`error` geçmişi duruyor. Ucuz kazanç olarak
-iş geçmişini YALNIZ bulut strip yolunda düşürmek mümkün (yerel save
-kontratını değiştirmemek için `export.ts`'e dokunmadan) — kapsamı sessizce
-genişletmemek için yapılmadı, ayrı karar olarak bırakıldı.
+**Size estimate missed, the ticket's prediction rested on a wrong assumption.**
+Actual: 17.54 MB -> **8.55 MB** (2.05x), predicted was ~2-4 MB. Measured cause:
+even if the THREE tables' content were 100% deleted, the file still stays at
+7.5 MB. Most of what remains is static index rows (13k+ vocab rows) and
+**`generation_jobs` history (8,430 rows, 2.4 MB, 28% of the stripped blob)**.
+The ticket says "generation_jobs history is already trimmed on export too,"
+but `export.ts` only deletes `queued`/`running`; `done`/`error` history
+remains. As a cheap win, it's possible to drop job history ONLY on the cloud
+strip path (without touching `export.ts`, to avoid changing the local save
+contract); left as a separate decision, not done here to avoid silently
+widening scope.

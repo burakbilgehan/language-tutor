@@ -1,6 +1,6 @@
 ---
 id: T-054
-title: okumo.dev landing sayfası (design handoff — ayrı scope)
+title: okumo.dev landing page (design handoff, separate scope)
 status: done
 priority: p3
 effort: M
@@ -9,51 +9,57 @@ depends: [T-052]
 created: 2026-07-27
 ---
 
-## Karar + uygulama (2026-07-31)
+## Decision + implementation (2026-07-31)
 
-**Landing `/` KÖKÜNDE.** Gerekçe: pazarlama yüzeyinin taranabilir/unfurl
-edilebilir olması gerekiyor; eski `/` bir client redirect kapısıydı (🌸
-spinner) ve crawler'a hiçbir şey göstermiyordu. Ayrı yol (`/welcome`) çıplak
-`okumo.dev` ziyaretçisini yine spinner'a düşürürdü.
+**Landing lives AT `/`, the root.** Rationale: a marketing surface needs to be
+crawlable/unfurlable; the old `/` was a client-side redirect gate (a 🌸
+spinner) that showed crawlers nothing. A separate path (`/welcome`) would
+still drop a bare `okumo.dev` visitor into the spinner.
 
-Dönen kullanıcı iki katmanlı çözülüyor:
-- `src/lib/visited-flag-key.ts` + `visited-flag.ts` — profil oluşturan her UI
-  yolu senkron localStorage bayrağı yazar (6 nokta).
-- `ReturningUserGate` — boyama ÖNCESİ inline script (tema script'inin eşi);
-  bayrak varsa landing hiç görünmeden `location.replace("/map")`.
-- IndexedDB tek gerçek kaynak KALIR; bayrak sadece kestirme.
+Returning users are resolved in two layers:
+- `src/lib/visited-flag-key.ts` + `visited-flag.ts`: every UI path that
+  creates a profile writes a synchronous localStorage flag (6 spots).
+- `ReturningUserGate`: an inline script BEFORE paint (the theme script's
+  counterpart); if the flag is set, `location.replace("/map")` runs before
+  landing ever renders.
+- IndexedDB REMAINS the single source of truth; the flag is only a shortcut.
 
-**Bilinen takas:** verisi olup bayrağı olmayan kullanıcı (bayrak öncesi
-profiller, localStorage temizliği) landing'i bir kez görür. Çıkış yolu
-hero altındaki "kayıtlı ilerlemeni sürdür" linki — tam `profileData()`
-yolunu TIKLAMADA koşturur ve bayrağı geri doldurur. Mount'ta değil:
-pazarlama ziyaretçisine sql.js boot'u ödetmemek için.
+**Known trade-off:** a user with data but no flag (pre-flag profiles,
+localStorage cleared) sees landing once. The way out is the "continue your
+saved progress" link under the hero, which runs the full `profileData()`
+path only ON CLICK and backfills the flag. Not on mount: to avoid making a
+marketing visitor pay for the sql.js boot.
 
-**AppChrome:** `SelectionTooltip`/`CommandPalette`/`FeedbackButton` üçü de
-`useProfileMeta()` → `profileData()` → ~645KB sql.js WASM + IndexedDB boot
-tetikliyordu ve RootLayout'ta KOŞULSUZ mount ediliyordu — yani maliyet
-rotadan bağımsızdı, landing'i ayrı yola taşımak bile çözmezdi. Artık
-`usePathname()` ile landing'de mount edilmiyorlar.
+**AppChrome:** `SelectionTooltip`/`CommandPalette`/`FeedbackButton` all
+triggered `useProfileMeta()` -> `profileData()` -> a ~645KB sql.js WASM +
+IndexedDB boot, and were mounted UNCONDITIONALLY in RootLayout, meaning the
+cost was route-independent; moving landing to a separate path wouldn't even
+have fixed it. They're now not mounted on landing, via `usePathname()`.
 
-Kapsam dışı bırakılanlar (ayrı iş): favicon/OG görseli/robots.txt/sitemap
-asset üretimi, ekran görüntüsü pipeline'ı (önizleme DS desenlerinden CSS ile
-kuruldu), fiyatlandırma/monetize mesajı.
-Handoff'ta ayrı scope: okumo.dev için landing sayfası.
-Referans: v1 mock `design/okumo-sky/Okumo Landing.dc.html` idi — v1 handoff
-GEÇERSİZ ve silindi (git geçmişinde: `5ad0c88`). Bu iş çekildiğinde v2
-Yūyake sistemi (`design/okumo-yuyake/`) baz alınır; landing mock'u v2'de
-yok, DS v2 token/bileşen rolleriyle sıfırdan kurgulanır.
+Left out of scope (separate work): favicon/OG image/robots.txt/sitemap asset
+production, screenshot pipeline (the preview was built from DS patterns in
+CSS), pricing/monetization messaging.
+Separate scope in the handoff: a landing page for okumo.dev.
+Reference: the v1 mock was `design/okumo-sky/Okumo Landing.dc.html`; the v1
+handoff is INVALID and was deleted (in git history: `5ad0c88`). When this
+work is picked up it's based on the v2 Yūyake system
+(`design/okumo-yuyake/`); there's no landing mock in v2, it's built from
+scratch using DS v2 tokens/component roles.
 
-Şu an okumo.dev = uygulamanın kendisi (Worker static assets, anonim başlangıç
-+ login). Landing = ürünü tanıtan, "başla" ile app'e geçiren pazarlama yüzeyi.
-Açık kararlar (Burak):
-- Landing app'in KÖKÜ mü (`/` landing → `/onboarding` app), yoksa ayrı yol mu?
-- Statik export'a nasıl oturur (mevcut root pages kalıbı, `<Suspense>` kuralı)?
-- Kapsam pazarlama-only mu (özellikler, ekran görüntüleri, "başla" CTA) yoksa
-  fiyatlandırma/monetize mesajı da mı (monetize modeli henüz kararlaşmadı →
-  şimdilik pazarlama-only tut).
+okumo.dev is currently the app itself (Worker static assets, anonymous start
++ login). Landing = the marketing surface introducing the product, passing
+users into the app via "start."
+Open decisions (Burak):
+- Is landing the app's ROOT (`/` landing -> `/onboarding` app), or a separate
+  path?
+- How does it fit the static export (existing root pages pattern,
+  `<Suspense>` rule)?
+- Is scope marketing-only (features, screenshots, "start" CTA), or also
+  pricing/monetization messaging (monetization model isn't decided yet, so
+  keep marketing-only for now).
 
-Sky ailesi + Kumo mark (T-052) landing'de de kullanılır → depends T-052.
-confidence low: landing içeriği/yapısı Burak'ın ürün mesajına bağlı, mock
-başlangıç noktası. Tasarım + kopya ağırlıklı. Diğer içerik/güvenlik işlerine
-göre düşük öncelik — okumo kamuya duyurulmadan önce çekilir.
+The sky family + Kumo mark (T-052) are also used on landing, hence depends
+T-052. confidence low: landing content/structure depends on Burak's product
+messaging, the mock is only a starting point. Design- and copy-heavy. Lower
+priority relative to other content/security work; picked up before okumo is
+publicly announced.

@@ -1,6 +1,6 @@
 ---
 id: T-022
-title: Ders yeniden üretme butonuna feedback text box'ı
+title: Feedback text box on the lesson regenerate button
 status: done
 priority: p2
 effort: S
@@ -8,26 +8,28 @@ confidence: high
 depends: []
 created: 2026-07-18
 ---
-Daha önce istenmişti, es geçilmiş — bu yüzden todo. Ders "yeniden üret"
-akışı şu an körlemesine yeniden generate ediyor; aynı hatayı tekrar üretme
-riski var. Butona bir text box eklenecek: kullanıcı neyin yanlış/eksik
-olduğunu yazar ("örnekler çok kolay", "romaji hatalı" vb.), bu metin
-regenerate prompt'una "önceki üretimdeki sorunlar — bunları düzelt"
-bölümü olarak eklenir.
+Requested before, skipped, hence this todo. The lesson "regenerate" flow
+currently regenerates blindly; there's a risk of producing the same mistake
+again. A text box will be added to the button: the user writes what's
+wrong/missing ("examples too easy", "romaji is wrong", etc.), this text gets
+added to the regenerate prompt as a "problems in the previous generation,
+fix these" section.
 
-Uygulama:
-- UI: regenerate butonu → küçük form (textarea, opsiyonel değil zorunlu
-  yapılabilir; boşsa eski davranış). Lesson sayfasında; aynı kalıp
-  grammar topic regenerate'ine de uygulanabilir (varsa).
-- Prompt: lesson prompt'una opsiyonel `regenerationFeedback` parametresi;
-  `nativeLanguageName()` kuralına uy (hardcode Türkçe yok). Kullanıcı
-  metni prompt'a data olarak girer (injection kaygısı düşük — kullanıcının
-  kendi LLM'i/oturumu).
-- Akış iki modda da (server route + statik core) çalışmalı —
-  `src/core/lesson.ts` regenerate yoluna parametre ekle, route/client-api
-  ince kabuk kalsın (CLAUDE.md seam kuralı).
-- Eski ders içeriği prompt'a "önceki üretim" olarak kısaca dahil edilirse
-  LLM neyi düzelttiğini görür — token maliyetiyle tartılmalı, özet yeter.
+Implementation:
+- UI: regenerate button -> small form (textarea, can be made required instead
+  of optional; falls back to old behavior if empty). On the lesson page; the
+  same pattern could apply to grammar topic regenerate (if it has one).
+- Prompt: an optional `regenerationFeedback` parameter on the lesson prompt;
+  follow the `nativeLanguageName()` rule (no hardcoded Turkish). User text
+  enters the prompt as data (injection concern is low, it's the user's own
+  LLM/session).
+- The flow should work in both modes (server route + static core), add the
+  parameter to the regenerate path in `src/core/lesson.ts`, keep the route/
+  client-api as thin shells (CLAUDE.md seam rule).
+- If the old lesson content is briefly included in the prompt as "previous
+  generation," the LLM can see what it needs to fix, weigh against token cost,
+  a summary is enough.
 
-Doğrulama: fixture modda parametrenin prompt'a girdiğini assert eden
-birim test veya log kontrolü; gerçek LLM'le bir kez uçtan uca.
+Verification: a unit test or log check in fixture mode asserting the
+parameter enters the prompt; one end-to-end pass with a real LLM.
+</content>

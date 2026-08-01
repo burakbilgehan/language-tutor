@@ -1,6 +1,6 @@
 ---
 id: T-048
-title: Giriş UI — anonim/load + login seçeneği + buluttan getir
+title: Login entry UI - anonymous/load + login option + pull from cloud
 status: done
 priority: p2
 effort: M
@@ -8,129 +8,141 @@ confidence: high
 depends: [T-047]
 created: 2026-07-26
 ---
-Backend uçtan uca çalışınca kullanıcı yüzeyini bağla. Girişte insanlar YİNE
-anonim katılma + kayıt yükleme ekranıyla karşılansın (mevcut T-025
-onboarding load/new), **artık bir de login seçeneği** olsun.
+Once the backend works end-to-end, wire up the user-facing surface. On entry
+people should STILL be greeted by the anonymous-join + load-save screen
+(existing T-025 onboarding load/new), but **now with a login option too**.
 
-- **Onboarding'e üçüncü kapı:** "Anonim başla" / "Kayıt yükle (dosya)" /
-  **"Giriş yap"** (Google + magic-link). Anonim akış hiç değişmez (local-first).
-- **Login sonrası:** kendi save'ini **buluttan getir** (T-047 pull) — ya da
-  yeni cihazda ilk kez ise buluta gönder. Hesap durumu göstergesi (kim giriş
-  yapmış, son sync zamanı).
-- **Ayarlar:** çıkış yap, "buluta gönder / buluttan getir" (Drive
-  butonlarının yanında ya da yerine), hesap bağla/çöz.
-- **i18n:** yeni kopya tr/en (mevcut co-located `S` kalıbı).
+- **Third door in onboarding:** "Start anonymously" / "Load a save (file)" /
+  **"Sign in"** (Google + magic-link). The anonymous flow doesn't change at
+  all (local-first).
+- **After login:** **pull** the user's own save from the cloud (T-047 pull),
+  or push to the cloud if it's a first-time new device. Account status
+  indicator (who's signed in, last sync time).
+- **Settings:** sign out, "push to cloud / pull from cloud" (next to or in
+  place of the Drive buttons), link/unlink account.
+- **i18n:** new copy in tr/en (existing co-located `S` pattern).
 
-Fence: onboarding component'leri + ayarlar + auth-durumu hook'u. Worker
-kodu (T-046/T-047) bittiğinde bu saf frontend → dosya kümesi büyük ölçüde
-ayrık.
+Fence: onboarding components + settings + auth-status hook. Once the Worker
+code (T-046/T-047) is done, this is purely frontend, so the file sets are
+largely disjoint.
 
-**T-048 uygulama kararları (2026-07-26):**
+**T-048 implementation decisions (2026-07-26):**
 
-- **Magic-link yok** (T-046 sahip kararı) — üçüncü kapı yalnız Google.
-- **better-auth client paketi EKLENMEDİ, elle fetch.** Gerekçe: kullanılan
-  yüzey iki uç nokta (`POST /api/auth/sign-in/social` → `200 {url}`,
-  `GET /api/auth/get-session`) + `POST /api/auth/sign-out`, ve bu şekiller
-  zaten `worker/test/session.test.ts` ile kilitli. Kök `package.json`'a bir
-  auth kütüphanesi eklemek, çoğunlukla anonim çalışan statik bundle'a
-  gereksiz ağırlık olurdu. Kök bağımlılıklar DEĞİŞMEDİ.
-- **`cloudAvailable()` render kapısı olarak KULLANILAMAZ** (bulunan tuzak):
-  `IS_STATIC && isSignedIn()` — yani giriş yapmadan false, dolayısıyla "giriş
-  yap" butonunu ona bağlamak kilitlenme olurdu (butonu görmek için giriş
-  yapmış olman gerekir). Doğru ayırt edici "bu origin'de backend var mı" ve
-  bu zaten açık bir uç nokta: Worker'da `GET /api/health` → 200, anonim-only
-  GitHub Pages aynasında 404. Probe `useAuthStatus` içinde, `readCloudApiBase()`
-  ile — hiçbir origin gömülü değil. `cloudAvailable()` push/pull için
-  (oturum gerçekten gerekli) hâlâ geçerli; T-047'de değişiklik yapılmadı.
-- **`useAuthStatus` KARAMSAR varsayılan** (useLlmStatus'ün tersi, kasıtlı):
-  `{user:null, loading:true}`. Sunucu doğrulamadan "giriş yapıldı" yazmak
-  yalan olurdu ve arkasındaki her düğme ilk tıklamada patlardı.
-- **OAuth dönüş ayağı `useSearchParams` KULLANMIYOR.** `/onboarding` sayfasının
-  `<Suspense>` sarmalayıcısı yok; hook'u eklemek statik export'u kırardı
-  (build çalıştırma izni yoktu → doğrulanamaz risk). Marker
-  `window.location.search`'ten `useEffect` içinde okunuyor.
-- **`callbackURL` mutlak URL:** `window.location.origin + withBase("/onboarding")
-  + "?cloud=return"`. Göreli `"/"` API-base override'ı varken Worker'ın kendi
-  köküne düşerdi. **Doğrulanmadı, sahibe not:** better-auth `callbackURL`'i
-  `trustedOrigins(env)`'e karşı doğruluyor — üretimde aynı-origin olduğu için
-  sorunsuz, ama dev (:3000) ve olası ayna senaryolarında site origin'inin o
-  allowlist'te olması gerekir (Worker config'i, bu ticket'ın fence'i dışında).
-- **Dönüş ayağı akışı:** oturum çözüldükten sonra körlemesine `cloudPull()`
-  DEĞİL — `cloudInfo()` (HEAD, egress yok). 404 → "buluta henüz kayıt
-  göndermemişsin" + normal onboarding'e devam; var → pull teklifi. Körlemesine
-  pull "ilk cihaz" senaryosunu hata gibi gösterirdi.
-- **Pull onayı:** replace-all olduğu için dosya-import akışıyla aynı ağırlıkta
-  `window.confirm`. Yalnız profil olmadığı DOĞRULANMIŞ oturumda atlanıyor
-  (`!checkingProfiles && usedLanguages.length === 0`); henüz bilinmiyorsa
-  soruluyor — güvenli taraf.
-- **`PullResult.warnings` toast DEĞİL.** Onboarding'de pull sonrası
-  `/map`'e yönlendirme listeyi çöpe atardı; uyarı varsa yönlendirme
-  BEKLETİLİYOR, `CloudWarnings` maddeleri sayarak gösteriyor, kullanıcı
-  onaylayınca devam ediliyor. Ayarlarda bölüm state'inde kapatılana kadar duruyor.
-- **Kontrat pürüzü (düzeltilmedi, kasıtlı):** `pushToCloud` 413'te
-  `AppError("save_invalid")` fırlatıyor, ama paylaşılan katalog bu kodu
-  "Geçersiz kayıt dosyası (SQLite değil)" diye gösteriyor — fazla büyük ama
-  gayet geçerli bir kayıt için yanlış bilgi. `src/lib/i18n/errors.ts`
-  değiştirilmedi (aynı kod sunuculu dosya-import yolunda da kullanılıyor);
-  bunun yerine `src/lib/cloud-error.ts` kodları UI "kind"lerine çeviriyor ve
-  buluta özel kopya component'lerin kendi `S` tablosunda. 413 → "30 MB sınırı",
-  503/404 → "servise ulaşılamadı, kaydın sağlam".
-- **Test edilebilir çekirdek ayrıldı:** `describeCloudError` saf fonksiyon,
-  `src/lib/cloud-error.test.ts` (6 test) `npm test` glob'una giriyor —
-  tarayıcıya bağımlı bir özelliğin kanıtlanabilir tek parçası.
-- Anonim akış hiç değişmedi: üçüncü kapı yalnız `auth.backendAvailable`
-  true iken render ediliyor, hiçbir yerde kapı/gate değil. **Tek sapma,
-  kayda geçsin:** statik modda her onboarding açılışı artık bir
-  `GET /api/health` probe'u atıyor — anonim Pages aynasında 404 (yutuluyor,
-  kullanıcıya hiçbir şey sızmıyor, yalnız konsolda bir satır). Davranış
-  aynı, ağ isteği bir tane fazla. İkinci (ölçülmemiş, davranışsal etkisi yok)
-  sapma: `src/lib/cloud-error.ts` `@/lib/backup/cloud`'u STATİK import ediyor
-  (hata sınıfları `instanceof` için gerekli), yani `cloud.ts` +
-  `save/seed-strip.ts` artık onboarding giriş bundle'ına da giriyor — daha
-  önce yalnız `cloudPush`/`cloudPull` seam'lerinden dinamik geliyordu. sql.js
-  hâlâ dinamik, yani ağır kısım etkilenmiyor.
+- **No magic-link** (T-046 owner decision), the third door is Google-only.
+- **The better-auth client package was NOT added, manual fetch instead.**
+  Rationale: the surface used is two endpoints
+  (`POST /api/auth/sign-in/social` -> `200 {url}`,
+  `GET /api/auth/get-session`) plus `POST /api/auth/sign-out`, and these
+  shapes are already locked by `worker/test/session.test.ts`. Adding an auth
+  library to the root `package.json` would be unnecessary weight for a static
+  bundle that mostly runs anonymously. Root dependencies UNCHANGED.
+- **`cloudAvailable()` CANNOT be used as a render gate** (a trap found along
+  the way): `IS_STATIC && isSignedIn()`, meaning it's false before signing in,
+  so gating the "sign in" button on it would be a deadlock (you'd need to be
+  signed in to see the button). The correct discriminator is "does this
+  origin have a backend," which is already an open endpoint: `GET /api/health`
+  on the Worker returns 200, 404 on the anonymous-only GitHub Pages mirror.
+  The probe lives in `useAuthStatus`, via `readCloudApiBase()`, no origin is
+  hardcoded. `cloudAvailable()` still applies for push/pull (where a session
+  is genuinely required); unchanged in T-047.
+- **`useAuthStatus` has a PESSIMISTIC default** (the opposite of useLlmStatus,
+  deliberately): `{user:null, loading:true}`. Saying "signed in" before the
+  server confirms would be a lie, and every button behind it would break on
+  first click.
+- **The OAuth return leg does NOT use `useSearchParams`.** The `/onboarding`
+  page has no `<Suspense>` wrapper; adding the hook would break the static
+  export (no permission to run the build, so this is an unverified risk).
+  The marker is read from `window.location.search` inside `useEffect`.
+- **`callbackURL` is an absolute URL:**
+  `window.location.origin + withBase("/onboarding") + "?cloud=return"`.
+  A relative `"/"` would fall to the Worker's own root when the API-base
+  override is set. **Not verified, note for the owner:** better-auth checks
+  `callbackURL` against `trustedOrigins(env)`; fine in production since it's
+  same-origin, but in dev (:3000) and possible mirror scenarios the site
+  origin needs to be in that allowlist (Worker config, outside this ticket's
+  fence).
+- **Return-leg flow:** after the session resolves, it does NOT blindly call
+  `cloudPull()`, it calls `cloudInfo()` (HEAD, no egress). 404 means "you
+  haven't pushed to the cloud yet," continue to normal onboarding; exists
+  means offer a pull. Blindly pulling would make the "first device" scenario
+  look like an error.
+- **Pull confirmation:** since it's replace-all, it gets the same weight
+  `window.confirm` as the file-import flow. Skipped only in a session that's
+  CONFIRMED to have no profiles (`!checkingProfiles && usedLanguages.length === 0`);
+  asked when not yet known, the safe side.
+- **`PullResult.warnings` is NOT a toast.** In onboarding, redirecting to
+  `/map` after pull would throw the list away; if there are warnings, the
+  redirect is HELD, `CloudWarnings` shows the count of items, and it proceeds
+  once the user acknowledges. In settings it stays until dismissed in section
+  state.
+- **Contract rough edge (not fixed, deliberate):** `pushToCloud` throws
+  `AppError("save_invalid")` on 413, but the shared catalog displays that code
+  as "Invalid save file (not SQLite)", which is wrong info for a file that's
+  simply too large but perfectly valid. `src/lib/i18n/errors.ts` was not
+  changed (the same code is also used on the server-mode file-import path);
+  instead `src/lib/cloud-error.ts` maps codes to UI "kinds," and cloud-specific
+  copy lives in the components' own `S` table. 413 -> "30 MB limit," 503/404 ->
+  "service unreachable, your save is intact."
+- **A testable core was split out:** `describeCloudError` is a pure function,
+  `src/lib/cloud-error.test.ts` (6 tests) is picked up by the `npm test` glob,
+  the one provable piece of a browser-dependent feature.
+- The anonymous flow is entirely unchanged: the third door only renders when
+  `auth.backendAvailable` is true, never a gate anywhere else. **The one
+  deviation, for the record:** in static mode every onboarding open now fires
+  a `GET /api/health` probe, 404 on the anonymous Pages mirror (swallowed, no
+  leak to the user, just one console line). Same behavior, one extra network
+  request. Second (unmeasured, no behavioral effect) deviation:
+  `src/lib/cloud-error.ts` STATICALLY imports `@/lib/backup/cloud` (error
+  classes needed for `instanceof`), so `cloud.ts` + `save/seed-strip.ts` now
+  also enter the onboarding entry bundle, previously they only arrived
+  dynamically via the `cloudPush`/`cloudPull` seams. sql.js is still dynamic,
+  so the heavy part is unaffected.
 
-**Merge-review'da bulunan + düzeltilen 3 bulgu:**
+**3 findings found + fixed during merge review:**
 
-1. **Yıkıcı pull yanlış yüklemde onaysız kalıyordu.** İlk hâl
-   `usedLanguages.length === 0`'ı "yerel boş" diye okuyordu; oysa
-   `usedLanguages` **curriculum-join'lu** (`src/core/profile.ts`
-   `innerJoin(curricula)`). LLM yapılandırılmamış bir cihazda profil var ama
-   müfredat yok — o durumda `usedLanguages` boş görünür ve replace-all
-   SESSİZCE çalışırdı (SRS kartları, ayarlar gider). Ayrıca `profileData()`
-   reddedince de boş görünüyordu, yani geçici bir okuma hatası en tehlikeli
-   anda onayı atlatıyordu. Artık `profilesKnownEmpty` var: yalnız
-   `profileData()` ÇÖZÜLÜP sıfır profil dönerse true, varsayılan false —
-   "bilinmiyor" ve "okunamadı" ikisi de sorar.
-2. **`getCloudInfo()` her 404-olmayan hatayı da `exists:false` yapıyor**
-   (403 origin-gate, 500…), dolayısıyla "buluta hiç göndermemişsin" demek
-   yanlış bilgi olurdu — üstelik kullanıcıyı sıfırdan başlamaya yönlendirirdi.
-   `cloud.ts` fence dışı olduğu için kopya tarafında çözüldü: metin artık
-   yokluk İDDİA ETMİYOR ("henüz göndermemiş olabilirsin ya da servise
-   ulaşılamıyor") ve o dalda "Tekrar dene" var.
-3. **`invalidateAuthStatus()` `inflight`'ı temizlemiyordu.** API adresi
-   kaydedilirken ilk probe (eski, boş adrese karşı) hâlâ uçuyorsa, bayat
-   promise geri veriliyor ve sonucunu kalıcı olarak `cached`'e yazıyordu →
-   hesap UI'ı tam sayfa yenilemeye kadar gizli kalırdı. Bu, alanın var olma
-   sebebi olan dev topolojisinin (:3000 → :8787) birinci-koşum yolu. Artık
-   `inflight` da sıfırlanıyor + bir `generation` sayacı bayat probe'un
-   `cached`'e yazmasını engelliyor.
-4. `?cloud=return` marker'ı okunduktan sonra `history.replaceState` ile
-   URL'den siliniyor — yoksa her yenilemede dönüş ekranı tekrar açılıyordu.
+1. **A destructive pull went through without confirmation on the wrong read.**
+   The original code read `usedLanguages.length === 0` as "local is empty";
+   but `usedLanguages` is **curriculum-joined** (`src/core/profile.ts`
+   `innerJoin(curricula)`). On a device with an unconfigured LLM, a profile can
+   exist without a curriculum, in which case `usedLanguages` looks empty and
+   replace-all would run SILENTLY (SRS cards, settings gone). Also, if
+   `profileData()` was rejected, it also looked empty, so a transient read
+   error would skip the confirmation at the most dangerous moment. Now there's
+   `profilesKnownEmpty`: true only if `profileData()` RESOLVES and returns
+   zero profiles, defaults false, "unknown" and "unreadable" both prompt.
+2. **`getCloudInfo()` was turning every non-404 error into `exists:false`**
+   too (403 origin-gate, 500, etc.), so saying "you've never pushed to the
+   cloud" would be wrong information, and it would even steer the user to
+   start from scratch. Since `cloud.ts` is out of fence, this was resolved on
+   the copy side: the text no longer CLAIMS absence ("you may not have pushed
+   yet, or the service may be unreachable") and that branch has a "Try again."
+3. **`invalidateAuthStatus()` wasn't clearing `inflight`.** If the API address
+   was being saved while the first probe (old, against the empty address) was
+   still in flight, a stale promise would be returned and its result would be
+   permanently written to `cached`, hiding the account UI until a full page
+   reload. This is exactly the dev topology (:3000 -> :8787) the field even
+   exists for. `inflight` is now also reset, plus a `generation` counter
+   prevents a stale probe from writing to `cached`.
+4. After the `?cloud=return` marker is read, it's stripped from the URL via
+   `history.replaceState`, otherwise the return screen would reopen on every
+   refresh.
 
-**Bilinen cila (düzeltilmedi, çıkmaz değil):** dönüş ekranında "Devam et"e
-basan ZATEN GİRİŞ YAPMIŞ kullanıcıya intro ekranı hâlâ "Giriş yap" kapısını
-gösteriyor. Hesap durumu ayarlarda doğru görünüyor, akış kilitlenmiyor.
+**Known polish debt (not fixed, not a blocker):** on the return screen, a
+user who is ALREADY signed in and clicks "Continue" still sees the intro
+screen's "Sign in" door. Account status shows correctly in settings, the flow
+doesn't lock up.
 
-**Tarayıcı gerektiren, ELLE doğrulanacaklar** (bu ticket'ta koşulamadı —
-build çalıştırma izni yoktu, gerçek Google OAuth istemcisi yok):
-`npm run build:static`; gerçek Google giriş tur-dönüşü; profili olup
-müfredatı OLMAYAN cihazda pull → onay diyaloğu ÇIKMALI (yukarıdaki 1.
-bulgunun vakası); sayfa yeni yüklenmişken Ayarlar → Gelişmiş → API adresi
-kaydet → hesap kontrolleri tam sayfa yenilemeden görünmeli (3. bulgu);
-dönüş ekranını "Devam et" ile kapatıp yenile → normal intro gelmeli (4.).
+**Requires a browser, needs MANUAL verification** (couldn't be run in this
+ticket, no permission to run the build, no real Google OAuth client):
+`npm run build:static`; a real Google sign-in round trip; on a device with a
+profile but NO curriculum, pull should trigger the confirmation dialog (the
+case behind finding 1 above); on a freshly loaded page, Settings -> Advanced
+-> save API address -> account checks should appear without a full page
+reload (finding 3); dismiss the return screen with "Continue" and reload,
+normal intro should appear (finding 4).
 
-**Sahibe deploy notu (fence dışı, ama çalışması buna bağlı):** site origin'i
-Worker'ın `TRUSTED_ORIGINS`'inde olmalı. Değilse better-auth callback'i
-reddeder ve kullanıcı uygulamaya dönüş yolu OLMAYAN bir Worker sayfasında
-kalır — uygulama içi hiçbir çıkış düğmesiyle kurtarılamayan tek çıkmaz.
+**Deploy note for the owner (out of fence, but the flow depends on it):** the
+site origin must be in the Worker's `TRUSTED_ORIGINS`. If not, better-auth
+rejects the callback and the user ends up stuck on a Worker page with NO way
+back into the app, the only dead end that can't be recovered with any in-app
+exit button.

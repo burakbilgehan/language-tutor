@@ -1,6 +1,6 @@
 ---
 id: T-030
-title: ja kelime sözlüğü (JMdict tabanlı, zh vocab kalıbının kopyası)
+title: ja vocabulary dictionary (JMdict-based, copy of the zh vocab pattern)
 status: reverted
 priority: p2
 effort: L
@@ -9,90 +9,95 @@ depends: [T-029]
 created: 2026-07-22
 closed: 2026-07-22
 ---
-Kapanış notu (22 Tem 2026): uygulandı. Veri: JLPT seviyeleri Jonathan
-Waller/tanos.co.uk (CC BY), Bluskyo/JLPT_Vocabulary dönüşümü üzerinden;
-okunuş+gloss JMdict/EDRDG (CC BY-SA 4.0), scriptin/jmdict-simplified
-(jmdict-eng) üzerinden. `scripts/build-ja-vocab-index.mjs` iki dosyayı
-JMdict entry id'sinde join+dedup edip → `src/lib/vocab-index/ja-data.json`
-(7584 kelime, N5→N1). Kavşak kapsamı %99.72 (8505 formdan 24'ü JMdict'te yok
-— hepsi PDF dönüşüm çöpü, düşürüldü). T-029 çok-form dersi uygulandı: aynı
-yüzeye çakışan farklı JMdict girdileri (入る=はいる/いる) tek satıra
-birleştirilir — en kolay seviye (max Tanos = N5) + o okunuş baş, tüm
-gloss'lar kayıpsız union; özel-isim sense'leri (n-pr/surname/place…) gloss
-listesinin sonuna itilir. **v1 sınırı**: birleşen bir yüzeyin alternatif
-okunuşları bağımsız aranamaz (生, 何 gibi çok-okunuşlular tek okunuşla
-listede). Seviye kaynağı Tanos 2010-öncesi listeler — modern resmi
-bölünmeyle birebir örtüşmeyebilir (N3 interpolasyonu).
+Closing note (Jul 22, 2026): implemented. Data: JLPT levels via
+Jonathan Waller/tanos.co.uk (CC BY), through the Bluskyo/JLPT_Vocabulary
+conversion; readings+glosses from JMdict/EDRDG (CC BY-SA 4.0), via
+scriptin/jmdict-simplified (jmdict-eng). `scripts/build-ja-vocab-index.mjs`
+joins+dedupes the two files on the JMdict entry id -> `src/lib/vocab-index/ja-data.json`
+(7584 words, N5->N1). Join coverage 99.72% (24 of 8505 forms not in JMdict,
+all PDF-conversion garbage, dropped). The T-029 multi-form lesson was applied:
+different JMdict entries colliding on the same surface (入る=はいる/いる) are
+merged into a single row; the easiest level (max Tanos = N5) plus that reading
+comes first, all glosses union without loss; proper-noun senses (n-pr/surname/
+place...) are pushed to the end of the gloss list. **v1 limitation**: alternate
+readings of a merged surface cannot be searched independently (multi-reading
+words like 生, 何 are listed under a single reading). Level source is pre-2010
+Tanos lists; may not line up exactly with the modern official split (N3
+interpolation).
 
-Kod: `vocab-index/ja.ts` + `vocabIndexFor` ja dalı, `VocabIndexEntry.level`
-N5–N1'e genişletildi (şema/save değişmedi — vocab_entries.level düz metin);
-`search-index.ts` + `vocab-search.ts` okunuş katlama dile duyarlı (kana→romaji
-`foldJaReading` / pinyin `foldPinyin`, satırın kendi scriptine göre dispatch);
-nav gate `["zh","ja"]`; UI `lang` + seviye etiketleri (VocabSidebar/EntryView)
-level prefix'inden (N*=ja) türetiliyor, EntryView `levelDisplay` kullanıyor;
-`prompts/vocab.ts` 量词 satırı zh'ye özel, ja'da düşer, örnekler furigana
-bracket. Doğrulama: "uma"/"馬"/"horse" üçü de 馬 buluyor (headless rankVocab
-testi ALL PASS), parity ALL PASS, 58 unit test, `npm run build` OK, tsc temiz.
-In-browser nav render'ı (ja gösterir/nl gizler) kodla doğrulandı, tarayıcıda
-değil. Atıf **sayfası** T-036'ya devredildi (kod başlıklarında atıf var).
-Onay (Burak, 2026-07-22): faktüel katman veri setinden, LLM sadece
-pedagoji. zh'de bu mimari çalışıyor (complete-hsk-vocabulary → index);
-ja'da vocab sözlüğü hiç yok. Jisho scrape EDİLMEZ — Jisho zaten JMdict'in
-arayüzü; dosyanın kendisi indirilir.
+Code: `vocab-index/ja.ts` + the ja branch of `vocabIndexFor`, `VocabIndexEntry.level`
+extended to N5-N1 (schema/save unchanged; vocab_entries.level stays plain text);
+`search-index.ts` + `vocab-search.ts` reading-fold is script-aware (kana->romaji
+`foldJaReading` / pinyin `foldPinyin`, dispatched per row's own script);
+nav gate `["zh","ja"]`; UI `lang` + level labels (VocabSidebar/EntryView)
+are derived from the level prefix (N*=ja), EntryView uses `levelDisplay`;
+`prompts/vocab.ts`'s 量词 (classifier) line is zh-specific, dropped for ja, examples use
+furigana bracket notation. Verification: "uma"/"馬"/"horse" all three find 馬
+(headless rankVocab test ALL PASS), parity ALL PASS, 58 unit tests, `npm run build` OK, tsc clean.
+In-browser nav rendering (shows for ja, hides for nl) was verified in code,
+not in the browser. Attribution **page** deferred to T-036 (code headers already
+carry attribution).
+Approved (Burak, 2026-07-22): the factual layer comes from the dataset, the
+LLM is pedagogy only. This architecture already works for zh (complete-hsk-vocabulary -> index);
+ja had no vocabulary dictionary at all. Do NOT scrape Jisho; Jisho is
+already a JMdict frontend, so the file itself is downloaded instead.
 
-Elimizdekiler (baştan başlamıyoruz):
-- `src/lib/jmdict/` — JMdict'in compact alt kümesi (common girişler,
-  [word, reading, gloss] üçlüleri) zaten repoda, EDRDG CC BY-SA atıf notu
-  başında. SelectionTooltip/kanji lookup bunu kullanıyor.
-- `vocab_entries` tablosu targetLanguage kolonlu — şema hazır; UI nav
-  gate'i `langs: ["zh"]`, ja eklenecek.
-- Kanji index emsali: okunuş/gloss statik, LLM sadece Türkçe içerik —
-  aynı sözleşme.
+What we already have (not starting from scratch):
+- `src/lib/jmdict/`; a compact subset of JMdict (common entries,
+  [word, reading, gloss] triples) already in the repo, with an EDRDG CC BY-SA
+  attribution note at the top. SelectionTooltip/kanji lookup use this.
+- `vocab_entries` table has a targetLanguage column, schema is ready; UI nav
+  gate is `langs: ["zh"]`, ja to be added.
+- Kanji index precedent: readings/glosses static, LLM only for the Turkish
+  content, same contract.
 
-İş:
-1. **Index distilasyonu**: `scripts/build-ja-vocab-index.mjs` →
-   `src/lib/vocab-index/ja-data.json` (zh-data ile aynı şekil: word /
-   reading(kana) / en[] / level). Gloss+okunuş kaynağı JMdict (tam dosya,
-   repodaki alt küme değil). **Seviye kaynağı ayrı problem**: JLPT'nin
-   2010 sonrası resmi kelime listesi yok — topluluk listesi gerekir
-   (Tanos CC-BY ya da jlpt-word-list türevleri); lisansını ticket'a not
-   düş. T-029'un çok-form dersi burada da geçerli (JMdict'te bir kelimenin
-   birden çok yazımı/okunuşu olur — kayıpsız union, özel-isim önceliği).
-2. **Core/UI genişlemesi**: `ensureVocabSeeded`/`core/vocab.ts` ja index'i
-   tanısın (`vocabIndexFor` dispatch), nav gate'e ja, `/vocab?word=`
-   ja'da açılsın. Arama: kana + romaji eşleşmesi (`jp.ts` wanakana
-   yardımcıları — T-016 emsal).
-3. **LLM yarısı**: `VocabContentSchema`'nın 量词 (classifier) alanı
-   zh'ye özgü — ja dalında düşür ya da opsiyonel yap; örnekler furigana
-   bracket notasyonuyla. Üretim yine user-triggered + packaged seed
-   (`seed:vocab` zaten dil-parametreli).
-4. **Atıf**: EDRDG şartı — atıf sayfası işi lisans ticket'ıyla birleşir;
-   JMdict tam dosya kullanımı orada listelensin.
+Work:
+1. **Index distillation**: `scripts/build-ja-vocab-index.mjs` ->
+   `src/lib/vocab-index/ja-data.json` (same shape as zh-data: word /
+   reading(kana) / en[] / level). Gloss+reading source is JMdict (full file,
+   not the repo's subset). **Level source is a separate problem**: JLPT has
+   no official post-2010 word list; a community list is needed
+   (Tanos CC-BY or jlpt-word-list derivatives); note the license in the
+   ticket. T-029's multi-form lesson applies here too (a JMdict word can
+   have multiple spellings/readings; lossless union, proper-noun-last
+   priority).
+2. **Core/UI expansion**: `ensureVocabSeeded`/`core/vocab.ts` should recognize
+   the ja index (`vocabIndexFor` dispatch), add ja to the nav gate,
+   `/vocab?word=` should open for ja. Search: kana + romaji matching
+   (`jp.ts` wanakana helpers; T-016 precedent).
+3. **LLM half**: `VocabContentSchema`'s 量词 (classifier) field is
+   zh-specific; drop or make optional for the ja branch; examples use
+   furigana bracket notation. Generation stays user-triggered + packaged
+   seed (`seed:vocab` is already language-parameterized).
+4. **Attribution**: EDRDG requirement; the attribution page work merges
+   with the license ticket; the full-file JMdict usage should be listed there.
 
-Doğrulama: "uma" / "馬" / "horse" üçü de aynı kelimeyi bulur; parity
-harness ALL PASS; nav ja profilde Sözlük sekmesini gösterir, nl'de
-göstermez.
+Verification: "uma" / "馬" / "horse" all three find the same word; parity
+harness ALL PASS; nav shows the Dictionary tab on a ja profile, hides it
+on nl.
 
-Geri alma (2026-07-22, Burak): iki düzeltme turuna rağmen içerik kalitesi
-kabul edilemez kaldı (yanlış entry eşleşmeleri: いくら→"salmon roe",
-甘い→"skillful", 前→さき; sense-kısıtı ihlalleri; çoklu okunuş temsili yok).
-ja sözlük yüzeyi tamamen söküldü: index/build script silindi, nav zh-only,
-listVocab index'siz dilde boş döner (bayat seed satırları görünmez). zh
-sözlüğü ve ranking iyileştirmeleri (gloss kalite alt-skoru) yerinde kaldı.
-Ders: JMdict distilasyonu Jisho-seviyesi sunum yapısı (sense grupları,
-appliesToKana, çoklu okunuş) olmadan yayınlanmamalı; yeniden denenecekse
-önce görsel prototip onayı, sonra veri işi.
+Reverted (2026-07-22, Burak): despite two correction rounds, content quality
+remained unacceptable (wrong entry matches: いくら->"salmon roe",
+甘い->"skillful", 前->さき; sense-restriction violations; no multi-reading
+representation). The ja dictionary surface was fully torn out: index/build
+script deleted, nav zh-only, listVocab returns empty for a language without
+an index (stale seed rows no longer show). The zh dictionary and ranking
+improvements (gloss-quality sub-score) stayed in place.
+Lesson: a JMdict distillation should not ship without Jisho-level
+presentation structure (sense groups, appliesToKana, multi-reading support);
+if retried, get visual-prototype approval first, then do the data work.
 
-DB artığı (2026-07-27 keşif + temizlik): revert kod dosyalarını (index,
-build script, nav gate) sildi ama denemenin `ensureVocabSeeded` ile
-`vocab_entries` tablosuna yazdığı 8190 ja satırını (N1=3157, N2=1892,
-N3=1731, N4=690, N5=720 — biri `ready`, gerçek bir LLM çağrısı yakmış)
-DB'de bırakmıştı. `scripts/blast-generate.ts` index dosyasını değil
-doğrudan `vocab_entries WHERE status IN ('pending','error')`'ı okuduğu
-için bu 8190 hayalet satırı görüp kuyruğa aldı — hiçbir UI'da asla
-gösterilemeyecek içerik için gereksiz LLM üretimi tetikleyecekti.
-`DELETE FROM vocab_entries WHERE target_language='ja'` ile temizlendi;
-tablo artık yalnızca gerçek zh satırlarını (4991) içeriyor. Ders: kod
-revert'i DB seed'ini otomatik temizlemiyor — bir index/dil sürümünü geri
-alırken ilgili DB satırlarının da silinip silinmediği ayrıca kontrol
-edilmeli.
+DB leftover (discovered + cleaned up 2026-07-27): the revert deleted the
+code files (index, build script, nav gate) but left the 8190 ja rows that
+the experiment's `ensureVocabSeeded` had written into `vocab_entries`
+(N1=3157, N2=1892, N3=1731, N4=690, N5=720; one was `ready`, having burned
+an actual LLM call) in the DB. `scripts/blast-generate.ts` reads directly
+from `vocab_entries WHERE status IN ('pending','error')` rather than the
+index file, so it saw and queued these 8190 ghost rows, which would have
+triggered pointless LLM generation for content that could never be shown
+in any UI. Cleaned up with
+`DELETE FROM vocab_entries WHERE target_language='ja'`; the table now
+contains only the real zh rows (4991). Lesson: a code revert doesn't
+automatically clean up the DB seed; when reverting an index/language
+version, separately check whether the corresponding DB rows also need
+deleting.

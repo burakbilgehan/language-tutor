@@ -1,4 +1,4 @@
-# worker/ — language-tutor backend (T-046, T-047, T-058)
+# worker/: language-tutor backend (T-046, T-047, T-058)
 
 Cloudflare Worker holding **identity** (better-auth, Google-only, sessions in
 D1), the **per-user save blob** in R2, and (T-058) a **model-catalog
@@ -7,10 +7,10 @@ hardened it; T-047 built real save-sync on top.
 
 ## Model catalog freshness (T-058)
 
-`GET /api/llm-catalog` — open route, no session, mirrors `/api/health`'s
+`GET /api/llm-catalog`: open route, no session, mirrors `/api/health`'s
 posture. Serves a **versioned** copy of the app's LLM model catalog
 (`src/catalog-payload.ts`, a hand-synced mirror of the app's
-`src/lib/llm/catalog.ts` MODEL_REGISTRY — see "Two catalogs, spelled twice"
+`src/lib/llm/catalog.ts` MODEL_REGISTRY, see "Two catalogs, spelled twice"
 below) plus `staleWarnings` from the last cron run and `lastCheckedAt` (both
 omitted/empty until the cron has run once). `Cache-Control: public,
 max-age=3600` so a client re-fetching on every page load costs nothing beyond
@@ -18,45 +18,45 @@ the browser's own HTTP cache.
 
 **The app build's embedded catalog is ALWAYS the working fallback.** This
 route is an optional overlay a client can fetch at runtime to pick up
-label/price corrections and cron-discovered stale ids — never a hard
+label/price corrections and cron-discovered stale ids, never a hard
 dependency. A client that can't reach this route (offline, server mode has no
 such route, this Worker is down) keeps working unchanged.
 
-**Weekly cron** (`triggers.crons`, Monday 04:00 UTC — arbitrary beyond "not
+**Weekly cron** (`triggers.crons`, Monday 04:00 UTC: arbitrary beyond "not
 daily", so a transient blip doesn't spam KV writes and a real rename has a
 week to get noticed and fixed by hand) checks every catalog id marked
 `checkAs` in `src/catalog-data.ts` against OpenRouter's public, key-free `GET
 /models` and writes the result to KV (`src/catalog-cron.ts`). It **never**
 auto-fixes or auto-removes a dead id, and it **never** overwrites a good
-previous report with a failed one — a network blip, a non-200, malformed
+previous report with a failed one: a network blip, a non-200, malformed
 JSON, or a suspiciously short model list (`< 50`, the real list has
 consistently been 300+) all leave KV exactly as it was, logging a
 `fetchError` instead of writing. Without that guard, one flaky fetch could
 report "every model is dead" to every client reading `/api/llm-catalog` until
-the next successful run. Curation stays human — this is the watchdog, not the
+the next successful run. Curation stays human: this is the watchdog, not the
 fix.
 
 **Two catalogs, spelled twice, on purpose.** `src/catalog-data.ts` (what to
 check) and `src/catalog-payload.ts` (what to serve) both live in this
-package, separate from the app's `src/lib/llm/catalog.ts` — same reasoning as
+package, separate from the app's `src/lib/llm/catalog.ts`, same reasoning as
 `MAX_UPLOAD_BYTES`/`VERSION_HEADER` in `routes.ts`: this is a standalone npm
 package with its own lockfile and no path into the app's `src/`, and the app
 catalog is explicitly "zero node imports" so it can ship in a browser bundle,
 a constraint this Worker doesn't share and shouldn't import into. A
 `test/catalog-drift.test.ts` guard keeps `catalog-data.ts` and
 `catalog-payload.ts` in sync WITH EACH OTHER; keeping either in sync with the
-app's `src/lib/llm/catalog.ts` is a **manual step** — re-run the sync
+app's `src/lib/llm/catalog.ts` is a **manual step**: re-run the sync
 whenever `MODEL_REGISTRY` changes there. Only models with a genuine
 public/key-free listing get a `checkAs` (Anthropic/OpenAI native ids via
 their OpenRouter mirror, OpenRouter slugs directly); CLI aliases, Ollama tags,
 DeepSeek's version-independent native aliases, and the LM Studio placeholder
-get `checkAs: null` and are never flagged — guessing a mapping heuristically
+get `checkAs: null` and are never flagged: guessing a mapping heuristically
 risked a false "dead" warning, and one false alarm is enough to make the
 mechanism untrusted.
 
 **Live-network discovery**: this vitest-pool-workers config permits real
-outbound `fetch` from the test runtime (no `outboundService` restriction) —
-confirmed empirically while writing the tests, an early version of the
+outbound `fetch` from the test runtime (no `outboundService` restriction),
+confirmed empirically while writing the tests; an early version of the
 scheduled-handler test wrongly assumed egress was blocked. The one test that
 exercises this (`test/catalog-route.test.ts`, "LIVE network, real
 OpenRouter") is gated behind `env.T058_LIVE_CHECK` (off by default via
@@ -66,7 +66,7 @@ and CI; flip the binding to `"1"` locally to re-run the live proof.
 ## Save-sync (T-047)
 
 `GET`/`PUT /api/save`, authed, key `saves/{userId}/latest.db` derived from the
-**session** — never from client input, so no user can address another's object.
+**session**, never from client input, so no user can address another's object.
 
 The backend is deliberately **format-blind**: it stores an opaque byte string
 plus an opaque version label. It never parses SQLite and never decides
@@ -78,15 +78,15 @@ re-applied on pull), which measured 17.5 MB → 8.6 MB on the owner's real DB.
 | --- | --- |
 | Size cap | 30 MB. `Content-Length` missing → **411**; over cap → **413**, decided *before* `request.body` is touched (no R2 write, no streaming). |
 | Lying `Content-Length` | Body streams through a `FixedLengthStream` pinned to the declared size. Overrunning it errors the write and the partial object is deleted. |
-| `schemaVersion` | Client-declared, stored in R2 `customMetadata`, echoed on GET as `x-lt-schema-version`. A GET declaring a different version is refused **409** — via `head()`, so no egress and, crucially, before the client overwrites local data. |
+| `schemaVersion` | Client-declared, stored in R2 `customMetadata`, echoed on GET as `x-lt-schema-version`. A GET declaring a different version is refused **409**, via `head()`, so no egress and, crucially, before the client overwrites local data. |
 | `updatedAt` | ISO timestamp in `customMetadata`, returned as `x-lt-updated-at`. Last-write-wins. |
-| `HEAD` | Metadata only — returns early **before** `get()`, so a "what is in the cloud?" check costs no egress. Without that early return the runtime would drop the body only after R2 had served every byte. |
+| `HEAD` | Metadata only, returns early **before** `get()`, so a "what is in the cloud?" check costs no egress. Without that early return the runtime would drop the body only after R2 had served every byte. |
 
 **Known hole in the server-side version gate, deliberately left:** the 409 fires
 only when the stored version is non-empty *and* the client declared one. A blob
 stored without a version (a T-045-era object, or a client that omits the header)
 is served unchecked. That is safe rather than lucky: the client validates again
-before swapping — `importBytes` → `validateSaveImage` refuses a wrong/absent
+before swapping: `importBytes` → `validateSaveImage` refuses a wrong/absent
 version, so an unloadable blob cannot replace live data. The server gate is
 defence in depth and an egress saver, not the only check.
 
@@ -96,12 +96,12 @@ buy cross-user queries that manual push/pull does not need.
 
 Why a `FixedLengthStream` rather than a counting `TransformStream`: R2's `put()`
 rejects a stream of unknown length, and `pipeThrough` erases it. The
-`TransformStream` variant broke *every* upload — caught by the suite, not by
+`TransformStream` variant broke *every* upload, caught by the suite, not by
 reasoning.
 
 `scripts/mint-dev-session.mjs` mints a signed session cookie against the local
 D1 so `curl` can exercise the authed routes without a real Google sign-in. Sign
-with better-auth's own `makeSignature` — it emits standard base64, and a
+with better-auth's own `makeSignature`: it emits standard base64, and a
 hand-rolled base64url signature silently resolves the session to `null`.
 
 ## Architecture
@@ -115,19 +115,20 @@ served by the runtime; `run_worker_first: ["/api/*"]` guarantees the API is
 never shadowed by a same-named asset and that asset requests never spend Worker
 CPU.
 
-GitHub Pages stays as an **anonymous-only mirror** — no login, no sync. Its
-workflow is untouched.
+> **No longer applies (amended 2026-07-27):** GitHub Pages was originally kept
+> as an anonymous-only mirror. The mirror and its `pages.yml` workflow were
+> removed on 2026-07-27; okumo.dev (this Worker) is now the only deploy.
 
 | File | Role |
 | --- | --- |
-| `src/index.ts` | Entry point. Splits `/api/*` (→ dispatcher) from assets. **No routing of its own** — a test enforces that. |
+| `src/index.ts` | Entry point. Splits `/api/*` (→ dispatcher) from assets. **No routing of its own**: a test enforces that. |
 | `src/routes.ts` | The route table: the complete API inventory. `auth: "required"` handlers take an `AuthedCtx` that *contains* a session. |
 | `src/dispatch.ts` | One pipeline: route lookup → origin gate → session → handler. Never touches `request.body`. |
 | `src/origin.ts` | Origin allowlist + CORS/preflight. Parses `TRUSTED_ORIGINS` once. |
 | `src/auth-options.ts` | The shared better-auth option fragment (binding-free). |
 | `src/auth.ts` | better-auth instance, built per-request-scope, memoized per isolate. |
 | `schema-gen.config.ts` | Node-only config for `@better-auth/cli generate`. |
-| `test/` | The auth gate — see below. |
+| `test/` | The auth gate, see below. |
 
 ### Auth-before-execute is structural, not a convention
 
@@ -135,7 +136,7 @@ T-039's bug was "the handler ran before the auth check". Here that is
 unrepresentable: an authenticated handler's context type includes a resolved
 `session`, so it cannot be *called* without one. The dispatcher resolves the
 session before the handler is reachable, and no body is read before that.
-T-047's save routes inherit the property by construction — they just join the
+T-047's save routes inherit the property by construction: they just join the
 table.
 
 ### Origin posture
@@ -149,14 +150,14 @@ table.
   (`*` is invalid with credentials). `Vary: Origin` on everything.
 - The `/api/auth/*` exemption is narrow: **only the OAuth handshake**
   (`callback/*`, `sign-in/social`, `oauth2/*`) and **only for non-OPTIONS
-  methods**. Those genuinely are cross-site — Google redirects the user to the
-  callback — and better-auth guards them itself using the *same parsed list*.
+  methods**. Those genuinely are cross-site: Google redirects the user to the
+  callback, and better-auth guards them itself using the *same parsed list*.
   Everything else under `/api/auth/*` (notably `sign-out`) gets the full
   allowlist check. Two footguns closed here, both measured:
   - OPTIONS was originally exempt too, so preflights 404'd (better-auth's router
     does not answer OPTIONS) and browsers would have blocked the real request.
   - A cross-site `POST /api/auth/sign-out` from `evil.example` returned 200 and
-    cleared the session cookies — forced-sign-out CSRF. Nuisance-grade (no data
+    cleared the session cookies: forced-sign-out CSRF. Nuisance-grade (no data
     access), now 403.
 
 Dev note: `localhost:3000` → `localhost:8787` is cross-**origin** (so it needs
@@ -175,7 +176,7 @@ Verified behaviour of the same option set:
 
 Note the **name changes** on https (better-auth adds the `__Secure-` prefix).
 Anything reading the cookie by name must read
-`ctx.authCookies.sessionToken.name` rather than hardcoding it —
+`ctx.authCookies.sessionToken.name` rather than hardcoding it;
 `test/helpers/session.ts` does.
 
 ## Run it locally
@@ -188,7 +189,7 @@ npm run migrate:local     # applies migrations to local D1
 npm run dev               # wrangler dev on :8787
 ```
 
-`wrangler dev` and `wrangler d1 execute --local` are fully offline — miniflare
+`wrangler dev` and `wrangler d1 execute --local` are fully offline: miniflare
 simulates D1 and R2. Do **not** run `wrangler d1 create` / `r2 bucket create`
 locally; those need an authenticated account and are owner-only deploy steps.
 
@@ -212,7 +213,7 @@ shape does not transfer to a single-dispatcher Worker, so this gate is instead a
 - an unauthenticated `PUT /api/save` leaves **R2 unchanged** (criterion 3
   verified, not asserted);
 - forged/garbage session cookies are rejected (the HMAC is really checked);
-- `src/index.ts` contains no path matching — i.e. nobody can add a route that
+- `src/index.ts` contains no path matching, i.e. nobody can add a route that
   bypasses the table.
 
 Adding an unauthenticated mutating route fails the first two; adding one
@@ -221,14 +222,14 @@ shipping.
 
 `test/set-cookie.test.ts` guards the one path that **cannot** be exercised
 locally. The dispatcher re-wraps every response to attach CORS headers, and a
-`Headers` copy can collapse multiple `Set-Cookie` values into one — which would
+`Headers` copy can collapse multiple `Set-Cookie` values into one, which would
 silently break the real Google callback (the response most likely to carry two).
 Verified it does not.
 
 **Sessions in tests** are minted through better-auth's internal adapter with a
 hand-signed cookie (`test/helpers/session.ts`), because Google is the only
 provider and there is deliberately **no** signup endpoint to call. Test-only
-secrets live in `vitest.config.ts`, which `wrangler deploy` never reads — so
+secrets live in `vitest.config.ts`, which `wrangler deploy` never reads, so
 test configuration cannot reach production. The suite passes with `.dev.vars`
 absent (verified), so it works on a fresh clone.
 
@@ -236,32 +237,32 @@ absent (verified), so it works on a fresh clone.
 
 | Check | Result |
 | --- | --- |
-| `GET /` (static asset) | `200 text/html` — same origin as the API |
+| `GET /` (static asset) | `200 text/html`, same origin as the API |
 | `GET /api/health` no Origin | `200 {"ok":true}`, no CORS headers needed |
 | `PUT /api/save` Origin `evil.example` | `403 origin_not_allowed` |
 | `PUT /api/save` no Origin | `403 origin_required` |
 | `OPTIONS /api/save` from `evil.example` | `403`, **no** `Allow-Origin` header |
 | `OPTIONS /api/save` from `localhost:3000` | `204` + exact origin + `Allow-Credentials` |
-| `OPTIONS /api/auth/sign-in/social` from `localhost:3000` | `204` (was `404` — fixed) |
+| `OPTIONS /api/auth/sign-in/social` from `localhost:3000` | `204` (was `404`, fixed) |
 | `POST /api/auth/sign-in/social` from `localhost:3000` (cross-origin) | `200` + `Allow-Origin: http://localhost:3000` |
-| `POST /api/auth/sign-out` from `evil.example` | `403` (was `200` + cookies cleared — fixed) |
+| `POST /api/auth/sign-out` from `evil.example` | `403` (was `200` + cookies cleared, fixed) |
 | `POST /api/auth/sign-out` same-origin | `200`, two `Set-Cookie` headers preserved |
 | `PUT /api/save` allowed origin, **no session** | `401` |
-| R2 after those rejected PUTs | **empty** — no side effect |
+| R2 after those rejected PUTs | **empty**, no side effect |
 | `GET /api/auth/get-session` w/ signed cookie | session + user resolved from D1 |
 | `PUT`/`GET /api/save` w/ session | round-trips; key `saves/<userId>/latest.db` |
-| second user `GET /api/save` | `404` on **its own** key — never user A's blob |
+| second user `GET /api/save` | `404` on **its own** key, never user A's blob |
 | **T-047** `PUT` real 8.55 MB stripped blob | `200`, `bytes: 8962048` |
 | `GET` it back | **byte-identical** (same SHA-256), `content-length` + version/updatedAt headers |
 | `GET` declaring version 8 vs stored 7 | `409 save_version_mismatch` |
 | `PUT` 35 MB body (cap 30 MB) | `413 too_large`; the stored save is **unchanged** (hash re-verified) |
 | `PUT` chunked, no `Content-Length` | `411 length_required` |
-| unauthed `PUT` then re-`GET` | `401`, stored blob byte-identical — no side effect |
+| unauthed `PUT` then re-`GET` | `401`, stored blob byte-identical, no side effect |
 | pulled blob | `PRAGMA integrity_check` = ok, 3 profiles, 554 grammar rows `pending` (awaiting CDN refill) |
 | `POST /api/auth/sign-up/email` | `400 EMAIL_PASSWORD_SIGN_UP_DISABLED` |
-| `POST /api/auth/sign-in/magic-link` | `404` — plugin removed |
+| `POST /api/auth/sign-in/magic-link` | `404`, plugin removed |
 | `POST /api/auth/sign-in/social` (google) | `200` → `accounts.google.com` with `state` + PKCE `code_challenge` |
-| `GET /api/auth/callback/google` | `302` — reaches better-auth, not blocked by our gate |
+| `GET /api/auth/callback/google` | `302`, reaches better-auth, not blocked by our gate |
 | Set-Cookie on http dev | `HttpOnly; SameSite=Lax`, no `Secure` (correct for http) |
 
 **Not verified here (blocked on owner setup):** a real Google sign-in roundtrip
@@ -275,7 +276,7 @@ not automated.
 Production lives in the `env.production` block of `wrangler.jsonc`: worker name
 `okumo`, custom domain **okumo.dev** (bought via Cloudflare Registrar, zone on
 this account), `../out` assets, prod origins. The top-level block stays
-localhost/placeholder — it is what `wrangler dev` and the test suite read.
+localhost/placeholder: it is what `wrangler dev` and the test suite read.
 
 1. **Create resources** and paste the printed D1 id into the `env.production`
    d1 block (replacing the all-zeros placeholder):
@@ -297,7 +298,7 @@ localhost/placeholder — it is what `wrangler dev` and the test suite read.
    https://okumo.dev/api/auth/callback/google
    http://localhost:8787/api/auth/callback/google
    ```
-   (Verified path — it is what the sign-in redirect actually requests.)
+   (Verified path: it is what the sign-in redirect actually requests.)
 4. **Static assets.** `env.production` points at `../out`. Build it at the repo
    root with a plain `npm run build:static`, **without** `NEXT_PUBLIC_BASE_PATH`.
    Nothing sets that variable anymore (the GitHub Pages workflow that did was
@@ -310,7 +311,7 @@ localhost/placeholder — it is what `wrangler dev` and the test suite read.
    ```
    Optional in the sense that `GET /api/llm-catalog` still serves fine with
    the placeholder (empty `staleWarnings`, `readStoredReport` treats a
-   missing/broken binding as "no warnings yet") — but the cron's KV **write**
+   missing/broken binding as "no warnings yet"), but the cron's KV **write**
    needs the real namespace to persist anything, so do this before relying on
    the weekly check. No further activation step: `triggers.crons` in
    `wrangler.jsonc` is picked up on deploy; confirm it took by checking the
@@ -331,6 +332,6 @@ localhost/placeholder — it is what `wrangler dev` and the test suite read.
   migration. `verification` is core OAuth-state (not magic-link) and
   `account.password` is unconditional, so `0001` is unchanged.
 - better-auth registers the email endpoints unconditionally and refuses at
-  runtime when disabled — hence `400 EMAIL_PASSWORD_SIGN_UP_DISABLED`, not
+  runtime when disabled, hence `400 EMAIL_PASSWORD_SIGN_UP_DISABLED`, not
   `404`. The test asserts that error code, so re-enabling the provider breaks
   the suite.

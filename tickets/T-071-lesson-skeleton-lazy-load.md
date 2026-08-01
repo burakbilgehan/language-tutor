@@ -1,6 +1,6 @@
 ---
 id: T-071
-title: Ders üretimini böl — hızlı iskelet + arkadan tamamlanan egzersizler (lazy load)
+title: Split lesson generation: a fast skeleton + exercises completed in the background (lazy load)
 status: todo
 priority: p1
 effort: L
@@ -9,45 +9,29 @@ depends: []
 created: 2026-08-01
 ---
 
-## Sorun
+## Problem
 
-Tek Sonnet çağrısı tüm dersi (anlatım + örnekler + 10+ egzersiz + kabul
-varyantları, 6-9k karakter) tek seferde üretiyor: 90-190s, kuyrukta 180s+
-kuyruklu vakalar. Kullanıcı algısı (2026-08-01, Burak): "187 saniyede biten
-ders gayet küçük içerik; 3+ dk beklemek anlamsız." Prefetch bu süreyi
-gizliyor ama ilk açılışta ve pencere boşken çıplak yaşanıyor.
+A single Sonnet call generates the whole lesson (explanation + examples + 10+ exercises + accepted-answer variants, 6-9k characters) in one shot: 90-190s, with queued cases hitting 180s+. User perception (2026-08-01, Burak): "a lesson that takes 187 seconds is pretty small content; waiting 3+ minutes doesn't make sense." Prefetch hides this duration, but it's felt raw on first open and whenever the window is empty.
 
-## Onaylı yön (Burak, 2026-08-01)
+## Approved direction (Burak, 2026-08-01)
 
-İki aşamalı üretim; HEM kullanıcı açılışında HEM prefetch'te aynı bölünme:
+Two-stage generation; the same split applies BOTH on user open AND on prefetch:
 
-1. **İskelet çağrısı** (hızlı, hedef 30-40s): ders başlığı/anlatım/örnekler
-   + ilk ~3 egzersiz. Bu döndüğü an ders AÇILIR; kullanıcı çalışmaya başlar.
-2. **Tamamlama çağrısı** (arkada): kalan egzersizler + kabul varyantları.
-   Bittiğinde derse eklenir; kullanıcı 3. egzersizi bitirmeden hazırsa
-   dikişsiz, değilse egzersiz listesi sonunda "hazırlanıyor" placeholder'ı.
+1. **Skeleton call** (fast, target 30-40s): lesson title/explanation/examples
+   + the first ~3 exercises. The moment this returns, the lesson OPENS; the user starts working.
+2. **Completion call** (in the background): the remaining exercises + accepted-answer variants. Once done, it's appended to the lesson; seamless if the user isn't done with exercise 3 yet, otherwise a "preparing more" placeholder at the end of the exercise list.
 
-Prefetch'te de iki parça sırayla üretilir (iskelet önce: pencere iki dersin
-İSKELETİNİ, sonra tamamlamalarını çeksin — en kötü durumda bile sıradaki
-ders "açılabilir" durumda olur).
+In prefetch, the two pieces are also generated in sequence (skeleton first: the window should pull both lessons' SKELETONS before their completions - so even in the worst case, the next lesson is at least "openable").
 
-## Tasarım soruları (implementasyondan önce karara bağla)
+## Design questions (decide before implementing)
 
-- İçerik şeması: `LessonContent`'e kısmi durum eklemek SAVE_SCHEMA_VERSION
-  bump'ı GEREKTİRMEMELİ. Aday: content map'inde `exercises` + opsiyonel
-  `pendingExercises: true` bayrağı (zod'da optional alan = eski kayıtlar
-  geçerli kalır); tamamlama çağrısı bayrağı düşürür.
-- İki çağrı = iki prompt: tamamlama çağrısı iskeletin egzersizlerini görmeli
-  (tekrar/çakışma olmasın), ama tüm anlatımı yeniden üretMEmeli.
-- Kesinti: iskelet var + tamamlama öldü → ders açılır, egzersiz listesi
-  sonunda retry butonu (T-070 error yüzeyi deseni). Pencere invariant'ı
-  "iskeleti olan ders" ile "tam ders"i ayırt etmeli mi? (öneri: hedef listesi
-  önce iskeletsizler, sonra tamamlanmamışlar.)
-- Maliyet: çağrı sayısı 2x ama toplam token benzer; kuyruk baskısı için
-  tamamlama çağrıları her zaman urgent'sız.
+- Content schema: adding partial state to `LessonContent` must NOT require a SAVE_SCHEMA_VERSION bump. Candidate: an `exercises` map plus an optional `pendingExercises: true` flag (an optional zod field keeps old records valid); the completion call clears the flag.
+- Two calls = two prompts: the completion call must see the skeleton's exercises
+  (to avoid repeats/overlap), but must NOT regenerate the whole explanation.
+- Interruption: skeleton exists + completion dies -> the lesson still opens, with a retry button at the end of the exercise list (the T-070 error-surface pattern). Should the window invariant distinguish "has a skeleton" from "fully complete"? (suggestion: target list prioritizes skeleton-less lessons first, then incomplete ones.)
+- Cost: call count doubles, but total tokens are similar; to ease queue pressure, completion calls are always non-urgent.
 
-## Kapsam dışı
+## Out of scope
 
-- Streaming/SSE (zod bütün-doğrulama modeliyle uyumsuz; bu ticket çağrı
-  bölme ile çözüyor).
-- Grammar/kanji/vocab üretimleri (zaten küçük ve tek parça).
+- Streaming/SSE (incompatible with the whole-document zod validation model; this ticket solves it via call-splitting instead).
+- Grammar/kanji/vocab generation (already small and single-shot).

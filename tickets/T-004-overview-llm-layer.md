@@ -1,6 +1,6 @@
 ---
 id: T-004
-title: Floating overview'a LLM yorum katmanı
+title: LLM commentary layer for the floating overview
 status: backlog
 priority: p3
 effort: S
@@ -8,8 +8,8 @@ confidence: medium
 depends: []
 created: 2026-07-17
 ---
-Panel v1 tamamen deterministik (ilerleme, tempo, projeksiyon, SRS,
-struggles). Eksik: haftada bir üretilip cache'lenen kısa LLM yorumu —
-gidişat değerlendirmesi + kişisel öneri ("particle'larda zorlanıyorsun,
-şu grammar konusuna bak"). Cache için küçük tablo ya da profiles kolonu
-(SAVE bump gerekir); fast tier, haftada 1 çağrı.
+Panel v1 is fully deterministic (progress, pace, projection, SRS, struggles).
+Missing: a short LLM commentary generated and cached weekly, an assessment of
+progress plus a personal suggestion ("you're struggling with particles, check
+out this grammar topic"). Needs a small table or a profiles column for the
+cache (requires a SAVE bump); fast tier, one call per week.

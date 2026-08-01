@@ -1,6 +1,6 @@
 ---
 id: T-011
-title: Mevcut nl/zh profillerine yan görev backfill
+title: Side-quest backfill for existing nl/zh profiles
 status: wontfix
 priority: p2
 effort: S
@@ -8,18 +8,20 @@ confidence: high
 depends: []
 created: 2026-07-18
 ---
-Bug (parity testi ortaya çıkardı, 2026-07-18'de kökü düzeltildi): chapter
-üretimindeki "yan görevler bir kez oluşturulur" kontrolü curriculum'a değil
-TÜM nodes tablosuna bakıyordu — ja profilinin 5 görevi nl ve zh
-profillerinde görev oluşumunu bastırdı. `src/core/curriculum-gen.ts`
-artık curriculum-scoped bakıyor; YENİ profiller görevlerini alıyor.
+Bug (surfaced by a parity test, root-caused on 2026-07-18): the "side quests
+are only created once" check during chapter generation looked at the ENTIRE
+nodes table instead of the curriculum, so the ja profile's 5 quests suppressed
+quest creation on the nl and zh profiles. `src/core/curriculum-gen.ts` now
+scopes the check to the curriculum; NEW profiles get their quests.
 
-Kalan: mevcut nl/zh profillerinde hâlâ 0 yan görev var ve append akışı
-`isFirst` olmadığı için geriye dönük oluşturmuyor. Backfill gerek:
-ya lazy self-heal (roadmap açılışında curriculum'da hiç side_quest yoksa
-ilk chapter için LLM'den üret) ya da tek seferlik script. Self-heal
-tercih — save import edilen eski kayıtları da düzeltir. LLM çağrısı
-gerektirdiği için llmConfigured gate + job dedupe şart.
+Remaining: existing nl/zh profiles still have 0 side quests, and since the
+append flow isn't `isFirst`, it doesn't retroactively create them. Needs a
+backfill: either a lazy self-heal (on roadmap open, if the curriculum has no
+side_quest at all, generate one for the first chapter via the LLM) or a
+one-off script. Self-heal is preferred, it also fixes older records restored
+via save import. Requires an llmConfigured gate + job dedupe since it needs an
+LLM call.
 
-**wontfix (2026-07-18)**: Side quest özelliği tamamen kaldırılıyor (T-018,
-kullanıcı kararı) — backfill anlamsızlaştı.
+**wontfix (2026-07-18)**: the side quest feature is being removed entirely
+(T-018, user decision). No longer applies; superseded by
+[T-018](T-018-remove-side-quests.md). The backfill became moot.

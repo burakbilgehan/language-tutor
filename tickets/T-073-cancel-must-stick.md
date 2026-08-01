@@ -1,6 +1,6 @@
 ---
 id: T-073
-title: Vazgeç kalıcı olmalı — iptal edilen ders otomatik yeniden üretilmesin
+title: Cancel must stick: a canceled lesson must not auto-regenerate
 status: todo
 priority: p1
 effort: S
@@ -9,41 +9,29 @@ depends: []
 created: 2026-08-01
 ---
 
-## Olay (2026-08-01 canlı)
+## Incident (2026-08-01, live)
 
-Kullanıcı "hazırlanıyor" ekranında Vazgeç'e bastı; panel kapandı ve AYNI
-SANİYE yeni bir üretim başladı (köprü logu: 16:10:13 iptal + 16:10:13 istek,
-aynı job id). Kullanıcının açık iptali hiçe sayılıyor.
+The user hit Cancel on the "preparing" screen; the panel closed and a new generation started THE SAME SECOND (bridge log: 16:10:13 cancel + 16:10:13 request, same job id). The user's explicit cancel is being ignored.
 
-## Kök neden (kod okumasıyla doğrulandı)
+## Root cause (confirmed by reading the code)
 
-1. `LessonPlayer.tsx` "generating" durumunda 3 sn'de bir `open()` poll'u
-   kurar (satır ~271). Vazgeç iptal edip satırı "pending"e döndürünce,
-   kurulu poll bir sonraki atışında `openNodeApi` → `needsGeneration` →
-   `ensureLessonGen(urgent)` ile üretimi YENİDEN başlatır.
-2. `client-api.ts openNodeApi`: "cancelled ise üretme" kontrolü
-   `await ensureLessonGen`'den SONRA duruyor (satır ~1182) — iş işten geçmiş
-   oluyor. Store'daki "cancelled" kaydı `running` olmadığı için
-   `startLessonGen` yeni üretime izin veriyor.
-3. `open()` unmount sonrası da çalışıyor: `stopped.current` yalnız
-   `setData`'yı gate'liyor, `openNodeApi` çağrısını (yan etkili!) değil.
+1. `LessonPlayer.tsx` sets up an `open()` poll every 3s while "generating" (around line
+   271). When Cancel reverts the row to "pending", the poll's next tick hits `openNodeApi` -> `needsGeneration` -> `ensureLessonGen(urgent)`, restarting generation.
+2. `client-api.ts openNodeApi`: the "don't generate if cancelled" check sits
+   AFTER `await ensureLessonGen` (around line ~1182) - by then it's too late. The store's "cancelled" record isn't `running`, so `startLessonGen` allows a new generation.
+3. `open()` still runs after unmount: `stopped.current` only gates `setData`,
+   not the (side-effecting!) `openNodeApi` call itself.
 
-## İstenen davranış
+## Desired behavior
 
-- BİLE İSTEYE iptal edilen ders o OTURUMDA hiçbir otomatik yoldan (poll,
-  T-068 penceresi, harita açılış tetiği) yeniden üretilmez. Yeniden üretim
-  yalnız kullanıcının açık eylemi (dersi tekrar açmak / tekrar dene).
-  Not: pencere hedef filtresi (`runLessonWindow` içindeki cancelled skip)
-  zaten var; eksik olan openNodeApi + poll katmanları.
-- Ders BİTİRİNCE yeni açılan node'lara otomatik prefetch atılması DOĞRU
-  davranış, korunacak (`completeNodeApi` → runLessonWindow zinciri).
+- A DELIBERATELY canceled lesson must not be regenerated automatically through
+  ANY path (poll, the T-068 window, the map open trigger) during that SESSION. Regeneration only happens through an explicit user action (reopening the lesson / retry). Note: the window's target filter (the cancelled skip inside `runLessonWindow`) already exists; what's missing is the openNodeApi + poll layers.
+- Auto-prefetch firing on newly opened nodes right after finishing a lesson is
+  CORRECT behavior and stays as is (`completeNodeApi` -> the runLessonWindow chain).
 
-## Düzeltme krokisi (basit tutulmalı)
+## Fix sketch (keep it simple)
 
-- `openNodeApi` needsGeneration dalında `lessonGenState(nodeId)?.kind ===
-  "cancelled"` kontrolü ensureLessonGen'den ÖNCEYE; cancelled ise üretim
-  başlatmadan `{status:"generating"}` yerine iptali temsil eden sonuç dön
-  (çağıran haritaya dönüyor zaten).
-- `open()` poll callback'i: `stopped.current` VEYA store "cancelled" ise
-  openNodeApi'yi hiç çağırmadan çık; unmount cleanup'ında bekleyen
-  setTimeout temizlensin.
+- In `openNodeApi`'s needsGeneration branch, move the
+  `lessonGenState(nodeId)?.kind === "cancelled"` check to BEFORE ensureLessonGen; if cancelled, return a result representing the cancellation without starting generation, instead of `{status:"generating"}` (the caller already returns it to the map).
+- The `open()` poll callback: if `stopped.current` OR the store says "cancelled",
+  bail out without ever calling openNodeApi; clear any pending setTimeout in the unmount cleanup.

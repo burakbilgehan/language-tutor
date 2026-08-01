@@ -1,6 +1,6 @@
 ---
 id: T-076
-title: Soru metni (promptTr) furigana render'ından geçmiyor — ham parantez görünüyor
+title: Question text (promptTr) skips furigana rendering: raw brackets show through
 status: todo
 priority: p2
 effort: S
@@ -9,23 +9,17 @@ depends: []
 created: 2026-08-01
 ---
 
-## Sorun
+## Problem
 
-Köşeli parantez notasyonu (漢字[かんじ]) TEL formatı; UI'da `Furigana`
-bileşeni ruby olarak kanjinin üstüne basıyor. Tasarım doğru (hizalama
-problemi: ayrı okunuş alanı istemcide morfolojik analiz gerektirirdi;
-Anki'nin de kullandığı yaklaşım). AMA `LessonPlayer.tsx:692` soru metnini
-(`exercise.promptTr`) Furigana'dan geçirmeden HAM basıyor: içinde Japonca
-parça olan sorularda (「母」の 読[よ]み方[かた]は...) kullanıcı parantezleri
-ekranda görüyor (2026-08-01 şikayeti).
+Bracket notation (漢字[かんじ]) is the WIRE format; in the UI, the `Furigana`
+component renders it as ruby text above the kanji. The design is correct (an alignment problem: a separate reading field would require client-side morphological analysis; this is also the approach Anki uses). BUT `LessonPlayer.tsx:692` renders the question text
+(`exercise.promptTr`) RAW without passing it through Furigana: on questions containing a Japanese fragment (「母」の 読[よ]み方[かた]は...), the user sees the brackets on screen (2026-08-01 complaint).
 
-## İş
+## Work
 
-1. `promptTr`'yi `Furigana` render'ından geçir (cjkLang zaten bileşende
-   mevcut; hedef dil ja/zh değilse Furigana no-op olmalı).
-2. Tek turlu audit: LLM'den gelen ve parantez içerebilecek metin basan TÜM
-   yüzeyler (SrsSession kart yüzleri, review practice, chat, selfCheck,
-   fill_blank boşluklu cümle, feedback) Furigana'dan geçiyor mu?
-   Geçmeyenler listelenip aynı PR'da düzeltilir.
-3. Grading tarafına dokunulmaz: answers.ts'in simetrik bracket strip'i
-   (T-044) davranışı değişmemeli.
+1. Pass `promptTr` through `Furigana` rendering (cjkLang is already available
+   in the component; Furigana should be a no-op when the target language isn't ja/zh).
+2. One-pass audit: check every surface that renders LLM-sourced text that might
+   contain brackets (SRS card faces, review practice, chat, selfCheck, the fill_blank gapped sentence, feedback) - do they all go through Furigana? List the ones that don't and fix them in the same PR.
+3. Don't touch the grading side: answers.ts's symmetric bracket-stripping
+   (T-044) behavior must not change.

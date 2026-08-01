@@ -1,6 +1,6 @@
 ---
 id: T-040
-title: Server modu env-token auth gate (public'e açılmadan önce blocker)
+title: Server-mode env-token auth gate (blocker before going public)
 status: done
 priority: p1
 effort: M
@@ -8,86 +8,96 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-**Kapsam daraltıldı (2026-07-26):** Bu ticket = env-token gate (proportionate
-kapanış). Gerçek multi-tenant izolasyon (per-user DB / profil sahipliği,
-job IDOR tenant'laşması) → **T-043**'e ayrıldı (monetization modeline gate'li,
-XL, ertelendi). Env-token gate her public-pivot şeklinde doğru; multi-tenant
-temeli bugün gereksiz over-build.
+**Scope narrowed (2026-07-26):** This ticket = the env-token gate
+(proportionate closure). Real multi-tenant isolation (per-user DB /
+profile ownership, tenanting the job IDOR) -> split off to **T-043**
+(gated on the monetization model, XL, deferred). An env-token gate is the
+correct move for any public pivot shape; a multi-tenant foundation would
+be needless over-build today.
 
 
-T-026 dalga 5 bulgusu. **Tehdit çerçevesi B (public/monetize eşiği)** —
-bugün exploit DEĞİL (canlı deploy statik/Pages, `/api/*` route'ları
-`build-static.mjs:15` ile stash'leniyor; server modu localhost tek-kullanıcı).
-**Ama server modu localhost dışına açıldığı an blocker.** Bulgu
-fable-verifier'dan geçti. **Verdict: CONFIRMED (mekanizma), urgency
-statik-deploy gerçeğiyle sınırlı.**
+T-026 wave 5 finding. **Threat frame B (public/monetize threshold)**;
+not exploitable today (the live deploy is static/Pages, `/api/*` routes
+are stripped by `build-static.mjs:15`; server mode is localhost
+single-user). **But the moment server mode opens beyond localhost, it's
+a blocker.** The finding passed fable-verifier. **Verdict: CONFIRMED
+(mechanism), urgency limited by the reality of the static deploy.**
 
-Kök neden: hiçbir server route'unda auth yok (repo'da `middleware.ts` yok,
-`getServerSession`/`cookies`/`requireAuth` primitifi yok) ve tek global DB
-(`src/db/index.ts` DB_PATH, per-user tenant yok — multi-*profile* hepsi
-owner'a ait, multi-*tenant* değil). En keskin iki route:
-- **GET /api/save/export** (`src/app/api/save/export/route.ts:5`): auth'suz
-  istek tüm `data/app.db`'yi (her profil, tüm ilerleme) döndürür — komple
-  exfiltration.
-- **POST /api/save/import** (`src/app/api/save/import/route.ts`): auth'suz
-  istek paylaşılan DB'yi herkes için değiştirir (`import.ts:97`
-  tmp→DB_PATH rename). S1'in (kötücül import trigger'ı) yazma yarısı.
+Root cause: no server route has auth (no `middleware.ts` in the repo, no
+`getServerSession`/`cookies`/`requireAuth` primitive) and there's a
+single global DB (`src/db/index.ts` DB_PATH, no per-user tenancy; all
+multi-*profile* belongs to the owner, not multi-*tenant*). The two
+sharpest routes:
+- **GET /api/save/export** (`src/app/api/save/export/route.ts:5`): an
+  unauthenticated request returns the entire `data/app.db` (every
+  profile, all progress); full exfiltration.
+- **POST /api/save/import** (`src/app/api/save/import/route.ts`): an
+  unauthenticated request mutates the shared DB for everyone
+  (`import.ts:97` tmp->DB_PATH rename). The write half of S1 (a
+  malicious import trigger).
 
-Ama sorun bu iki route'la sınırlı değil: her mutating/LLM route'u
-(curriculum generate, grammar/kanji/vocab batch, chat, translate) auth'suz
-→ açıldığında kota yakma + veri erişimi. Bu, T-026'nın öngördüğü "auth
-katmanı gibi büyük iş ayrı ticket" kalemi.
+But the problem isn't limited to these two routes: every mutating/LLM
+route (curriculum generate, grammar/kanji/vocab batch, chat, translate)
+is unauthenticated -> once open, quota-burn + data access. This is the
+"an auth layer is a big enough item for its own ticket" item T-026
+anticipated.
 
-Repo'nun kendi kodu bu senaryoyu meşrulaştırıyor: `src/lib/llm/config.ts:31-35`
-`cliAllowed()`/`LLM_CLI_DISABLED` tam da "hosted instance owner'ın Max
-sub'ını yakamasın" için var — yani yazar guest-erişimli server deploy'u
-öngörüyor. Ama `LLM_CLI_DISABLED` YALNIZ CLI-provider construction'ı
-gate'liyor (config.ts:34), `/api/save/*` veya diğer route'lar için hiçbir
-şey yapmıyor. Auth boşluğu sahipsiz (README'de operatöre "auth ekle"
-yönlendirmesi de yok).
+The repo's own code justifies this scenario:
+`src/lib/llm/config.ts:31-35`'s `cliAllowed()`/`LLM_CLI_DISABLED` exists
+exactly so "a hosted instance's guests can't burn the owner's Max sub";
+meaning the author was already anticipating a guest-accessible server
+deploy. But `LLM_CLI_DISABLED` ONLY gates CLI-provider construction
+(config.ts:34), it does nothing for `/api/save/*` or other routes. The
+auth gap is unowned (the README doesn't even point the operator to "add
+auth").
 
-Önerilen yön: server modu için minimum bir kimlik katmanı — ör. env
-tabanlı tek-token (`APP_AUTH_TOKEN`) + tüm mutating/exfil route'larını saran
-`requireAuth()` middleware; ya da tam multi-tenant (per-user DB / profil
-sahipliği) eğer monetize gerçek multi-user olacaksa. Karar public pivot'un
-şekline bağlı. Kapsam büyük → alt-parçalara bölünebilir (route envanteri →
-token gate → tenant izolasyonu).
+Suggested direction: a minimal identity layer for server mode; e.g. an
+env-based single token (`APP_AUTH_TOKEN`) + a `requireAuth()` middleware
+wrapping all mutating/exfil routes; or full multi-tenancy (per-user DB /
+profile ownership) if monetization becomes real multi-user. The decision
+depends on the shape of the public pivot. Large scope -> can be split
+into sub-parts (route inventory -> token gate -> tenant isolation).
 
-Defense-in-depth rider'ları (bu ticket'la beraber ucuz): **S2** — server
-import'a magic-header ön-kontrolü ekle (`save-image.ts:63` browser'da var,
-server'da yok; near-noise ama ucuz). Job route IDOR'u (T-034, `core/jobs.ts:78`
-"NO profile scoping") bu ticket kapsamında tenant'laşmalı.
+Defense-in-depth riders (cheap alongside this ticket): **S2**; add a
+magic-header pre-check to server import (`save-image.ts:63` has it in the
+browser, not on the server; near-noise but cheap). The job route IDOR
+(T-034, `core/jobs.ts:78` "NO profile scoping") should be tenanted within
+this ticket's scope.
 
 ---
 
-**Kapanış (2026-07-26):** Env-token gate shipped.
+**Closing (2026-07-26):** Env-token gate shipped.
 
-- `src/lib/auth.ts` — `requireAuth(req)` guard (`requireLlm()` şekli/stilinde,
-  401 + stabil `unauthorized` kodu), `APP_AUTH_TOKEN` ile sürülüyor. Token
-  `Authorization: Bearer` VEYA `lt_auth` cookie ile sunulabilir.
-  Karşılaştırma SHA-256 digest üzerinden `timingSafeEqual` (constant-time; ham
-  buffer karşılaştırması uzunluk farkında throw eder, çıplak uzunluk kontrolü
-  de uzunluk sızdırır).
-- **APP_AUTH_TOKEN unset/boş → tam no-op.** localhost tek-kullanıcı akışı
-  birebir aynı; canlı doğrulandı (export 18MB döndü, PATCH profile, stats,
-  fixture LLM route hepsi 200; `/api/auth` gate kapalıyken 404 = inert).
-- `GET /api/auth?token=…` cookie bootstrap. Cookie opsiyonel değil zorunlu:
-  save export `window.location.href` navigasyonu (client-api.ts:562), header
-  taşıyamaz. HttpOnly + SameSite=**Strict** (Lax değil — cookie mutating
-  route'ları da yetkilendiriyor, cross-site POST /api/save/import cookie
-  taşımamalı; T-039'un savaştığı CSRF sınıfı) + Path=/ + Secure yalnız https
-  (aksi halde http://localhost kırılırdı).
-- `GET /api/health/llm` (üç boolean, client gating) ve
-  `GET /api/strokes/[char]` (vendored public stroke dataset) hariç TÜM route
-  method'ları gate'li. `requireAuth` her handler'da İLK ifade — `requireLlm()`
-  ve `req.json()/formData()` öncesi (yoksa auth'suz çağrı 100MB upload parse
-  ettirir ve LLM yapılandırılmış mı bilgisini sızdırır).
-- `src/lib/auth.test.ts` sweep'i **invariant'a çeviriyor**: her
-  `src/app/api/**/route.ts` yürünüyor, gate'siz method suite'i düşürüyor
-  (negatif kontrolle doğrulandı). Yeni route sessizce gate'siz shipleyemez.
+- `src/lib/auth.ts`; a `requireAuth(req)` guard (in the shape/style of
+  `requireLlm()`, 401 + a stable `unauthorized` code), driven by
+  `APP_AUTH_TOKEN`. The token can be presented via `Authorization: Bearer`
+  OR the `lt_auth` cookie. Comparison via `timingSafeEqual` over a
+  SHA-256 digest (constant-time; comparing raw buffers throws on a length
+  mismatch, and a bare length check also leaks length).
+- **APP_AUTH_TOKEN unset/empty -> complete no-op.** The localhost
+  single-user flow is byte-for-byte identical; verified live (export
+  returned 18MB, PATCH profile, stats, fixture LLM route all 200;
+  `/api/auth` 404s while the gate is off = inert).
+- `GET /api/auth?token=…` bootstraps the cookie. The cookie isn't
+  optional, it's mandatory: save export navigates via
+  `window.location.href` (client-api.ts:562), which can't carry a header.
+  HttpOnly + SameSite=**Strict** (not Lax; the cookie also authorizes
+  mutating routes, a cross-site POST /api/save/import shouldn't carry the
+  cookie; the CSRF class T-039 fights) + Path=/ + Secure only on https
+  (otherwise it would break http://localhost).
+- ALL route methods are gated except `GET /api/health/llm` (three
+  booleans, client gating) and `GET /api/strokes/[char]` (vendored public
+  stroke dataset). `requireAuth` is the FIRST statement in every handler;
+  before `requireLlm()` and before `req.json()/formData()` (otherwise an
+  unauthenticated call would get a 100MB upload parsed and leak whether
+  the LLM is configured).
+- `src/lib/auth.test.ts`'s sweep turns this into an **invariant**: it
+  walks every `src/app/api/**/route.ts`, failing the suite if a method
+  isn't gated (verified with a negative control). A new route can't
+  silently ship ungated.
 
-Şema değişikliği yok, SAVE_SCHEMA_VERSION bump yok, statik mod dokunulmadı.
+No schema change, no SAVE_SCHEMA_VERSION bump, static mode untouched.
 
-**Kasıtlı kapsam dışı:** S2 server import magic-header rider'ı → T-041
-(`src/lib/save/import.ts` sahipliği). Job route IDOR tenant'laşması /
-per-user DB / profil sahipliği → T-043.
+**Deliberately out of scope:** the S2 server-import magic-header rider ->
+T-041 (owned by `src/lib/save/import.ts`). Job route IDOR tenanting /
+per-user DB / profile ownership -> T-043.

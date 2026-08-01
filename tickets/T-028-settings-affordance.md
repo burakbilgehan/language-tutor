@@ -1,6 +1,6 @@
 ---
 id: T-028
-title: Ayarlar butonu köşede kalsın ama amacını belli etsin
+title: Settings button can stay in the corner but should signal its purpose
 status: done
 priority: p3
 effort: S
@@ -8,19 +8,20 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
-Sağ üstteki dişli çok küçük; Ayarlar önemli bir sayfa (LLM kurulumu,
-save export/import, profil yönetimi hep orada). Karar (Burak): köşede
-kalsın, nav sekmesi OLMASIN — ama küçük kalmasın ve amacını daha iyi
-belirtsin.
+The gear icon in the top right is too small; Settings is an important page
+(LLM setup, save export/import, profile management all live there). Decision
+(Burak): it stays in the corner, should NOT become a nav tab, but shouldn't
+stay small and should better signal its purpose.
 
-İş (StatsHeader):
-- Dişliyi header'daki diğer çiplerle ($0.00, ⌘K) aynı görsel ağırlığa
-  getir: çip formu + "Ayarlar" etiketi (dar ekranda etiket düşer, ikon
-  büyük kalır). Tap target ≥ 44px.
-- LLM yapılandırılmamışken (useLlmStatus) çipe dikkat çeken bir durum
-  ekle (nokta/renk) — yeni kullanıcının Ayarlar'ı bulamama problemi en
-  çok o anda yaşanıyor.
-- i18n: co-located S tablosu (tr/en), mevcut kalıp.
+Work (StatsHeader):
+- Bring the gear to the same visual weight as the other chips in the header
+  ($0.00, ⌘K): chip shape + "Ayarlar" ("Settings") label (the label drops on
+  narrow screens, the icon stays big). Tap target >= 44px.
+- When the LLM isn't configured (useLlmStatus), add an attention state to the
+  chip (dot/color), that's the moment new users most struggle to find
+  Settings.
+- i18n: co-located S table (tr/en), existing pattern.
 
-Doğrulama: masaüstü + mobil genişlikte görsel kontrol; LLM'siz temiz
-profille açılışta çipin dikkat çektiğini gör.
+Verification: visual check at desktop + mobile widths; see the chip draw
+attention on first open with an LLM-less clean profile.
+</content>
