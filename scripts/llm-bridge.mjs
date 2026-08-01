@@ -210,17 +210,40 @@ class BridgeTimeoutError extends Error {
   }
 }
 
+/** İstemci bağlantıyı kopardı (fetch abort / sekme kapandı). Yanıt yazılacak
+ * kimse kalmadığı için loglanır ve sessizce geçilir; 500 sayılmaz. */
+class BridgeCancelledError extends Error {
+  constructor(cmd) {
+    super(`${cmd} iptal edildi (istemci vazgeçti)`);
+    this.type = "cancelled";
+  }
+}
+
 // ------------------------------------------------------------------- yardımcı
-function runCli({ cmd, args, stdin, env }, timeoutMs = TIMEOUT_MS) {
+/** `cancel`: istek başına iptal durumu. İstemci bağlantıyı koparınca
+ * `requested` true olur ve `kill` (varsa) çalışan CLI sürecini öldürür.
+ * Bu olmadan "Vazgeç" yalnız tarayıcı tarafını keser: CLI süreci tavana
+ * kadar zombi olarak koşar VE tek şeritli kuyruğu işgal eder; kullanıcının
+ * yeniden başlattığı üretim zombinin arkasında dakikalarca bekler. */
+function runCli({ cmd, args, stdin, env }, timeoutMs = TIMEOUT_MS, cancel) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd: WORKDIR, env: env ?? process.env });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let cancelled = false;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
     }, timeoutMs);
+    if (cancel) {
+      cancel.kill = () => {
+        cancelled = true;
+        child.kill("SIGKILL");
+      };
+      // Yarış: bağlantı, süreç spawn edilmeden hemen önce kopmuş olabilir.
+      if (cancel.requested) cancel.kill();
+    }
 
     child.stdout.on("data", (d) => (stdout += d));
     child.stderr.on("data", (d) => (stderr += d));
@@ -230,6 +253,8 @@ function runCli({ cmd, args, stdin, env }, timeoutMs = TIMEOUT_MS) {
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (cancel) cancel.kill = null;
+      if (cancelled) return reject(new BridgeCancelledError(cmd));
       if (timedOut) return reject(new BridgeTimeoutError(cmd, timeoutMs));
       if (code !== 0)
         return reject(new Error(`${cmd} hata verdi (exit ${code}): ${stderr.slice(0, 500)}`));
@@ -376,6 +401,17 @@ const server = http.createServer(async (req, res) => {
       });
     }
     let body = "";
+    // İstek başına iptal durumu: yanıt bitmeden bağlantı kapanırsa istemci
+    // vazgeçmiş demektir. Çalışan CLI süreci öldürülür; sıradaysa hiç
+    // başlatılmaz. res "close" hem normal bitişte hem kopuşta gelir;
+    // writableEnded ikisini ayırır.
+    const cancel = { requested: false, kill: null };
+    res.on("close", () => {
+      if (!res.writableEnded) {
+        cancel.requested = true;
+        cancel.kill?.();
+      }
+    });
     req.on("data", (d) => (body += d));
     req.on("end", async () => {
       const started = Date.now();
@@ -389,7 +425,12 @@ const server = http.createServer(async (req, res) => {
           : parsed.model;
         const spec = adapter.build(prompt, system, model);
         const timeoutMs = timeoutForRequest(parsed);
-        const stdout = await serialize(() => runCli(spec, timeoutMs));
+        const stdout = await serialize(() => {
+          // Sırası gelmeden vazgeçildiyse CLI hiç başlatılmaz: zombi üretim
+          // tek şeritli kuyruğu dakikalarca işgal etmesin.
+          if (cancel.requested) throw new BridgeCancelledError(spec.cmd);
+          return runCli(spec, timeoutMs, cancel);
+        });
         const { text, usage } = adapter.parse(stdout);
         const secs = ((Date.now() - started) / 1000).toFixed(1);
         console.log(
@@ -413,6 +454,13 @@ const server = http.createServer(async (req, res) => {
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        // İptal hata değil: istemci gitti, yanıt yazacak soket de yok.
+        // Logla ve çık; 500 sayılmasın, kuyruk bir sonrakine geçsin.
+        if (err instanceof BridgeCancelledError) {
+          console.log(`[bridge] iptal: ${message}`);
+          res.destroy();
+          return;
+        }
         console.error(`[bridge] HATA: ${message}`);
         // Zaman aşımı ayrı statü + tip: uygulama bunu LlmTimeoutError'a
         // çevirip "üretim çok uzun sürdü, tekrar dene" diyebilsin. Diğer her
