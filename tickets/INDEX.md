@@ -7,6 +7,10 @@ dosyası + buraya satır. Bu index her ticket değişikliğinde güncellenir.
 
 | ID | Başlık | Statü | Öncelik | Efor | Güven |
 |---|---|---|---|---|---|
+| [T-073](T-073-cancel-must-stick.md) | Vazgeç kalıcı olmalı: iptal edilen ders otomatik yeniden üretilmesin | todo | p1 | S | high |
+| [T-075](T-075-coverage-ledger.md) | Kapsama defteri: ders prompt'una ham soru listesi yerine deterministik özet | todo | p1 | M | medium |
+| [T-076](T-076-furigana-raw-surfaces.md) | promptTr furigana render'ından geçmiyor: ham parantez görünüyor + yüzey auditi | todo | p2 | S | high |
+| [T-074](T-074-bridge-log-ids.md) | Köprü loglarında iş kimliği tüm satırlara işlensin | todo | p3 | XS | high |
 | [T-072](T-072-bridge-job-reattach.md) | Köprüde iş kimliği + sonuç önbelleği: refresh üretimi öldürmesin, biten iş kaybolmasın | done | p2 | M | medium |
 | [T-071](T-071-lesson-skeleton-lazy-load.md) | Ders üretimini böl: hızlı iskelet + arkadan tamamlanan egzersizler | todo | p1 | L | medium |
 | [T-069](T-069-kill-server-static-duality.md) | Server/static ikiliğini kaldır — tek runtime olarak static'e yakınsama | todo | p1 | XL | medium |
