@@ -53,9 +53,8 @@ const S = {
       `Tüm seviyeler (${lvl}'e kadar) tamamlandı. Sözlük + gramer artık senin.`,
     review: "Tekrar",
     genPreparing: "Üretiliyor",
-    genFailed: "Üretilemedi; tekrar denemek için tıkla",
-    genReady: "Üretildi; ders indirildi, anında açılır",
-    genNotReady: "Henüz hazır değil; sıran yaklaşınca üretilecek",
+    genFailed: "Üretim hata aldı; tekrar denemek için tıkla",
+    genReady: "Kullanıma hazır; seni bekliyor",
     langMismatchTitle: "Müfredat başka bir dilde hazırlanmış",
     langMismatchBody:
       "Bu müfredatın başlıkları farklı bir dilde. İlerlemen korunur — yalnızca görünen başlıklar bu dile çevrilir.",
@@ -120,8 +119,7 @@ const S = {
     review: "Review",
     genPreparing: "Generating",
     genFailed: "Generation failed; click to retry",
-    genReady: "Generated; lesson is downloaded and opens instantly",
-    genNotReady: "Not ready yet; it will be generated as your turn approaches",
+    genReady: "Ready to use; waiting for you",
     langMismatchTitle: "Curriculum is in another language",
     langMismatchBody:
       "This curriculum's titles are in a different language. Your progress is kept — only the visible titles are translated into this language.",
@@ -597,7 +595,6 @@ export function RoadmapView() {
                     preparing: t.genPreparing,
                     failed: t.genFailed,
                     ready: t.genReady,
-                    notReady: t.genNotReady,
                   }}
                   onRetry={() =>
                     void retryLessonGen(node.id, { urgent: false }).catch(
@@ -748,7 +745,6 @@ function NodeBubble({
     preparing: string;
     failed: string;
     ready: string;
-    notReady: string;
   };
   /** Rozetten, dersi AÇMADAN yeniden üretim (urgent'sız). Kilitli node'da da
    * çalışır; asıl düğüm tıklaması kilitliyken zaten no-op. */
@@ -757,18 +753,18 @@ function NodeBubble({
   const locked = node.status === "locked";
   const completed = node.status === "completed";
   const available = node.status === "available";
-  // İçerik durumu: OTURUMDAKİ canlı store önce, DB'deki kalıcı damga sonra
-  // (reload sonrası store boşken tek hakikat kaynağı DB satırı; retry
-  // sürerken de bayat "error" damgası "başarısız" diye gösterilmez).
+  // İçerik durumu: OTURUMDAKİ canlı store önce, DB'deki kalıcı damga sonra.
+  // "!" YALNIZ bu oturumdaki taze hatadır: DB'deki tarihî error damgaları
+  // haritayı boyamaz (2026-08-01: eski server-mode döneminin fosilleri tüm
+  // müfredatı "hatalı" gösteriyordu). Damgalı ders yine de sessiz değil:
+  // pencereye girince oturum başına bir otomatik retry alır, açılırsa
+  // "Tekrar dene" ekranına düşer. Üretilmemiş dersler gösterge TAŞIMAZ;
+  // her düğüme rozet koymak sinyali öldürür.
   const st = genState?.kind;
   const generating = st === "running";
   const genReady =
     !generating && (st === "ready" || (!st && node.lessonStatus === "ready"));
-  const genFailed =
-    !generating &&
-    !genReady &&
-    (st === "error" ||
-      ((!st || st === "cancelled") && node.lessonStatus === "error"));
+  const genFailed = !generating && !genReady && st === "error";
 
   return (
     // `disabled` DEĞİL aria-disabled: disabled buton çocuklarının tıklamasını
@@ -785,64 +781,62 @@ function NodeBubble({
       }`}
       title={node.subtitleTr ?? undefined}
     >
-      <div
-        className={`flex h-16 w-16 items-center justify-center rounded-full text-2xl transition-all ${
-          completed
-            ? "bg-indigo text-surface shadow-cozy"
-            : available
-              ? "bg-accent text-surface shadow-cozy animate-pulse-glow group-hover:scale-110"
-              : "bg-locked text-surface"
-        }`}
-      >
-        {locked ? "🔒" : completed ? "✓" : TYPE_ICON[node.lessonType]}
-      </div>
-      {/* İçerik durumu göstergesi (tooltip = title). Dört durum:
-          üretiliyor (indigo ⋯) / üretilemedi (vermilion !, TIKLANINCA dersi
-          açmadan yeniden dener) / üretildi (dolu indigo nokta) / henüz hazır
-          değil (içi boş soluk nokta). Tamamlanmış derste gösterge yok. */}
-      {!completed && generating && (
-        <span
-          title={genLabels.preparing}
-          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo text-[10px] leading-none text-surface shadow-cozy"
+      {/* Gösterge DAİREYE sabitlenir, butona değil: buton alttaki başlığı da
+          kapsıyor ve başlık genişledikçe rozet daireden kopup boşlukta
+          yüzüyordu. */}
+      <div className="relative">
+        <div
+          className={`flex h-16 w-16 items-center justify-center rounded-full text-2xl transition-all ${
+            completed
+              ? "bg-indigo text-surface shadow-cozy"
+              : available
+                ? "bg-accent text-surface shadow-cozy animate-pulse-glow group-hover:scale-110"
+                : "bg-locked text-surface"
+          }`}
         >
-          ⋯
-        </span>
-      )}
-      {!completed && genFailed && (
-        <span
-          role="button"
-          tabIndex={0}
-          title={genLabels.failed}
-          onClick={(e) => {
-            // Düğüm tıklamasından ayrık: ders açılmaz, üretim yeniden başlar.
-            e.stopPropagation();
-            onRetry();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
+          {locked ? "🔒" : completed ? "✓" : TYPE_ICON[node.lessonType]}
+        </div>
+        {/* İçerik durumu (tooltip = title), yalnız sinyal taşıyan üç durum:
+            üretiliyor (dönen halka) / bu oturumda hata (vermilion !,
+            TIKLANINCA dersi açmadan yeniden dener) / kullanıma hazır
+            (indigo ✓). Üretilmemişler ve tarihî error damgaları boş kalır. */}
+        {!completed && generating && (
+          <span
+            title={genLabels.preparing}
+            className="absolute -right-1 -top-1 h-4 w-4 animate-spin rounded-full border-2 border-indigo-mid border-t-transparent shadow-cozy"
+          />
+        )}
+        {!completed && genFailed && (
+          <span
+            role="button"
+            tabIndex={0}
+            title={genLabels.failed}
+            onClick={(e) => {
+              // Düğüm tıklamasından ayrık: ders açılmaz, üretim yeniden başlar.
               e.stopPropagation();
               onRetry();
-            }
-          }}
-          className="absolute -right-1 -top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-accent text-[10px] leading-none text-surface shadow-cozy transition-transform hover:scale-125"
-        >
-          !
-        </span>
-      )}
-      {!completed && !generating && !genFailed && (
-        <span
-          title={genReady ? genLabels.ready : genLabels.notReady}
-          className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full shadow-cozy ${
-            genReady
-              ? "bg-indigo"
-              : // İçi boş nokta iki temada da okunmalı: ink-soft kenarlık
-                // (açıkta koyu kahve, koyuda açık bej) + surface dolgu,
-                // düğüm dairesinden ayrışsın diye.
-                "border-2 border-ink-soft/60 bg-surface"
-          }`}
-        />
-      )}
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onRetry();
+              }
+            }}
+            className="absolute -right-1 -top-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-accent text-[10px] leading-none text-surface shadow-cozy transition-transform hover:scale-125"
+          >
+            !
+          </span>
+        )}
+        {!completed && genReady && (
+          <span
+            title={genLabels.ready}
+            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo text-[9px] leading-none text-surface shadow-cozy"
+          >
+            ✓
+          </span>
+        )}
+      </div>
       <div
         className={`mt-1.5 max-w-36 text-center text-xs font-semibold leading-tight ${
           locked ? "text-ink-soft/60" : "text-ink"
