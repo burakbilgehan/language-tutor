@@ -1,7 +1,7 @@
 ---
 id: T-072
 title: Köprüde iş kimliği + sonuç önbelleği — refresh/kopma üretimi öldürmesin, biten iş kaybolmasın
-status: open
+status: done
 priority: p2
 effort: M
 confidence: medium
@@ -34,6 +34,23 @@ orphaned kalmasın:
 - Kullanıcının GERÇEK iptali ayrışır: açık bir iptal sinyali (örn.
   `POST /v1/cancel {job_id}` ya da job_id'siz istek semantiği) CLI'ı bugünkü
   gibi öldürür. "Vazgeç" butonunun anlamı değişmemeli (T-070-C).
+
+## Uygulama (2026-08-01, aynı gün)
+
+- Kimlik localStorage yerine DETERMİNİSTİK: SHA-256(model+system+prompt)
+  (`computeBridgeJobId`, browser-provider). Refresh aynı prompt'u kurar,
+  aynı kimlikle koşan işe bağlanır ya da önbellekten alır; depolama yok.
+  Retry prompt'u (zod hataları eklenir) doğal olarak farklı kimlik üretir.
+- Köprü: `jobs` haritası; kimlikli işte kopan bağlantı CLI'ı öldürmez
+  (cancel.keepAlive), sahipsiz biten BAŞARILI sonuç 10 dk TTL ile bekler ve
+  BİR KEZ teslim edilir (consume-once: regenerate bayat sonuç yemesin).
+  Hata/iptal önbelleğe yazılmaz. Koşan işe ikinci istek ATTACH olur (çok
+  sekme aynı işi paylaşır, ikinci CLI yok).
+- Gerçek iptal: `POST /v1/cancel {job_id}`; istemci yalnız kullanıcı
+  iptalinde gönderir (timeout abort'unda GÖNDERMEZ: iş sahipsiz bitip
+  önbelleğe düşsün diye).
+- Doğrulama: canlı köprüde 3 akış test edildi; kopan istemci → "sahipsiz
+  bitti" + 17ms önbellek teslimi; /v1/cancel → CLI kill.
 
 ## Dikkat
 

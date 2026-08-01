@@ -304,6 +304,10 @@ const LOG_STRINGS = {
     cancelled: "iptal",
     error: "HATA",
     timeoutNote: "timeout",
+    attach: "geri bağlandı (iş zaten koşuyor)",
+    cacheHit: "önbellekten teslim",
+    orphaned: "sahipsiz bitti; sonuç önbellekte bekliyor",
+    userCancel: "iptal istendi (/v1/cancel)",
   },
   en: {
     request: "request",
@@ -313,8 +317,33 @@ const LOG_STRINGS = {
     cancelled: "cancelled",
     error: "ERROR",
     timeoutNote: "timeout",
+    attach: "reattached (job already running)",
+    cacheHit: "served from cache",
+    orphaned: "finished orphaned; result cached",
+    userCancel: "cancel requested (/v1/cancel)",
   },
 };
+
+// ------------------------------------------------------------------ iş kaydı
+// T-072: istek ≠ iş. Uygulama her mantıksal üretim için deterministik bir
+// `bridge_job_id` gönderir (model+system+prompt hash'i). Bağlantı koparsa
+// (refresh, sekme kapanışı, istemci timeout'u) iş ÖLDÜRÜLMEZ: bitirir ve
+// sonuç TTL'li önbelleğe yazılır; aynı id ile gelen sonraki istek koşan işe
+// bağlanır ya da önbellekten anında teslim alır. Gerçek kullanıcı iptali
+// ayrı kapıdan gelir: POST /v1/cancel {job_id} CLI'ı bugüne kadarki gibi
+// öldürür. Id göndermeyen eski uygulama: davranış birebir eski (kopunca öldür).
+//
+// Önbellek yalnız SAHİPSİZ biten BAŞARILI sonuçları tutar (teslim edilen iş
+// anında silinir): "aynı prompt'u bilerek yeniden üret" akışı (regenerate)
+// bayat sonuç yemesin, hatalar da anında-tekrarlanan başarısızlığa dönmesin.
+const JOB_RESULT_TTL_MS = 10 * 60_000;
+const jobs = new Map();
+function sweepJobs() {
+  const now = Date.now();
+  for (const [id, j] of jobs) {
+    if (j.settled && j.expiresAt && j.expiresAt < now) jobs.delete(id);
+  }
+}
 
 // Aynı anda tek CLI süreci (abonelik limitleri + makine yükü).
 let chain = Promise.resolve();
@@ -408,6 +437,47 @@ function deny(req, res, { status, reason }) {
   res.end(JSON.stringify({ error: { message: `bridge: request rejected (${reason})` } }));
 }
 
+/** Bir işin sonucunu (başarı/hata/iptal) tek bir istemciye OpenAI-compat
+ * biçiminde yazar. Hem canlı isteğe hem geri bağlanan istemciye hem de
+ * önbellekten teslime aynı yol; her istemcinin KENDİ cors başlıkları geçer. */
+function deliverOutcome(resX, corsX, outcome) {
+  if (outcome.ok) {
+    resX.writeHead(200, { ...corsX, "content-type": "application/json" });
+    resX.end(
+      JSON.stringify({
+        id: `bridge-${Date.now()}`,
+        object: "chat.completion",
+        model: outcome.model ?? BACKEND,
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: outcome.text },
+            finish_reason: "stop",
+          },
+        ],
+        ...(outcome.usage ? { usage: outcome.usage } : {}),
+      })
+    );
+    return;
+  }
+  const err = outcome.err;
+  const message = err instanceof Error ? err.message : String(err);
+  // Zaman aşımı ayrı statü + tip: uygulama bunu LlmTimeoutError'a çevirip
+  // "üretim çok uzun sürdü, tekrar dene" diyebilsin.
+  if (err instanceof BridgeTimeoutError) {
+    resX.writeHead(504, { ...corsX, "content-type": "application/json" });
+    resX.end(
+      JSON.stringify({ error: { message, type: "timeout", timeout_ms: err.timeoutMs } })
+    );
+    return;
+  }
+  // Canlı bir istemciye iptal teslimi ancak başka bir istemci /v1/cancel
+  // dediyse olur (çok sekme); tip alanı ayırt etmeye yeter.
+  const type = err instanceof BridgeCancelledError ? { type: "cancelled" } : {};
+  resX.writeHead(500, { ...corsX, "content-type": "application/json" });
+  resX.end(JSON.stringify({ error: { message, ...type } }));
+}
+
 // -------------------------------------------------------------------- sunucu
 const server = http.createServer(async (req, res) => {
   // Tek kapı: Host + Origin (+ token). Başarısızsa hiçbir yol çalışmaz —
@@ -444,15 +514,19 @@ const server = http.createServer(async (req, res) => {
       });
     }
     let body = "";
-    // İstek başına iptal durumu: yanıt bitmeden bağlantı kapanırsa istemci
-    // vazgeçmiş demektir. Çalışan CLI süreci öldürülür; sıradaysa hiç
-    // başlatılmaz. res "close" hem normal bitişte hem kopuşta gelir;
-    // writableEnded ikisini ayırır.
-    const cancel = { requested: false, kill: null };
+    // İstek başına iptal durumu. İş kimliği YOKSA eski davranış: bağlantı
+    // kopunca CLI öldürülür (keepAlive=false). Kimlik VARSA (T-072) iş sürer;
+    // kopan istemci yalnız alıcı listesinden düşer (onClientGone), gerçek
+    // iptal /v1/cancel'dan gelir. res "close" hem normal bitişte hem kopuşta
+    // gelir; writableEnded ikisini ayırır.
+    const cancel = { requested: false, kill: null, keepAlive: false, onClientGone: null };
     res.on("close", () => {
       if (!res.writableEnded) {
-        cancel.requested = true;
-        cancel.kill?.();
+        cancel.onClientGone?.();
+        if (!cancel.keepAlive) {
+          cancel.requested = true;
+          cancel.kill?.();
+        }
       }
     });
     req.on("data", (d) => (body += d));
@@ -488,68 +562,150 @@ const server = http.createServer(async (req, res) => {
             : undefined;
         const spec = adapter.build(prompt, system, model, jsonSchema);
         const timeoutMs = timeoutForRequest(parsed);
+
+        // T-072: iş kimliği. Aynı kimlikle koşan iş varsa BAĞLAN (ikinci CLI
+        // yok), sahipsiz bitmiş sonuç varsa önbellekten teslim et (bir kez).
+        sweepJobs();
+        const jobId =
+          typeof parsed.bridge_job_id === "string" &&
+          parsed.bridge_job_id.length > 0 &&
+          parsed.bridge_job_id.length <= 128
+            ? parsed.bridge_job_id
+            : null;
+        const existing = jobId ? jobs.get(jobId) : undefined;
+        if (existing) {
+          if (existing.settled) {
+            jobs.delete(jobId);
+            console.log(`[bridge ${ts()}] ${L.cacheHit}: ${label}`);
+            deliverOutcome(res, cors, existing.outcome);
+          } else {
+            console.log(`[bridge ${ts()}] ${L.attach}: ${label}`);
+            existing.clients.set(res, cors);
+            cancel.keepAlive = true; // bağlanan istemcinin kopuşu işi öldürmez
+            cancel.onClientGone = () => existing.clients.delete(res);
+          }
+          return;
+        }
+
+        const job = {
+          clients: new Map([[res, cors]]),
+          settled: false,
+          outcome: null,
+          cancel,
+          startedAt: started,
+          label,
+          L,
+          expiresAt: null,
+        };
+        if (jobId) {
+          jobs.set(jobId, job);
+          cancel.keepAlive = true;
+          cancel.onClientGone = () => job.clients.delete(res);
+        }
+
         console.log(
-          `[bridge ${ts()}] ${L.request}: ${label} (${L.timeoutNote} ${Math.round(timeoutMs / 1000)}s${chainIsBusy() ? `, ${L.queued}` : ""})`
+          `[bridge ${ts()}] ${L.request}: ${label} (${L.timeoutNote} ${Math.round(timeoutMs / 1000)}s${chainIsBusy() ? `, ${L.queued}` : ""}${jobId ? `, id=${jobId.slice(0, 8)}` : ""})`
         );
         heartbeat = setInterval(() => {
           const s = Math.round((Date.now() - started) / 1000);
           console.log(`[bridge ${ts()}] ${L.running}: ${label} (${s}s)`);
         }, 30_000);
-        const stdout = await serialize(() => {
-          // Sırası gelmeden vazgeçildiyse CLI hiç başlatılmaz: zombi üretim
-          // tek şeritli kuyruğu dakikalarca işgal etmesin.
-          if (cancel.requested) throw new BridgeCancelledError(spec.cmd);
-          return runCli(spec, timeoutMs, cancel);
-        });
+
+        let outcome;
+        try {
+          const stdout = await serialize(() => {
+            // Sırası gelmeden vazgeçildiyse CLI hiç başlatılmaz: zombi üretim
+            // tek şeritli kuyruğu dakikalarca işgal etmesin.
+            if (cancel.requested) throw new BridgeCancelledError(spec.cmd);
+            return runCli(spec, timeoutMs, cancel);
+          });
+          const { text, usage } = adapter.parse(stdout);
+          outcome = { ok: true, text, usage, model: parsed.model ?? BACKEND };
+        } catch (err) {
+          outcome = { ok: false, err };
+        }
         clearInterval(heartbeat);
-        const { text, usage } = adapter.parse(stdout);
+        heartbeat = null;
+        job.settled = true;
+        job.outcome = outcome;
+        const receivers = [...job.clients];
+        job.clients.clear();
+
         const secs = ((Date.now() - started) / 1000).toFixed(1);
-        console.log(
-          `[bridge ${ts()}] ${L.done}: ${label} — ${secs}s ${text.length}ch (backend=${BACKEND} model=${parsed.model ?? "-"})`
-        );
-        res.writeHead(200, { ...cors, "content-type": "application/json" });
-        res.end(
-          JSON.stringify({
-            id: `bridge-${Date.now()}`,
-            object: "chat.completion",
-            model: parsed.model ?? BACKEND,
-            choices: [
-              {
-                index: 0,
-                message: { role: "assistant", content: text },
-                finish_reason: "stop",
-              },
-            ],
-            ...(usage ? { usage } : {}),
-          })
-        );
-      } catch (err) {
-        if (heartbeat) clearInterval(heartbeat);
-        const message = err instanceof Error ? err.message : String(err);
-        // İptal hata değil: istemci gitti, yanıt yazacak soket de yok.
-        // Logla ve çık; 500 sayılmasın, kuyruk bir sonrakine geçsin.
-        if (err instanceof BridgeCancelledError) {
-          console.log(`[bridge ${ts()}] ${L.cancelled}: ${label} — ${message}`);
-          res.destroy();
+        if (outcome.ok) {
+          console.log(
+            `[bridge ${ts()}] ${L.done}: ${label} - ${secs}s ${outcome.text.length}ch (backend=${BACKEND} model=${parsed.model ?? "-"})`
+          );
+        } else if (outcome.err instanceof BridgeCancelledError) {
+          // İptal hata değil: logla, 500 sayılmasın, kuyruk bir sonrakine geçsin.
+          console.log(`[bridge ${ts()}] ${L.cancelled}: ${label} - ${outcome.err.message}`);
+        } else {
+          const message =
+            outcome.err instanceof Error ? outcome.err.message : String(outcome.err);
+          console.error(`[bridge ${ts()}] ${L.error}: ${label} - ${message}`);
+        }
+
+        if (receivers.length > 0) {
+          if (jobId) jobs.delete(jobId);
+          for (const [r, c] of receivers) deliverOutcome(r, c, outcome);
           return;
         }
-        console.error(`[bridge ${ts()}] ${L.error}: ${label} — ${message}`);
-        // Zaman aşımı ayrı statü + tip: uygulama bunu LlmTimeoutError'a
-        // çevirip "üretim çok uzun sürdü, tekrar dene" diyebilsin. Diğer her
-        // şey 500 olarak kalır (davranış değişmedi).
-        const isTimeout = err instanceof BridgeTimeoutError;
-        res.writeHead(isTimeout ? 504 : 500, {
-          ...cors,
-          "content-type": "application/json",
-        });
-        res.end(
-          JSON.stringify({
-            error: isTimeout
-              ? { message, type: "timeout", timeout_ms: err.timeoutMs }
-              : { message },
-          })
-        );
+        // İstemci kalmadı (refresh/sekme kapandı). Kimlikli BAŞARILI sonuç
+        // TTL ile bekler (yeniden bağlanan sayfa anında alır); hata/iptal
+        // saklanmaz ("tekrar dene" bayat başarısızlık yememeli).
+        if (jobId && outcome.ok) {
+          job.expiresAt = Date.now() + JOB_RESULT_TTL_MS;
+          console.log(`[bridge ${ts()}] ${L.orphaned}: ${label}`);
+        } else if (jobId) {
+          jobs.delete(jobId);
+        }
+      } catch (err) {
+        // Erken hatalar (JSON.parse vb.) — iş kaydı henüz yok.
+        if (heartbeat) clearInterval(heartbeat);
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[bridge ${ts()}] ${L.error}: ${label} - ${message}`);
+        if (!res.writableEnded) {
+          res.writeHead(500, { ...cors, "content-type": "application/json" });
+          res.end(JSON.stringify({ error: { message } }));
+        }
       }
+    });
+    return;
+  }
+
+  // T-072: gerçek kullanıcı iptali. Bağlantı kopması artık kimlikli işi
+  // öldürmediği için "Vazgeç" bu uca açık çağrı yapar; CLI bugüne kadarki
+  // gibi öldürülür. Eski uygulama bu ucu hiç çağırmaz.
+  if (req.method === "POST" && urlPath === "/v1/cancel") {
+    if (!isJsonContentType(req)) {
+      return deny(req, res, {
+        status: 415,
+        reason: `content_type (${req.headers["content-type"] ?? "-"})`,
+      });
+    }
+    let body = "";
+    req.on("data", (d) => (body += d));
+    req.on("end", () => {
+      let found = false;
+      try {
+        const parsed = JSON.parse(body);
+        const job =
+          typeof parsed.job_id === "string" ? jobs.get(parsed.job_id) : undefined;
+        if (job && !job.settled) {
+          found = true;
+          console.log(`[bridge ${ts()}] ${job.L.userCancel}: ${job.label}`);
+          job.cancel.requested = true;
+          job.cancel.kill?.();
+        }
+        // Bitmiş (önbellekte bekleyen) işin iptali = önbellekten düşür.
+        if (job && job.settled && typeof parsed.job_id === "string") {
+          jobs.delete(parsed.job_id);
+        }
+      } catch {
+        // bozuk gövde: found=false ile normal yanıt
+      }
+      res.writeHead(200, { ...cors, "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, found }));
     });
     return;
   }
