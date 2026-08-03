@@ -2,6 +2,13 @@ import { ZH_VOCAB_INDEX, type VocabIndexEntry } from "./zh";
 
 export type { VocabIndexEntry };
 
+// Languages that have a static vocab index. This is the single source for
+// "which vocab_entries rows are live": rows whose language is NOT here are
+// orphans (e.g. the reverted T-030 ja dictionary left 8k pending rows that
+// the blast scripts kept counting as work). Ops scripts filter by this list
+// so removed surfaces never re-enter a generation queue.
+export const VOCAB_INDEX_LANGS = ["zh"] as const;
+
 // Sync — used by server/core code (ensureVocabSeeded runs inside a
 // db.transaction, which cannot await). zh-data.json (~700 KB) statically
 // imported via ./zh; fine server-side (never shipped to the client), and in

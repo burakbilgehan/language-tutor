@@ -12,6 +12,8 @@ import {
   generateKanjiContent,
   generateVocabContent,
 } from "@/core/llm-gen";
+import { VOCAB_INDEX_LANGS } from "@/lib/vocab-index";
+import { grammarIndexFor } from "@/lib/grammar-index";
 
 const CONC = Number(process.env.BLAST_CONC ?? 8);
 
@@ -19,24 +21,35 @@ type Item = { kind: "grammar" | "kanji" | "vocab"; id: string; label: string };
 
 async function main() {
   const gen = getProvider();
-  const gt = db
+  // Orphan guard: rows whose language no longer has a static index (a
+  // reverted/removed surface, e.g. T-030's ja dictionary) are dead data,
+  // not work. Skip them loudly instead of regenerating them.
+  const gtAll = db
     .select()
     .from(tables.grammarTopics)
     .where(inArray(tables.grammarTopics.status, ["pending", "error"]))
     .orderBy(tables.grammarTopics.level, tables.grammarTopics.position)
     .all();
+  const gt = gtAll.filter((t) => grammarIndexFor(t.targetLanguage).length > 0);
   const ke = db
     .select()
     .from(tables.kanjiEntries)
     .where(inArray(tables.kanjiEntries.status, ["pending", "error"]))
     .orderBy(tables.kanjiEntries.level, tables.kanjiEntries.char)
     .all();
-  const ve = db
+  const veAll = db
     .select()
     .from(tables.vocabEntries)
     .where(inArray(tables.vocabEntries.status, ["pending", "error"]))
     .orderBy(tables.vocabEntries.position)
     .all();
+  const ve = veAll.filter((v) =>
+    (VOCAB_INDEX_LANGS as readonly string[]).includes(v.targetLanguage)
+  );
+  const skipped = gtAll.length - gt.length + (veAll.length - ve.length);
+  if (skipped > 0) {
+    console.log(`orphan: ${skipped} satır atlandı (indexi olmayan dil; ölü veri)`);
+  }
   const items: Item[] = [
     ...gt.map((t) => ({
       kind: "grammar" as const,

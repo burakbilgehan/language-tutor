@@ -5,7 +5,7 @@
 // başlatılan koşuları da durdurur (pkill -f blast-generate).
 import { createServer } from "node:http";
 import { execSync, spawn } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,17 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DB_PATH = join(ROOT, "data", "app.db");
 const LOG_PATH = join(ROOT, "data", `blast-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.log`);
 const PORT = 4646;
+
+// Vocab: sadece statik indexi olan diller sayılır (src/lib/vocab-index/
+// <lang>-data.json). Indexi kaldırılmış bir dilin DB'de kalan satırları
+// (ör. geri alınan T-030 ja sözlüğü) iş değil, ölü veridir; panel onları
+// "sırada" gösterirse blast onları yeniden üretmeye kalkar.
+const VOCAB_LANGS = readdirSync(join(ROOT, "src", "lib", "vocab-index"))
+  .map((f) => f.match(/^([a-z]{2})-data\.json$/)?.[1])
+  .filter(Boolean);
+const VOCAB_WHERE = VOCAB_LANGS.length
+  ? `target_language IN (${VOCAB_LANGS.map((l) => `'${l}'`).join(",")})`
+  : "0";
 
 let prevGenerating = null; // char -> level
 let events = []; // {char, level, outcome: "ready"|"error", at}
@@ -56,13 +67,13 @@ function readState() {
       db.prepare("SELECT status, COUNT(*) c FROM grammar_topics GROUP BY status").all().map((r) => [r.status, r.c])
     );
     const vocab = Object.fromEntries(
-      db.prepare("SELECT status, COUNT(*) c FROM vocab_entries GROUP BY status").all().map((r) => [r.status, r.c])
+      db.prepare(`SELECT status, COUNT(*) c FROM vocab_entries WHERE ${VOCAB_WHERE} GROUP BY status`).all().map((r) => [r.status, r.c])
     );
     // konu bazlı ilerleme: kind -> level -> {ready, total}
     const byLevel = { kanji: {}, vocab: {}, grammar: {} };
-    const fillByLevel = (kind, table, levelCol) => {
+    const fillByLevel = (kind, table, levelCol, where = "1") => {
       for (const r of db
-        .prepare(`SELECT ${levelCol} AS level, status, COUNT(*) c FROM ${table} GROUP BY ${levelCol}, status`)
+        .prepare(`SELECT ${levelCol} AS level, status, COUNT(*) c FROM ${table} WHERE ${where} GROUP BY ${levelCol}, status`)
         .all()) {
         const lv = r.level ?? "—";
         byLevel[kind][lv] ??= { ready: 0, total: 0 };
@@ -71,14 +82,14 @@ function readState() {
       }
     };
     fillByLevel("kanji", "kanji_entries", "level");
-    fillByLevel("vocab", "vocab_entries", "level");
+    fillByLevel("vocab", "vocab_entries", "level", VOCAB_WHERE);
     fillByLevel("grammar", "grammar_topics", "level");
     const generating = [
       ...db
         .prepare("SELECT char, level FROM kanji_entries WHERE status='generating' ORDER BY level, char")
         .all(),
       ...db
-        .prepare("SELECT word AS char, level FROM vocab_entries WHERE status='generating' ORDER BY position")
+        .prepare(`SELECT word AS char, level FROM vocab_entries WHERE status='generating' AND ${VOCAB_WHERE} ORDER BY position`)
         .all(),
     ];
 
@@ -109,7 +120,7 @@ function readState() {
     const done5 = db
       .prepare(
         `SELECT (SELECT COUNT(*) FROM kanji_entries WHERE generated_at > ?) +
-                (SELECT COUNT(*) FROM vocab_entries WHERE generated_at > ?) c`
+                (SELECT COUNT(*) FROM vocab_entries WHERE generated_at > ? AND ${VOCAB_WHERE}) c`
       )
       .get(nowSec - 300, nowSec - 300).c;
     const avgDur = db
@@ -120,7 +131,7 @@ function readState() {
     for (const r of db
       .prepare(
         `SELECT generated_at t FROM kanji_entries WHERE generated_at > ?
-         UNION ALL SELECT generated_at FROM vocab_entries WHERE generated_at > ?`
+         UNION ALL SELECT generated_at FROM vocab_entries WHERE generated_at > ? AND ${VOCAB_WHERE}`
       )
       .all(nowSec - 900, nowSec - 900)) {
       const idx = 14 - Math.floor((nowSec - r.t) / 60);
