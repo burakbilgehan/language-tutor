@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { profileData } from "@/lib/client-api";
 
 export interface ProfileMeta {
-  targetLanguage: "ja" | "zh" | "nl";
+  targetLanguage: "ja" | "zh" | "nl" | "fr";
   nativeLanguage: string;
   uiLanguage: string;
 }

@@ -20,7 +20,7 @@ import { grammarIndexFor } from "@/lib/grammar-index";
 import { countUnpreservedRuns } from "./mt/protect";
 
 const OUT_DIR = "src/lib/grammar-index";
-const LANGS = ["ja", "zh", "nl"];
+const LANGS = ["ja", "zh", "nl", "fr"];
 
 function parseArgs(argv: string[]) {
   const positional = argv.filter((a) => !a.startsWith("--"));

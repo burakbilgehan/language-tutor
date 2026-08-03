@@ -86,7 +86,7 @@ const S: LocalizedStrings<{
     nodeLocked: "kilitli",
     langTitle: "Diller",
     langBody:
-      "Japonca (JLPT N5→N1), Çince (HSK 1→6) ve Felemenkçe (A1→B1) için hazır içerik; başka bir dil seçersen okumo onu da standart seviyelerle açar.",
+      "Japonca (JLPT N5→N1), Çince (HSK 1→6), Felemenkçe ve Fransızca (A1→C2) için hazır içerik; başka bir dil seçersen okumo onu da standart seviyelerle açar.",
     langMore: "+ diğer diller",
     closingTitle: "Bir dil seç, ilk dersin hazır olsun.",
     closingBody: "Kurulum yok, kayıt yok. Tarayıcında açılır.",
@@ -127,7 +127,7 @@ const S: LocalizedStrings<{
     nodeLocked: "locked",
     langTitle: "Languages",
     langBody:
-      "Ready-made content for Japanese (JLPT N5→N1), Chinese (HSK 1→6) and Dutch (A1→B1); pick any other language and okumo opens it with standard levels.",
+      "Ready-made content for Japanese (JLPT N5→N1), Chinese (HSK 1→6), Dutch and French (A1→C2); pick any other language and okumo opens it with standard levels.",
     langMore: "+ other languages",
     closingTitle: "Pick a language and have your first lesson ready.",
     closingBody: "No install, no sign-up. It opens in your browser.",

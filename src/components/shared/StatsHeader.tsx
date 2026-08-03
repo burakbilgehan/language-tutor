@@ -188,8 +188,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/vocab", label: "vocab", langs: ["zh"] },
   { href: "/pinyin", label: "pinyin", langs: ["zh"] },
   { href: "/stroke", label: "stroke", jaOnly: true },
-  // ja: conjugator, zh: aspect chart, nl: conjugator — all languages covered.
-  { href: "/conjugate", label: "conjugate" },
+  // ja: conjugator, zh: aspect chart, nl: conjugator. fr has no view yet
+  // (T-077); an unlisted language would render an empty page, so gate it.
+  { href: "/conjugate", label: "conjugate", langs: ["ja", "zh", "nl"] },
   { href: "/exam", label: "exam", langs: ["nl"] },
   { href: "/review", label: "review" },
   { href: "/chat", label: "chat" },

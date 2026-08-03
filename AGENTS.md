@@ -303,9 +303,14 @@ better-sqlite3, WAL, `data/app.db`).
   `pick(S, draft.uiLanguage)` so language follows the step-0 choice live.
 - New target language: add to `LANGUAGES` (profile-options), the zod enum in
   `/api/profile`, the `ProfileMeta` union, a grammar index file + a
-  `grammarIndexFor` case, and (if not CEFR) a scheme in `levels.ts`;
+  `grammarIndexFor` case, a `titles.<target>.en.json` (at minimum `{}`; it
+  is statically imported by `grammar-index/index.ts`, so a missing file
+  breaks the build) + a `titlesFor` case, the `LANGS` list in
+  `scripts/mt-grammar-titles.ts`, and (if not CEFR) a scheme in `levels.ts`;
   language-specific prompt rules live behind `targetLanguage === "xx"`
-  branches in the prompt files.
+  branches in the prompt files. Check nav gating (`NAV_ITEMS` in
+  StatsHeader): a language-specific page with no view for the new language
+  (e.g. `/conjugate`) must be gated or it renders empty.
 
 ## Style
 

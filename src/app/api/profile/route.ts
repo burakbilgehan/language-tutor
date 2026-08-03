@@ -13,7 +13,7 @@ import {
 export const runtime = "nodejs";
 
 const ProfileInput = z.object({
-  targetLanguage: z.enum(["ja", "zh", "nl"]),
+  targetLanguage: z.enum(["ja", "zh", "nl", "fr"]),
   // Native language drives LLM content language + UI catalog; uiLanguage
   // follows it unless set separately. Defaults keep old clients working.
   nativeLanguage: z.enum(["tr", "en"]).default("tr"),

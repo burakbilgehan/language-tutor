@@ -7,6 +7,7 @@ file + a row here. This index is updated with every ticket change.
 
 | ID | Title | Status | Priority | Effort | Confidence |
 |---|---|---|---|---|---|
+| [T-077](T-077-french-conjugator.md) | French conjugator view for /conjugate (fr is nav-gated until it exists) | backlog | p2 | M | medium |
 | [T-073](T-073-cancel-must-stick.md) | Cancel must stick: a cancelled lesson should not auto-regenerate | todo | p1 | S | high |
 | [T-075](T-075-coverage-ledger.md) | Coverage ledger: deterministic summary instead of the raw question list in the lesson prompt | todo | p1 | M | medium |
 | [T-076](T-076-furigana-raw-surfaces.md) | promptTr doesn't pass through furigana rendering: raw brackets showing + surface audit | todo | p2 | S | high |

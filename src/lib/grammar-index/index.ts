@@ -1,4 +1,5 @@
 import { JA_GRAMMAR_INDEX, type GrammarIndexEntry } from "./ja";
+import { FR_GRAMMAR_INDEX } from "./fr";
 import { NL_GRAMMAR_INDEX } from "./nl";
 import { ZH_GRAMMAR_INDEX } from "./zh";
 
@@ -12,6 +13,8 @@ export function grammarIndexFor(targetLanguage: string): GrammarIndexEntry[] {
       return ZH_GRAMMAR_INDEX;
     case "nl":
       return NL_GRAMMAR_INDEX;
+    case "fr":
+      return FR_GRAMMAR_INDEX;
     default:
       return [];
   }
@@ -43,6 +46,7 @@ export function grammarIndexFor(targetLanguage: string): GrammarIndexEntry[] {
 import jaEn from "./titles.ja.en.json";
 import zhEn from "./titles.zh.en.json";
 import nlEn from "./titles.nl.en.json";
+import frEn from "./titles.fr.en.json";
 
 type Titles = Record<string, string>;
 
@@ -55,6 +59,8 @@ function titlesFor(targetLanguage: string, nativeLanguage: string): Titles | nul
       return zhEn as Titles;
     case "nl":
       return nlEn as Titles;
+    case "fr":
+      return frEn as Titles;
     default:
       return null;
   }

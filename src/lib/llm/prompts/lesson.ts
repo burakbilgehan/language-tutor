@@ -113,7 +113,9 @@ export function gradingPrompt(opts: {
   const scriptRule =
     opts.targetLanguage === "zh"
       ? `- Öğrenci hedef dildeki cevabı PINYIN ile yazabilir (klavyesinde hanzi yok) ve ton işaretlerini yazamayabilir. "ni hao" = 你好 = "nǐ hǎo" say; yazı sistemi ve ton işareti farkını asla hata sayma, içeriğe göre değerlendir.`
-      : `- Öğrenci hedef dildeki cevabı ROMAJI/latin harfleriyle yazabilir (klavyesinde kana/kanji yok). "konnichiwa" = こんにちは say; yazı sistemi farkını asla hata sayma, içeriğe göre değerlendir.`;
+      : opts.targetLanguage === "ja"
+        ? `- Öğrenci hedef dildeki cevabı ROMAJI/latin harfleriyle yazabilir (klavyesinde kana/kanji yok). "konnichiwa" = こんにちは say; yazı sistemi farkını asla hata sayma, içeriğe göre değerlendir.`
+        : `- Öğrenci aksan/diyakritik işaretlerini yazamayabilir (klavyesinde yok). "etudiant" = "étudiant" say; aksan farkını asla hata sayma, içeriğe göre değerlendir.`;
 
   const diacriticRule =
     (opts.nativeLanguage ?? "tr") === "tr"

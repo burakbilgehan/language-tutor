@@ -59,37 +59,41 @@ function canonicalJa(s: string): string {
 }
 
 /**
- * Fold Turkish diacritics to ASCII so "hayir" matches "hayır", "asagi"
- * matches "aşağı" — the user shouldn't lose an answer to a missing dot.
+ * Fold Latin diacritics to ASCII so "hayir" matches "hayır" and "etudiant"
+ * matches "étudiant"; the user shouldn't lose an answer to a missing
+ * accent. NFD + combining-mark strip covers Turkish, Dutch and French
+ * accents alike; the small table handles the characters NFD can't reach
+ * (dotless ı has no decomposition, œ/æ are ligatures, not base+mark).
+ * Apostrophes and hyphens are dropped too ("es-tu" = "es tu", "l'ami" =
+ * "l ami"); Latin path only, so romaji apostrophes (kon'nichiwa) keep
+ * their disambiguating role on the Japanese path.
  */
-const TURKISH_FOLD: Record<string, string> = {
+const LIGATURE_FOLD: Record<string, string> = {
   ı: "i",
-  ş: "s",
-  ç: "c",
-  ğ: "g",
-  ö: "o",
-  ü: "u",
-  â: "a",
-  î: "i",
-  û: "u",
+  œ: "oe",
+  æ: "ae",
 };
 
-function foldTurkish(s: string): string {
-  return s.replace(/[ışçğöüâîû]/g, (ch) => TURKISH_FOLD[ch] ?? ch);
+function foldLatin(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[ıœæ]/g, (ch) => LIGATURE_FOLD[ch])
+    .replace(/['’-]/g, "");
 }
 
 /**
  * Answer equivalence check. Japanese-aware when either side contains
- * kana/kanji; otherwise normalized compare with Turkish diacritics folded
- * (Turkish, Dutch, ...).
+ * kana/kanji; otherwise normalized compare with Latin diacritics folded
+ * (Turkish, Dutch, French, ...).
  */
 export function answersMatch(expected: string, given: string): boolean {
   if (basicNormalize(expected) === basicNormalize(given)) return true;
   if (hasJapanese(expected) || hasJapanese(given)) {
     return canonicalJa(expected) === canonicalJa(given);
   }
-  const e = foldTurkish(basicNormalize(expected));
-  const g = foldTurkish(basicNormalize(given));
+  const e = foldLatin(basicNormalize(expected));
+  const g = foldLatin(basicNormalize(given));
   if (e === g) return true;
   // Whitespace-insensitive: "a i u e o" (normalized "a, i, u, e, o") = "aiueo".
   return e.replace(/\s+/g, "") === g.replace(/\s+/g, "");
