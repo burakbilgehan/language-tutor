@@ -66,3 +66,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # kumo-feedback is a separate worker (workers/feedback) with no build
+      # step; deploying it here keeps "push to main = deploy" true for it too.
+      # Secrets (GITHUB_TOKEN) live on the worker and survive redeploys.
+      - name: Deploy feedback worker
+        run: npx wrangler deploy
+        working-directory: workers/feedback
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
