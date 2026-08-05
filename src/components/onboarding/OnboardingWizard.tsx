@@ -30,6 +30,7 @@ import { CloudWarnings } from "@/components/shared/CloudWarnings";
 import type { UnreconstitutedRow } from "@/lib/save/seed-strip";
 import { useLlmStatus } from "@/lib/llm-status";
 import { LlmSetupWizard } from "@/components/settings/LlmSetupWizard";
+import { PromptCustomizer } from "@/components/curriculum/PromptCustomizer";
 import {
   GOAL_OPTIONS,
   INTEREST_OPTIONS,
@@ -164,6 +165,10 @@ const S = {
     next: "Devam",
     preparing: "Hazırlanıyor...",
     start: "Yolculuğu Başlat ✨",
+    // T-080: üretim öncesi iki kapı.
+    customize: "Promptu özelleştir",
+    customizeHint:
+      "Müfredatını üretecek metni görmek ve pedagoji bölümünü kendine göre değiştirmek istersen.",
   },
   en: {
     introTitle: "Hello! 🌸",
@@ -260,6 +265,9 @@ const S = {
     next: "Continue",
     preparing: "Preparing...",
     start: "Start the Journey ✨",
+    customize: "Customize the prompt",
+    customizeHint:
+      "If you want to see the text that will build your curriculum and adjust the pedagogy section to suit you.",
   },
 };
 
@@ -279,6 +287,11 @@ export function OnboardingWizard() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // T-080. The profile row created by whichever door was taken first; both
+  // doors need it (the pedagogy prompt is built from the profile) and reusing
+  // it keeps "customize, cancel, then generate" from creating a second row.
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [customizing, setCustomizing] = useState(false);
   // Statikte ilk açılışta LLM bağlı değildir; son adımda sihirbazı gömerek
   // submit'ten önce bağlanma şansı ver (atlanabilir — hata mesajı yol gösterir).
   const llm = useLlmStatus();
@@ -577,24 +590,55 @@ export function OnboardingWizard() {
         : [...d[key], value],
     }));
 
+  // T-080. Both doors need the profile row first: the pedagogy meta-prompt is
+  // built FROM the profile (`curriculumPedagogyPrompt({ profile })`), so there
+  // is nothing to preview until it exists.
+  //
+  // Deliberately NOT short-circuited on an already-created profileId. The
+  // customize door can create the profile, get cancelled, and leave the user
+  // back on step 5 editing their motivation; short-circuiting would then
+  // generate the curriculum from the PRE-EDIT draft and silently drop the
+  // change. createOrReuseProfile patches the existing curriculum-less row with
+  // the current draft (and only 409s once a curriculum exists), so calling it
+  // every time is idempotent AND keeps the last-write-wins behaviour the flow
+  // had before this ticket.
+  const ensureProfile = useCallback(async (): Promise<string> => {
+    const t = pick(S, draft.uiLanguage);
+    const { profile } = await createProfileApi(
+      draft as unknown as Record<string, unknown>
+    );
+    if (!profile) throw new Error(t.profileSaveFailed);
+    // T-054: profil oluştu. Müfredat üretimi bundan sonra başarısız olsa
+    // bile (LLM yok / job hatası) profil DURUYOR; /map kendi boş durumunu
+    // gösterir. Bayrağı burada yazmak, o kullanıcıyı landing'e geri
+    // düşürmemek demek.
+    markVisited();
+    setProfileId(profile.id);
+    return profile.id;
+  }, [draft]);
+
+  const openCustomizer = useCallback(async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await ensureProfile();
+      setCustomizing(true);
+    } catch (err) {
+      setError(localizeError(err, resolveUiLang(draft.uiLanguage)));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [draft.uiLanguage, ensureProfile]);
+
   const submit = useCallback(async () => {
     setSubmitting(true);
     setError(null);
-    const t = pick(S, draft.uiLanguage);
     try {
-      const { profile } = await createProfileApi(
-        draft as unknown as Record<string, unknown>
-      );
-      if (!profile) throw new Error(t.profileSaveFailed);
-      // T-054: profil oluştu. Müfredat üretimi bundan sonra başarısız olsa
-      // bile (LLM yok / job hatası) profil DURUYOR — /map kendi boş durumunu
-      // gösterir. Bayrağı burada yazmak, o kullanıcıyı landing'e geri
-      // düşürmemek demek.
-      markVisited();
+      const id = await ensureProfile();
 
       let gen: { jobId?: string };
       try {
-        gen = await curriculumGenerate(profile.id);
+        gen = await curriculumGenerate(id);
       } catch (err) {
         // T-056: LLM yoksa müfredat üretimi ATLANIR — kişiselleştirme bir
         // augmentation, ön-koşul değil. Profil oluştu; /map müfredatsız
@@ -620,7 +664,26 @@ export function OnboardingWizard() {
     } finally {
       setSubmitting(false);
     }
-  }, [draft]);
+  }, [draft.uiLanguage, ensureProfile]);
+
+  // T-080: the customizer owns the screen while open. Saving the edited body
+  // hands straight over to the ordinary generation path, which now reads the
+  // user's wording instead of the auto-generated one.
+  if (customizing && profileId) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center px-6 py-12">
+        <PromptCustomizer
+          profileId={profileId}
+          uiLanguage={draft.uiLanguage}
+          onSaved={() => {
+            setCustomizing(false);
+            void submit();
+          }}
+          onCancel={() => setCustomizing(false)}
+        />
+      </div>
+    );
+  }
 
   // An in-flight generation job implies a profile already exists, so this
   // takes priority over the intro/loading checks below.
@@ -1165,6 +1228,22 @@ export function OnboardingWizard() {
                   {t.llmNeeded}
                 </p>
                 <LlmSetupWizard onDone={() => setLlmDone(true)} />
+              </div>
+            )}
+            {/* T-080 second door. Only where an LLM exists: without one there
+                is no prompt to preview, and generation is skipped anyway. Soft
+                variant on purpose; "Start the journey" below is this screen's
+                one dominant action. */}
+            {(llm.configured || llmDone) && (
+              <div className="mt-6 rounded-xl border-2 border-surface-2 bg-background p-4">
+                <p className="mb-3 text-sm text-ink-soft">{t.customizeHint}</p>
+                <CozyButton
+                  variant="soft"
+                  onClick={() => void openCustomizer()}
+                  disabled={submitting}
+                >
+                  {submitting ? t.preparing : t.customize}
+                </CozyButton>
               </div>
             )}
           </StepShell>

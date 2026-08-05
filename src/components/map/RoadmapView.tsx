@@ -11,6 +11,7 @@ import { StatsHeader, visibleNavItems } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { GeneratingScreen } from "@/components/onboarding/GeneratingScreen";
+import { PromptCustomizer } from "@/components/curriculum/PromptCustomizer";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
@@ -69,6 +70,10 @@ const S = {
     generateNow: "Müfredatı oluştur",
     generating: "Hazırlanıyor...",
     goSettings: "⚙️ LLM bağla",
+    // T-080: üretim öncesi ikinci kapı.
+    customize: "Promptu özelleştir",
+    customizeHint:
+      "İstersen önce gönderilecek metni gör; pedagoji bölümünü kendine göre değiştir.",
     hubHeading: "Bu arada kütüphane açık — bunlar tamamen hazır:",
     hubCards: {
       grammar: {
@@ -134,6 +139,9 @@ const S = {
     generateNow: "Generate curriculum",
     generating: "Preparing...",
     goSettings: "⚙️ Connect an LLM",
+    customize: "Customize the prompt",
+    customizeHint:
+      "See the text that will be sent first, and adjust the pedagogy section to suit you.",
     hubHeading: "Meanwhile the library is open — these are fully ready:",
     hubCards: {
       grammar: {
@@ -232,6 +240,10 @@ export function RoadmapView() {
   const [genJobId, setGenJobId] = useState<string | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  // T-080: the second door on the generate flow. The profile already exists
+  // here (that is what makes this the notReady hub rather than onboarding), so
+  // the customizer can open immediately.
+  const [customizing, setCustomizing] = useState(false);
 
   // Lessons open in a drawer over the map (scroll position survives). The
   // drawer state is mirrored into ?lesson=<id> so the browser back button
@@ -424,6 +436,27 @@ export function RoadmapView() {
       </CenteredPage>
     );
   }
+  // T-080: the customizer owns the screen while open. Saving persists the
+  // edited pedagogy body and hands over to the ordinary generate path, which
+  // then reads the user's wording (and so does every later extend).
+  if (customizing && profileId) {
+    return (
+      <div className="min-h-dvh pb-16">
+        <StatsHeader />
+        <main className="mx-auto max-w-3xl px-4 py-8">
+          <PromptCustomizer
+            profileId={profileId}
+            uiLanguage={meta?.uiLanguage}
+            onSaved={() => {
+              setCustomizing(false);
+              void startGenerate();
+            }}
+            onCancel={() => setCustomizing(false)}
+          />
+        </main>
+      </div>
+    );
+  }
   // T-056: a map-started server generation — reuse the onboarding screen
   // (status lines + job polling + error/retry) instead of a bare spinner.
   if (genJobId) {
@@ -466,14 +499,25 @@ export function RoadmapView() {
             <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">
               {llm.configured ? t.noCurriculumLlm : t.noCurriculumNoLlm}
             </p>
-            <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
               {llm.configured ? (
-                <CozyButton
-                  onClick={() => void startGenerate()}
-                  disabled={genBusy || !profileId}
-                >
-                  {genBusy ? t.generating : t.generateNow}
-                </CozyButton>
+                <>
+                  <CozyButton
+                    onClick={() => void startGenerate()}
+                    disabled={genBusy || !profileId}
+                  >
+                    {genBusy ? t.generating : t.generateNow}
+                  </CozyButton>
+                  {/* T-080. Soft variant: "Generate curriculum" above stays
+                      this page's single dominant action. */}
+                  <CozyButton
+                    variant="soft"
+                    onClick={() => setCustomizing(true)}
+                    disabled={genBusy || !profileId}
+                  >
+                    {t.customize}
+                  </CozyButton>
+                </>
               ) : (
                 <CozyButton
                   variant="soft"
@@ -483,6 +527,11 @@ export function RoadmapView() {
                 </CozyButton>
               )}
             </div>
+            {llm.configured && (
+              <p className="mx-auto mt-3 max-w-md text-xs text-ink-soft">
+                {t.customizeHint}
+              </p>
+            )}
             {genError && (
               <p className="mt-3 text-sm text-danger">{genError}</p>
             )}

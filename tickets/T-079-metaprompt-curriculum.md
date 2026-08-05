@@ -88,3 +88,9 @@ blanket pronunciation-lesson ban were dissolved into the meta-prompt; only
 Known benign race: two concurrent chapter jobs for different levels can each
 pay one meta-call (last write wins, both valid). T-080 must decide how
 hand-edited bodies interact with the staleness stamp (edited flag vs warn).
+
+Answered by T-080 (2026-08-06): edited flag AND warn. An additive
+`edited?: true` on the stored json marks hand-written bodies; a stale pair
+stamp discards an auto-generated body as before but KEEPS an edited one and
+surfaces the mismatch in the UI with an explicit regenerate button. See
+tickets/T-080-curriculum-prompt-transparency.md.

@@ -27,6 +27,8 @@ export const ERROR_CODES = [
   "save_load_failed",
   "job_cancelled",
   "curriculum_translate_failed",
+  // T-080: a hand-edited curriculum pedagogy body below the usable floor.
+  "pedagogy_too_short",
   // Kept verbatim: useLlmStatus/client gating already key on this string.
   "llm_unconfigured",
   // T-040: server-mode env-token gate (APP_AUTH_TOKEN) rejected the request.

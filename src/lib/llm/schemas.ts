@@ -169,12 +169,22 @@ export type CurriculumPedagogyContent = z.infer<typeof CurriculumPedagogySchema>
  * /api/profile), so a stale stamp must trigger a regeneration. Same idea as
  * `curricula.contentLang`. `targetLanguage` is immutable per profile but
  * stamped anyway so the stored value is self-describing for T-080's UI.
+ *
+ * `edited` (T-080) marks a body the USER wrote or amended by hand. It is
+ * additive and optional: values stored before T-080 simply lack it and behave
+ * exactly as before. Its one job is to change what a stale pair stamp means.
+ * An auto-generated stale body is disposable (regenerating costs one deep
+ * call), so it is discarded; a hand-edited one is user input, so it is kept
+ * and the staleness is surfaced in the UI with an explicit regenerate action
+ * instead of being silently destroyed. Deliberately `true`-only: absent means
+ * "not edited", so nothing has to write `edited: false`.
  */
 export type CurriculumPedagogy = {
   pedagogy: string;
   targetLanguage: string;
   nativeLanguage: string;
   generatedAt: string;
+  edited?: true;
 };
 
 // -- Curriculum re-translation (T-031) ---------------------------------------

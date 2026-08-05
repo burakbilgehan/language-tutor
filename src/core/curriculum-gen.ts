@@ -3,7 +3,8 @@ import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { CurriculumSchema, CurriculumPedagogySchema } from "@/lib/llm/schemas";
 import type { CurriculumPedagogy } from "@/lib/llm/schemas";
-import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
+import { chapterPrompt, chapterPromptParts } from "@/lib/llm/prompts/curriculum";
+import type { ChapterPromptParts } from "@/lib/llm/prompts/curriculum";
 import { curriculumPedagogyPrompt } from "@/lib/llm/prompts/curriculum-pedagogy";
 import { grammarIndexFor } from "@/lib/grammar-index";
 import { AppError } from "@/lib/errors";
@@ -205,24 +206,70 @@ function buildPriorSummary(
   return `Önceki üniteler:\n${unitLines}${grammarLine}`;
 }
 
+/** What the stored pedagogy body is, and whether its pair stamp still holds. */
+export interface StoredPedagogyInfo {
+  pedagogy: string;
+  /** True when the user wrote or amended this body by hand (T-080). */
+  edited: boolean;
+  /** True when the stamp no longer matches the profile's current pair. */
+  stale: boolean;
+  generatedAt: string | null;
+}
+
 /**
- * Reads the stored pedagogy body if it is still valid for the profile's
- * CURRENT language pair. `nativeLanguage` is editable (PATCH /api/profile) and
- * the whole premise of T-079 is that the prompt is pair-specific, so a body
- * written for a Turkish speaker must not be reused after a switch to English.
- * Same staleness idea as `curricula.contentLang`. Returns null when absent,
- * stale, or malformed (a hand-edited or truncated value must not poison the
- * chapter prompt; regenerating costs one deep call and is always recoverable).
+ * Inspects `profiles.curriculum_pedagogy` without deciding whether to use it.
+ * Returns null only for absent/malformed values; a stale body still comes back,
+ * flagged, because T-080's UI has to be able to SHOW a stale hand-edited body
+ * and offer regeneration as an explicit choice.
+ */
+export function inspectStoredPedagogy(
+  profile: typeof tables.profiles.$inferSelect
+): StoredPedagogyInfo | null {
+  const stored = profile.curriculumPedagogy as CurriculumPedagogy | null;
+  if (!stored || typeof stored.pedagogy !== "string") return null;
+  if (!stored.pedagogy.trim()) return null;
+  const stale =
+    stored.targetLanguage !== profile.targetLanguage ||
+    stored.nativeLanguage !== (profile.nativeLanguage ?? "tr");
+  return {
+    pedagogy: stored.pedagogy,
+    edited: stored.edited === true,
+    stale,
+    generatedAt:
+      typeof stored.generatedAt === "string" ? stored.generatedAt : null,
+  };
+}
+
+/**
+ * Reads the stored pedagogy body if it should be REUSED for generation.
+ *
+ * The pair stamp exists because `nativeLanguage` is editable (PATCH
+ * /api/profile) and the whole premise of T-079 is that the prompt is
+ * pair-specific: a body written for a Turkish speaker must not be silently
+ * reused after a switch to English. Same staleness idea as
+ * `curricula.contentLang`.
+ *
+ * T-080 amends what a stale stamp does, and the distinction is the point:
+ *
+ * - auto-generated + stale  -> null (regenerate; one deep call, nothing lost)
+ * - hand-edited   + stale   -> KEPT (user input is never silently destroyed;
+ *                              the UI shows the mismatch and offers an
+ *                              explicit regenerate button instead)
+ * - either        + fresh   -> kept
+ * - absent / malformed      -> null
+ *
+ * Keeping a stale EDITED body means a chapter can be generated from a prompt
+ * written for the previous native language. That is the correct trade: the
+ * user typed it, they can see it, and they can replace it in one click. The
+ * alternative deletes work the user did without asking.
  */
 export function readStoredPedagogy(
   profile: typeof tables.profiles.$inferSelect
 ): string | null {
-  const stored = profile.curriculumPedagogy as CurriculumPedagogy | null;
-  if (!stored || typeof stored.pedagogy !== "string") return null;
-  if (!stored.pedagogy.trim()) return null;
-  if (stored.targetLanguage !== profile.targetLanguage) return null;
-  if (stored.nativeLanguage !== (profile.nativeLanguage ?? "tr")) return null;
-  return stored.pedagogy;
+  const info = inspectStoredPedagogy(profile);
+  if (!info) return null;
+  if (info.stale && !info.edited) return null;
+  return info.pedagogy;
 }
 
 /**
@@ -243,7 +290,8 @@ export function readStoredPedagogy(
 export async function ensureCurriculumPedagogy(
   db: AppDb,
   gen: Gen,
-  profileId: string
+  profileId: string,
+  opts?: { force?: boolean }
 ): Promise<string> {
   const profile = db
     .select()
@@ -253,7 +301,10 @@ export async function ensureCurriculumPedagogy(
     .get();
   if (!profile) throw new Error("Profil bulunamadı");
 
-  const existing = readStoredPedagogy(profile);
+  // `force` is T-080's explicit "rewrite it" action, the only way a stored
+  // body (including a hand-edited one) is ever replaced. Generation itself
+  // never forces: it reuses whatever readStoredPedagogy hands back.
+  const existing = opts?.force ? null : readStoredPedagogy(profile);
   if (existing) return existing;
 
   const { system, prompt } = curriculumPedagogyPrompt({ profile });
@@ -279,6 +330,150 @@ export async function ensureCurriculumPedagogy(
     .run();
 
   return result.pedagogy;
+}
+
+/**
+ * T-080. The exact prompt that curriculum generation WOULD send, split at the
+ * one seam the user may edit. `before`/`after` are the locked data contract;
+ * `pedagogy` is the editable body.
+ *
+ * `level`/`priorSummary` are resolved by the SAME rules `generateChapter`
+ * applies to the same argument, so the preview is not an approximation of the
+ * real prompt; it is the real prompt.
+ */
+export interface PedagogyPreview extends ChapterPromptParts {
+  /** True when the body currently stored was hand-edited by the user. */
+  edited: boolean;
+  /** True when the stored body's language-pair stamp no longer matches. */
+  stale: boolean;
+  /** The level this preview was built for. */
+  level: string;
+}
+
+/**
+ * Mirrors `generateChapter`'s own resolution for the same `levelArg`, so the
+ * preview can never show a different chapter than the one that gets generated.
+ *
+ * Both wired entry points (onboarding's final step, the map hub's generate
+ * card) reach generation through `curriculumGenerate`, which passes `null`, so
+ * they preview the scheme's first level. The rules are copied here rather than
+ * approximated: `null` means the first level UNCONDITIONALLY, exactly as in
+ * generateChapter, and NOT "the next level after the highest existing chapter"
+ * (that is what extend does, via its own explicit level argument). Getting
+ * this wrong would show a preview for a level generation never targets.
+ */
+function resolvePreviewLevel(
+  db: AppDb,
+  profile: typeof tables.profiles.$inferSelect,
+  levelArg: string | null
+): { level: string; priorSummary?: string } {
+  const level = levelArg ?? schemeFor(profile.targetLanguage).levels[0];
+  const curriculum = db
+    .select()
+    .from(tables.curricula)
+    .where(eq(tables.curricula.profileId, profile.id))
+    .limit(1)
+    .get();
+  // generateChapter: `isFirst = !curriculum` decides whether a prior summary
+  // is built at all.
+  if (!curriculum) return { level };
+  return {
+    level,
+    priorSummary: buildPriorSummary(
+      db,
+      curriculum.id,
+      profile.targetLanguage,
+      level
+    ),
+  };
+}
+
+/**
+ * Builds the preview, generating the pedagogy body first if the profile has
+ * none usable. That generation is a DEEP-tier call and can take a minute; the
+ * caller owns the loading state. It persists on success exactly like the
+ * generation path does, so opening the preview and then generating with the
+ * recommended prompt never pays the meta-call twice.
+ */
+export async function previewCurriculumPrompt(
+  db: AppDb,
+  gen: Gen,
+  profileId: string,
+  opts?: { force?: boolean; level?: string | null }
+): Promise<PedagogyPreview> {
+  const before = db
+    .select()
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, profileId))
+    .limit(1)
+    .get();
+  if (!before) throw new AppError("profile_missing");
+
+  const pedagogy = await ensureCurriculumPedagogy(db, gen, profileId, opts);
+
+  // Re-read: ensureCurriculumPedagogy may have written a fresh (unedited,
+  // unstale) value, and the flags must describe what is stored NOW.
+  const profile =
+    db
+      .select()
+      .from(tables.profiles)
+      .where(eq(tables.profiles.id, profileId))
+      .limit(1)
+      .get() ?? before;
+  const info = inspectStoredPedagogy(profile);
+  const { level, priorSummary } = resolvePreviewLevel(
+    db,
+    profile,
+    opts?.level ?? null
+  );
+  const parts = chapterPromptParts({ profile, level, pedagogy, priorSummary });
+
+  return {
+    ...parts,
+    edited: info?.edited ?? false,
+    stale: info?.stale ?? false,
+    level,
+  };
+}
+
+/**
+ * Persists a hand-edited pedagogy body (T-080). Stamped `edited: true` and
+ * with the profile's CURRENT pair, so it is fresh by construction and every
+ * later extend reuses the user's wording.
+ *
+ * The floor is `CurriculumPedagogySchema`'s own 400-char minimum: an empty or
+ * near-empty body would silently produce the contentless curricula T-079 was
+ * built to eliminate, and the user gets a clear rejection instead.
+ */
+export function saveCurriculumPedagogy(
+  db: AppDb,
+  profileId: string,
+  body: string
+): void {
+  const profile = db
+    .select()
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, profileId))
+    .limit(1)
+    .get();
+  if (!profile) throw new AppError("profile_missing");
+
+  const trimmed = body.trim();
+  if (!CurriculumPedagogySchema.safeParse({ pedagogy: trimmed }).success) {
+    throw new AppError("pedagogy_too_short");
+  }
+
+  const stored: CurriculumPedagogy = {
+    pedagogy: trimmed,
+    targetLanguage: profile.targetLanguage,
+    nativeLanguage: profile.nativeLanguage ?? "tr",
+    generatedAt: new Date().toISOString(),
+    edited: true,
+  };
+  db.update(tables.profiles)
+    .set({ curriculumPedagogy: stored })
+    .where(eq(tables.profiles.id, profileId))
+    .run();
 }
 
 /**
