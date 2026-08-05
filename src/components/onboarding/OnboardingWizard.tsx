@@ -592,11 +592,17 @@ export function OnboardingWizard() {
 
   // T-080. Both doors need the profile row first: the pedagogy meta-prompt is
   // built FROM the profile (`curriculumPedagogyPrompt({ profile })`), so there
-  // is nothing to preview until it exists. createOrReuseProfile is idempotent
-  // for a curriculum-less profile, so backing out of the customizer and coming
-  // back does not pile up rows.
+  // is nothing to preview until it exists.
+  //
+  // Deliberately NOT short-circuited on an already-created profileId. The
+  // customize door can create the profile, get cancelled, and leave the user
+  // back on step 5 editing their motivation; short-circuiting would then
+  // generate the curriculum from the PRE-EDIT draft and silently drop the
+  // change. createOrReuseProfile patches the existing curriculum-less row with
+  // the current draft (and only 409s once a curriculum exists), so calling it
+  // every time is idempotent AND keeps the last-write-wins behaviour the flow
+  // had before this ticket.
   const ensureProfile = useCallback(async (): Promise<string> => {
-    if (profileId) return profileId;
     const t = pick(S, draft.uiLanguage);
     const { profile } = await createProfileApi(
       draft as unknown as Record<string, unknown>
@@ -609,7 +615,7 @@ export function OnboardingWizard() {
     markVisited();
     setProfileId(profile.id);
     return profile.id;
-  }, [draft, profileId]);
+  }, [draft]);
 
   const openCustomizer = useCallback(async () => {
     setSubmitting(true);

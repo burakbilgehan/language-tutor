@@ -12,7 +12,6 @@ import {
   isLevelOf,
   levelOrdinal,
   levelOrdinalFor,
-  nextLevelFor,
   remapLegacyLevel,
   schemeFor,
 } from "@/lib/curriculum/levels";
@@ -338,34 +337,46 @@ export async function ensureCurriculumPedagogy(
  * one seam the user may edit. `before`/`after` are the locked data contract;
  * `pedagogy` is the editable body.
  *
- * `level`/`priorSummary` are resolved exactly as `generateChapter` resolves
- * them for the NEXT chapter this profile would generate, so the preview is not
- * an approximation of the real prompt; it is the real prompt.
+ * `level`/`priorSummary` are resolved by the SAME rules `generateChapter`
+ * applies to the same argument, so the preview is not an approximation of the
+ * real prompt; it is the real prompt.
  */
 export interface PedagogyPreview extends ChapterPromptParts {
   /** True when the body currently stored was hand-edited by the user. */
   edited: boolean;
   /** True when the stored body's language-pair stamp no longer matches. */
   stale: boolean;
-  /** The level this preview was built for (the next one to be generated). */
+  /** The level this preview was built for. */
   level: string;
 }
 
-/** Resolves the level `generateChapter` would target next for this profile. */
-function nextChapterLevel(
+/**
+ * Mirrors `generateChapter`'s own resolution for the same `levelArg`, so the
+ * preview can never show a different chapter than the one that gets generated.
+ *
+ * Both wired entry points (onboarding's final step, the map hub's generate
+ * card) reach generation through `curriculumGenerate`, which passes `null`, so
+ * they preview the scheme's first level. The rules are copied here rather than
+ * approximated: `null` means the first level UNCONDITIONALLY, exactly as in
+ * generateChapter, and NOT "the next level after the highest existing chapter"
+ * (that is what extend does, via its own explicit level argument). Getting
+ * this wrong would show a preview for a level generation never targets.
+ */
+function resolvePreviewLevel(
   db: AppDb,
-  profile: typeof tables.profiles.$inferSelect
+  profile: typeof tables.profiles.$inferSelect,
+  levelArg: string | null
 ): { level: string; priorSummary?: string } {
+  const level = levelArg ?? schemeFor(profile.targetLanguage).levels[0];
   const curriculum = db
     .select()
     .from(tables.curricula)
     .where(eq(tables.curricula.profileId, profile.id))
     .limit(1)
     .get();
-  const first = schemeFor(profile.targetLanguage).levels[0];
-  if (!curriculum) return { level: first };
-  const top = topChapterLevel(db, curriculum.id, profile.targetLanguage);
-  const level = top ? (nextLevelFor(profile.targetLanguage, top) ?? top) : first;
+  // generateChapter: `isFirst = !curriculum` decides whether a prior summary
+  // is built at all.
+  if (!curriculum) return { level };
   return {
     level,
     priorSummary: buildPriorSummary(
@@ -388,7 +399,7 @@ export async function previewCurriculumPrompt(
   db: AppDb,
   gen: Gen,
   profileId: string,
-  opts?: { force?: boolean }
+  opts?: { force?: boolean; level?: string | null }
 ): Promise<PedagogyPreview> {
   const before = db
     .select()
@@ -410,7 +421,11 @@ export async function previewCurriculumPrompt(
       .limit(1)
       .get() ?? before;
   const info = inspectStoredPedagogy(profile);
-  const { level, priorSummary } = nextChapterLevel(db, profile);
+  const { level, priorSummary } = resolvePreviewLevel(
+    db,
+    profile,
+    opts?.level ?? null
+  );
   const parts = chapterPromptParts({ profile, level, pedagogy, priorSummary });
 
   return {
