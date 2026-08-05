@@ -1029,6 +1029,57 @@ export async function curriculumGenerate(profileId: string): Promise<{ jobId?: s
   return {};
 }
 
+/**
+ * T-080. Üretimin göndereceği TAM prompt: kilitli sözleşme yarıları
+ * (`before`/`after`) ile düzenlenebilir pedagoji gövdesi. Profilde kullanılabilir
+ * gövde yoksa derin katman meta-çağrısını burada tetikler (bir dakikayı
+ * bulabilir; bekleme durumunu çağıran gösterir). `force` = kullanıcının açık
+ * "yeniden yaz" isteği; el yazması bir gövdenin üzerine YALNIZ bu yazar.
+ */
+export async function curriculumPedagogyPreview(
+  profileId: string,
+  force?: boolean
+): Promise<import("@/core/curriculum-gen").PedagogyPreview> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/curriculum/pedagogy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId, force }),
+    });
+  }
+  const gen = await browserGen();
+  const handle = await browserDb();
+  const coreC = await import("@/core/curriculum-gen");
+  const preview = await coreC.previewCurriculumPrompt(
+    handle.db,
+    gen,
+    profileId,
+    { force }
+  );
+  await handle.persistNow(); // meta-çağrı gövdeyi yazdıysa kalıcı olsun
+  return preview;
+}
+
+/** T-080. El ile düzenlenmiş pedagoji gövdesini profile yazar; sonraki her
+ * bölüm (extend dahil) bunu kullanır. LLM çağrısı yok. */
+export async function curriculumPedagogySave(
+  profileId: string,
+  pedagogy: string
+): Promise<void> {
+  if (!IS_STATIC) {
+    await fetchJson("/api/curriculum/pedagogy", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId, pedagogy }),
+    });
+    return;
+  }
+  const handle = await browserDb();
+  const coreC = await import("@/core/curriculum-gen");
+  coreC.saveCurriculumPedagogy(handle.db, profileId, pedagogy);
+  await handle.persistNow();
+}
+
 /** Müfredat başlıklarını mevcut ana dile yerinde çevirir (T-031). İlerleme
  * silinmez; yalnızca görünen metinler değişir. */
 export async function curriculumRetranslate(): Promise<{ translated: number }> {
