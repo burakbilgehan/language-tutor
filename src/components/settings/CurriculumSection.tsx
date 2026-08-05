@@ -7,7 +7,12 @@ import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { AppError } from "@/lib/errors";
 import { withBase } from "@/lib/base-path";
 import { schemeFor, levelDisplay } from "@/lib/curriculum/levels";
-import { profileData, curriculumDelete, curriculumGenerate } from "@/lib/client-api";
+import {
+  profileData,
+  roadmap,
+  curriculumDelete,
+  curriculumGenerate,
+} from "@/lib/client-api";
 import type { CurriculumDeletionCounts } from "@/core/curriculum-delete";
 
 // T-082. Throwing a curriculum away and building a new one, optionally starting
@@ -109,6 +114,10 @@ export function CurriculumSection() {
   const [level, setLevel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleted, setDeleted] = useState<CurriculumDeletionCounts | null>(null);
+  // Null while unknown; false when there is nothing to delete, so the panel
+  // offers an explanation instead of a button that can only fail with
+  // `curriculum_missing`.
+  const [hasCurriculum, setHasCurriculum] = useState<boolean | null>(null);
 
   useEffect(() => {
     profileData()
@@ -123,6 +132,12 @@ export function CurriculumSection() {
         setLevel(schemeFor(d.profile.targetLanguage).levels[0]);
       })
       .catch(() => {});
+    // getRoadmap returns null when there is no curriculum (or it isn't ready),
+    // which is exactly the "nothing to delete" condition; it throws
+    // curriculum_not_ready through the client seam.
+    roadmap()
+      .then(() => setHasCurriculum(true))
+      .catch(() => setHasCurriculum(false));
   }, []);
 
   if (!profile) return null;
@@ -161,19 +176,23 @@ export function CurriculumSection() {
       <h2 className="mb-1 font-semibold">{t.title}</h2>
       <p className="mb-3 text-sm text-ink-soft">{t.desc}</p>
 
-      {phase === "idle" && (
-        <CozyButton
-          variant="soft"
-          className="text-danger"
-          onClick={() => {
-            setTyped("");
-            setError(null);
-            setPhase("armed");
-          }}
-        >
-          {t.deleteButton}
-        </CozyButton>
-      )}
+      {phase === "idle" &&
+        (hasCurriculum === false ? (
+          <p className="text-sm text-ink-soft">{t.noCurriculum}</p>
+        ) : (
+          <CozyButton
+            variant="soft"
+            className="text-danger"
+            disabled={hasCurriculum === null}
+            onClick={() => {
+              setTyped("");
+              setError(null);
+              setPhase("armed");
+            }}
+          >
+            {t.deleteButton}
+          </CozyButton>
+        ))}
 
       {phase === "armed" && (
         <div className="rounded-xl border-2 border-danger/40 bg-danger/5 px-4 py-4">
