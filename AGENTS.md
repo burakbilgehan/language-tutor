@@ -238,8 +238,17 @@ better-sqlite3, WAL, `data/app.db`).
   stamped with `save_meta` (schema version). Import is **replace-all**
   (wipes local, keeps one `.bak`), refuses on version mismatch. `db` in
   `src/db/index.ts` is a **lazy Proxy** + `resetDb()` so import can swap the
-  file under the live connection. **Bump `SAVE_SCHEMA_VERSION`
-  (`src/lib/save/version.ts`) whenever `schema.ts` changes shape.**
+  file under the live connection. **Schema shape changes and saves
+  (amended by T-079; the old blanket "always bump `SAVE_SCHEMA_VERSION`"
+  rule no longer applies):** import compares versions with strict
+  equality, so a bump refuses EVERY existing save. An additive change (new
+  nullable column / new table) ships WITHOUT a bump; instead add it to
+  `src/db/heals.ts` (`COLUMN_HEALS`) and regenerate `src/db/ddl.ts`; both
+  runtimes replay these idempotently (browser: `healImage` in
+  `src/db/browser.ts` on boot/import/restore/cloud-pull; server:
+  `importSave`). Bump `SAVE_SCHEMA_VERSION` (`src/lib/save/version.ts`)
+  ONLY for a change that cannot self-heal additively (destructive or
+  semantic rewrite), and accept that it locks out older saves.
 - **Cloud save-sync** (T-047/T-048, static mode only): the ONE remote
   backup; Google Drive (T-032) was removed in T-050, so `src/lib/backup/`
   now holds only the local half (lesson counter + throttled IndexedDB

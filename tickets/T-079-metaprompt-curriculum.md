@@ -1,7 +1,7 @@
 ---
 id: T-079
 title: "Meta-prompt curriculum architecture: language-pair-specific prompts written by the deep tier"
-status: todo
+status: done
 priority: p1
 effort: L
 confidence: medium
@@ -70,3 +70,21 @@ Requirements:
   stay thin shells.
 - T-080 (transparency/customization UI) builds directly on the stored
   prompt from this ticket.
+
+## Resolution (2026-08-06)
+
+Shipped in wave C1. Two-stage pipeline: `curriculumPedagogyPrompt`
+(`src/lib/llm/prompts/curriculum-pedagogy.ts`, deep tier, zod-validated
+`CurriculumPedagogySchema`) writes the pair-specific pedagogy body;
+`chapterPrompt` is now a pure data-contract wrapper around it. Body persisted
+as `profiles.curriculum_pedagogy` (nullable json: pedagogy + pair stamp +
+generatedAt), reused on every extend, regenerated when the native language
+changes. NO SAVE_SCHEMA_VERSION bump; heal-based instead: shared
+`src/db/heals.ts` COLUMN_HEALS replayed by browser `healImage` (boot, import,
+snapshot restore, cloud pull) AND server `importSave`. AGENTS.md bump rule
+amended accordingly. The hand-written ja/zh/latin guardrail blocks and the
+blanket pronunciation-lesson ban were dissolved into the meta-prompt; only
+"pronunciation questions answerable from spelling" stays banned (lesson.ts).
+Known benign race: two concurrent chapter jobs for different levels can each
+pay one meta-call (last write wins, both valid). T-080 must decide how
+hand-edited bodies interact with the staleness stamp (edited flag vs warn).

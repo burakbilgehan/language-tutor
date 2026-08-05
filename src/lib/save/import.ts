@@ -4,6 +4,8 @@ import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 import { inArray } from "drizzle-orm";
 import { db, tables, resetDb, DB_PATH } from "@/db";
+import { DDL } from "@/db/ddl";
+import { COLUMN_HEALS } from "@/db/heals";
 import { SAVE_SCHEMA_VERSION } from "./version";
 import {
   MAX_SAVE_BYTES,
@@ -154,6 +156,29 @@ export function importSave(bytes: Buffer): void {
   // sure it's back in WAL mode (a serialized image may carry a different
   // journal mode).
   db.$client.pragma("journal_mode = WAL");
+
+  // Additive self-heal, mirroring the browser's healImage (src/db/browser.ts):
+  // the version gate can't distinguish saves written before and after an
+  // additive no-bump schema change (T-079), so an imported file may miss
+  // tables or columns the current build declares. Replaying the CREATEs and
+  // ADD COLUMNs here keeps server mode from 500-ing on the first profile read
+  // until someone runs drizzle-kit push. Every statement is idempotent via
+  // try/catch on "already exists"/"duplicate column".
+  for (const stmt of [...DDL, ...COLUMN_HEALS]) {
+    try {
+      db.$client.exec(stmt);
+    } catch {
+      /* already exists / duplicate column */
+    }
+  }
+  try {
+    db.$client.exec("DROP INDEX IF EXISTS `translation_text_idx`");
+    db.$client.exec(
+      "CREATE UNIQUE INDEX `translation_text_idx` ON `translations` (`target_language`,`native_language`,`source_text`)"
+    );
+  } catch {
+    /* index already in desired shape */
+  }
 
   // Belt-and-suspenders: exportSave (src/lib/save/export.ts) already strips
   // in-flight generation_jobs rows, but saves taken before that fix are still

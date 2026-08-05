@@ -10,33 +10,11 @@ import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
 import { drizzle, type SQLJsDatabase as DrizzleSqlJs } from "drizzle-orm/sql-js";
 import * as schema from "./schema";
 import { DDL } from "./ddl";
+import { COLUMN_HEALS } from "./heals";
 import { withBase } from "@/lib/base-path";
 import { stampAndSerialize, validateSaveImage } from "@/lib/backup/save-image";
 
 export type BrowserDb = DrizzleSqlJs<typeof schema>;
-
-// Additive column self-heals for images persisted by pre-v7 builds. ADD COLUMN
-// with a NOT NULL DEFAULT backfills existing rows on read, so no data touch.
-// Idempotent: re-running on an already-migrated image throws "duplicate column",
-// swallowed by the caller. Keep in sync with schema.ts shape changes.
-const COLUMN_HEALS: string[] = [
-  "ALTER TABLE `translations` ADD COLUMN `native_language` text DEFAULT 'tr' NOT NULL",
-  "ALTER TABLE `curricula` ADD COLUMN `content_lang` text",
-  "ALTER TABLE `exercises` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
-  // T-035 schema v8
-  "ALTER TABLE `srs_cards` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
-  "ALTER TABLE `chat_messages` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
-  // T-079: per-profile curriculum pedagogy prompt. Nullable, so no backfill;
-  // an absent value means "generate on first use". Deliberately shipped
-  // WITHOUT a SAVE_SCHEMA_VERSION bump (import.ts compares versions with
-  // strict equality, so a bump would refuse every existing save). That makes
-  // the heal load-bearing rather than a nicety: a v8 image exported before
-  // this change and one exported after are indistinguishable to the version
-  // gate, so the replay below is the only thing standing between an old image
-  // and a runtime throw in getActiveProfile (drizzle enumerates every declared
-  // column in `select()`).
-  "ALTER TABLE `profiles` ADD COLUMN `curriculum_pedagogy` text",
-];
 
 /**
  * Bring a loaded SQLite image up to the current schema shape: replay the

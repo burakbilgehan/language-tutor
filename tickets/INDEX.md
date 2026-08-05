@@ -8,7 +8,7 @@ file + a row here. This index is updated with every ticket change.
 | ID | Title | Status | Priority | Effort | Confidence |
 |---|---|---|---|---|---|
 | [T-078](T-078-mcq-option-shuffle.md) | MCQ option shuffle in the code layer (answer is always option A) | done | p1 | S | high |
-| [T-079](T-079-metaprompt-curriculum.md) | Meta-prompt curriculum architecture: language-pair-specific prompts (deep tier) | todo | p1 | L | medium |
+| [T-079](T-079-metaprompt-curriculum.md) | Meta-prompt curriculum architecture: language-pair-specific prompts (deep tier) | done | p1 | L | medium |
 | [T-080](T-080-curriculum-prompt-transparency.md) | Curriculum prompt transparency: show + edit pedagogy, contract locked | todo | p1 | M | medium |
 | [T-081](T-081-web-speech-tts.md) | TTS via Web Speech API: speaker buttons on vocab and examples | todo | p2 | M | high |
 | [T-082](T-082-curriculum-delete-regenerate.md) | Curriculum delete + regenerate with starting level; per-lesson delete | todo | p1 | M | medium |
