@@ -5,6 +5,7 @@ import Link from "next/link";
 import { GrammarTable } from "@/components/grammar/GrammarTable";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { isMachineTranslated, type GrammarTopicContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
@@ -182,7 +183,10 @@ export function GrammarTopicView({ slug }: { slug: string }) {
             <div className="flex flex-col gap-3">
               {topic.content.examples.map((ex, i) => (
                 <div key={i} className="rounded-xl bg-background p-4">
-                  <div className="text-lg"><Furigana text={ex.target} lang={cjkLang} /></div>
+                  <div className="flex items-center gap-1.5 text-lg">
+                    <Furigana text={ex.target} lang={cjkLang} />
+                    <SpeakButton text={ex.target} />
+                  </div>
                   {ex.reading && (
                     <div className="text-sm text-ink-soft">{ex.reading}</div>
                   )}
