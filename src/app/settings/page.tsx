@@ -5,6 +5,7 @@ import Link from "next/link";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ProfileSection } from "@/components/settings/ProfileSection";
+import { CurriculumSection } from "@/components/settings/CurriculumSection";
 import { LlmSettingsSection } from "@/components/settings/LlmSettingsSection";
 import { JobQueuePanel } from "@/components/settings/JobQueuePanel";
 import { CloudAccountSection } from "@/components/settings/CloudAccountSection";
@@ -207,6 +208,12 @@ export default function SettingsPage() {
       <StatsHeader title={t.title} />
       <main className="mx-auto flex max-w-xl flex-col gap-5 px-4 py-8">
         <ProfileSection />
+
+        {/* T-082: delete the whole curriculum + regenerate from a chosen
+            starting level. Placed under the profile because the starting level
+            is a profile-scheme choice, and well above the save/backup block so
+            the two destructive areas don't read as one. */}
+        <CurriculumSection />
 
         <section className="rounded-cozy bg-surface p-6 shadow-cozy">
           <h2 className="mb-3 font-semibold">{t.appearance}</h2>

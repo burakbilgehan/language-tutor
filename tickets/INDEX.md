@@ -11,7 +11,7 @@ file + a row here. This index is updated with every ticket change.
 | [T-079](T-079-metaprompt-curriculum.md) | Meta-prompt curriculum architecture: language-pair-specific prompts (deep tier) | done | p1 | L | medium |
 | [T-080](T-080-curriculum-prompt-transparency.md) | Curriculum prompt transparency: show + edit pedagogy, contract locked | done | p1 | M | medium |
 | [T-081](T-081-web-speech-tts.md) | TTS via Web Speech API: speaker buttons on vocab and examples | done | p2 | M | high |
-| [T-082](T-082-curriculum-delete-regenerate.md) | Curriculum delete + regenerate with starting level; per-lesson delete | todo | p1 | M | medium |
+| [T-082](T-082-curriculum-delete-regenerate.md) | Curriculum delete + regenerate with starting level; per-lesson delete | done | p1 | M | medium |
 | [T-083](T-083-granular-placement.md) | Granular placement: start mid-level (parked, needs design ruling) | backlog | p3 | L | low |
 | [T-084](T-084-lesson-template-customization.md) | Lesson prompt template customization (phase 2 of transparency) | backlog | p3 | M | low |
 | [T-085](T-085-google-tts-byo-key.md) | Google Cloud TTS as optional BYO-key quality upgrade | backlog | p3 | M | medium |

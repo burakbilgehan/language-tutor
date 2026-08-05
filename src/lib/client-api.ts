@@ -1011,12 +1011,20 @@ export async function createProfileApi(
   return { profile };
 }
 
-export async function curriculumGenerate(profileId: string): Promise<{ jobId?: string }> {
+/**
+ * Müfredatın ilk bölümünü üretir. `level` (T-082): şemanın ilk seviyesi yerine
+ * hangi seviyeden BAŞLANACAĞI; öncesindeki seviyeler hiç üretilmez. Verilmezse
+ * eski davranış (şemanın ilk seviyesi) birebir korunur.
+ */
+export async function curriculumGenerate(
+  profileId: string,
+  level?: string | null
+): Promise<{ jobId?: string }> {
   if (!IS_STATIC) {
     return fetchJson("/api/curriculum/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileId }),
+      body: JSON.stringify({ profileId, level: level ?? null }),
     });
   }
   // Statik: job kuyruğu yok — üretim inline (2-5 dk sürebilir; çağıran
@@ -1024,9 +1032,53 @@ export async function curriculumGenerate(profileId: string): Promise<{ jobId?: s
   const gen = await browserGen();
   const handle = await browserDb();
   const coreC = await import("@/core/curriculum-gen");
-  await coreC.generateChapter(handle.db, gen, profileId, null);
+  await coreC.generateChapter(handle.db, gen, profileId, level ?? null);
   await handle.persistNow();
   return {};
+}
+
+/**
+ * T-082. Profilin TÜM müfredatını siler (bölümler, üniteler, node'lar,
+ * önbellekli dersler + onların alıştırma/denemeleri). XP, seri, SRS kartları ve
+ * `curriculum_pedagogy` profil düzeyindedir; hayatta kalır. Yıkıcı yazma:
+ * statik modda görüntü hemen kalıcılaştırılır (persistSoon değil), yoksa sekme
+ * kapanınca silme geri gelir.
+ */
+export async function curriculumDelete(profileId: string): Promise<{
+  deleted: import("@/core/curriculum-delete").CurriculumDeletionCounts;
+}> {
+  if (!IS_STATIC) {
+    return fetchJson("/api/curriculum", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId }),
+    });
+  }
+  const handle = await browserDb();
+  const coreD = await import("@/core/curriculum-delete");
+  const result = coreD.deleteCurriculum(handle.db, profileId);
+  await handle.persistNow();
+  return { deleted: result.deleted };
+}
+
+/**
+ * T-082. Tek bir node'un önbellekli dersini atar; node'un tamamlanma durumu
+ * DEĞİŞMEZ. Sonraki açılışta ders sıfırdan üretilir.
+ */
+export async function lessonDiscard(nodeId: string): Promise<void> {
+  if (!IS_STATIC) {
+    await fetchJson(`/api/nodes/${nodeId}/lesson`, { method: "DELETE" });
+    return;
+  }
+  const handle = await browserDb();
+  const coreD = await import("@/core/curriculum-delete");
+  coreD.discardLesson(handle.db, nodeId);
+  // Statik modda üretim durumu bellekte de tutulur; atılan dersin eski
+  // hata/iptal kaydı kalırsa yeniden üretim engellenir (retryLessonGen ile
+  // aynı gerekçe).
+  const { clearLessonGen } = await import("@/lib/lesson-gen-store");
+  clearLessonGen(nodeId);
+  await handle.persistNow();
 }
 
 /**

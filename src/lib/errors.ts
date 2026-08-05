@@ -29,6 +29,11 @@ export const ERROR_CODES = [
   "curriculum_translate_failed",
   // T-080: a hand-edited curriculum pedagogy body below the usable floor.
   "pedagogy_too_short",
+  // T-082: a curriculum delete was refused because a chapter/lesson generation
+  // is still running and would write into the curriculum being thrown away.
+  "curriculum_job_running",
+  // T-082: the requested starting level is not part of the profile's scheme.
+  "invalid_level",
   // Kept verbatim: useLlmStatus/client gating already key on this string.
   "llm_unconfigured",
   // T-040: server-mode env-token gate (APP_AUTH_TOKEN) rejected the request.
