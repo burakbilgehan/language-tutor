@@ -6,6 +6,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { srsDue, srsReview, translateText } from "@/lib/client-api";
@@ -180,34 +181,39 @@ export function SrsSession() {
           ))}
         </div>
 
-        <button
-          onClick={() => reveal(card)}
-          disabled={revealed}
-          className="flex min-h-72 w-full flex-col items-center justify-center gap-3 rounded-cozy bg-surface p-8 text-center shadow-cozy transition-transform active:scale-[0.99] cursor-pointer disabled:cursor-default"
-        >
-          <div className="text-4xl font-semibold">
-            <Furigana text={card.front} lang={cjkLang} />
+        <div className="relative">
+          <div className="absolute right-4 top-4 z-10">
+            <SpeakButton text={card.front} />
           </div>
-          {revealed ? (
-            <>
-              {card.reading && (
-                <div className="text-ink-soft">{card.reading}</div>
-              )}
-              <div className="text-xl font-semibold text-accent">
-                {needsXlate(card)
-                  ? xlated[card.id] ?? t.translating
-                  : card.back}
-              </div>
-              {card.example && (
-                <div className="text-sm text-ink-soft">
-                  <Furigana text={card.example} lang={cjkLang} />
+          <button
+            onClick={() => reveal(card)}
+            disabled={revealed}
+            className="flex min-h-72 w-full flex-col items-center justify-center gap-3 rounded-cozy bg-surface p-8 text-center shadow-cozy transition-transform active:scale-[0.99] cursor-pointer disabled:cursor-default"
+          >
+            <div className="text-4xl font-semibold">
+              <Furigana text={card.front} lang={cjkLang} />
+            </div>
+            {revealed ? (
+              <>
+                {card.reading && (
+                  <div className="text-ink-soft">{card.reading}</div>
+                )}
+                <div className="text-xl font-semibold text-accent">
+                  {needsXlate(card)
+                    ? xlated[card.id] ?? t.translating
+                    : card.back}
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="text-sm text-ink-soft">{t.tapToReveal}</div>
-          )}
-        </button>
+                {card.example && (
+                  <div className="text-sm text-ink-soft">
+                    <Furigana text={card.example} lang={cjkLang} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-sm text-ink-soft">{t.tapToReveal}</div>
+            )}
+          </button>
+        </div>
 
         {revealed && (
           <div className="mt-6 grid grid-cols-4 gap-2">

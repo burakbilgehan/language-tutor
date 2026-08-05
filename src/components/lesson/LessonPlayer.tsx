@@ -15,6 +15,7 @@ import { CozyButton } from "@/components/shared/CozyButton";
 import { StatsHeader } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { Furigana } from "@/components/shared/Furigana";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { useProfileMeta } from "@/lib/use-profile-meta";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError, resolveUiLang } from "@/lib/i18n/use-localize-error";
@@ -542,8 +543,9 @@ export function LessonPlayer({
               <div className="flex flex-col gap-4">
                 {lesson.examples.map((ex, i) => (
                   <div key={i} className="rounded-xl bg-background p-4">
-                    <div className="text-xl">
+                    <div className="flex items-center gap-1.5 text-xl">
                       <Furigana text={ex.target} lang={cjkLang} />
+                      <SpeakButton text={ex.target} />
                     </div>
                     {ex.reading && (
                       <div className="text-sm text-ink-soft">{ex.reading}</div>
@@ -705,8 +707,15 @@ function ExerciseCard({
 
       <h2 className="text-lg font-semibold">{exercise.promptTr}</h2>
       {exercise.targetText && (
-        <div className="mt-3 rounded-xl bg-background p-4 text-xl">
+        <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-background p-4 text-xl">
           <Furigana text={exercise.targetText} lang={cjkLang} />
+          {/* Only "translate" targetText is safe to speak: it's the target-
+              language sentence being translated, the answer is the native-
+              language text (lesson.ts prompt: target_text / answer split).
+              mcq targetText/options and fill_blank are the tested material
+              itself (e.g. a reading question); speaking it would hand the
+              answer to the learner. */}
+          {exercise.type === "translate" && <SpeakButton text={exercise.targetText} />}
         </div>
       )}
 

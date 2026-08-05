@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { Furigana } from "@/components/shared/Furigana";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import type { VocabContent } from "@/lib/llm/schemas";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useLocalizeError } from "@/lib/i18n/use-localize-error";
@@ -182,8 +183,14 @@ export function VocabEntryView({ word }: { word: string }) {
             <div className="flex flex-col gap-3">
               {entry.content.examples.map((ex, i) => (
                 <div key={i} className="rounded-xl bg-background p-4">
-                  <div className="text-lg">
+                  <div className="flex items-center gap-1.5 text-lg">
                     <Furigana text={ex.sentence} />
+                    {/* Vocab dictionary is zh-only today (T-012 note in
+                        AGENTS.md); a literal tag is correct here, not the
+                        per-surface hardcoding the ticket warns against
+                        (that referred to deriving from targetLanguage in
+                        multi-language surfaces like lessons/SRS). */}
+                    <SpeakButton text={ex.sentence} lang="zh-CN" />
                   </div>
                   <div className="text-sm font-medium">{ex.translation_tr}</div>
                 </div>
