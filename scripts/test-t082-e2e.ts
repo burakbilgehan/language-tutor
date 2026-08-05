@@ -14,6 +14,7 @@ import { drizzle } from "drizzle-orm/sql-js";
 import { eq, inArray } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { DDL } from "@/db/ddl";
+import type { AppDb } from "@/core/db-types";
 
 async function main() {
   const SQL = await initSqlJs({
@@ -23,7 +24,7 @@ async function main() {
   const sqlite = new SQL.Database();
   sqlite.run("PRAGMA foreign_keys = ON");
   for (const stmt of DDL) sqlite.run(stmt);
-  const db = drizzle(sqlite, { schema }) as never;
+  const db = drizzle(sqlite, { schema }) as unknown as AppDb;
 
   let fail = 0;
   const check = (name: string, cond: boolean, extra = "") => {
@@ -114,7 +115,9 @@ async function main() {
       id: "les-1",
       nodeId: firstNode.id,
       status: "ready",
-      content: { tr: { title_tr: "x" } },
+      // Stub body: only its PRESENCE matters here (the delete counts rows, it
+      // never parses content), so the full LessonContent shape is not built.
+      content: { tr: { title_tr: "x" } } as never,
     })
     .run();
   db.insert(schema.exercises)
