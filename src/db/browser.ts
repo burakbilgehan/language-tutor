@@ -26,7 +26,56 @@ const COLUMN_HEALS: string[] = [
   // T-035 schema v8
   "ALTER TABLE `srs_cards` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
   "ALTER TABLE `chat_messages` ADD COLUMN `lang` text DEFAULT 'tr' NOT NULL",
+  // T-079: per-profile curriculum pedagogy prompt. Nullable, so no backfill;
+  // an absent value means "generate on first use". Deliberately shipped
+  // WITHOUT a SAVE_SCHEMA_VERSION bump (import.ts compares versions with
+  // strict equality, so a bump would refuse every existing save). That makes
+  // the heal load-bearing rather than a nicety: a v8 image exported before
+  // this change and one exported after are indistinguishable to the version
+  // gate, so the replay below is the only thing standing between an old image
+  // and a runtime throw in getActiveProfile (drizzle enumerates every declared
+  // column in `select()`).
+  "ALTER TABLE `profiles` ADD COLUMN `curriculum_pedagogy` text",
 ];
+
+/**
+ * Bring a loaded SQLite image up to the current schema shape: replay the
+ * CREATE statements (adds tables introduced since the image was written) and
+ * the ADD COLUMN heals (CREATE TABLE replay cannot reach an existing table).
+ * Every statement is idempotent via try/catch on "already exists"/"duplicate
+ * column", so this is safe on every boot and on freshly-created images alike.
+ *
+ * MUST be called on every path that swaps a foreign image into the live
+ * handle, not just on boot: save import, snapshot restore and cloud pull all
+ * accept images produced by an older build of the app.
+ */
+export function healImage(sqlite: SqlJsDatabase) {
+  for (const stmt of DDL) {
+    try {
+      sqlite.run(stmt);
+    } catch {
+      /* already exists */
+    }
+  }
+  for (const stmt of COLUMN_HEALS) {
+    try {
+      sqlite.run(stmt);
+    } catch {
+      /* column already exists */
+    }
+  }
+  // The translations unique key gained native_language (T-031). Rebuild the
+  // index so an old image's (target, source) index becomes (target, native,
+  // source); DROP+CREATE is idempotent.
+  try {
+    sqlite.run("DROP INDEX IF EXISTS `translation_text_idx`");
+    sqlite.run(
+      "CREATE UNIQUE INDEX `translation_text_idx` ON `translations` (`target_language`,`native_language`,`source_text`)"
+    );
+  } catch {
+    /* index already in desired shape */
+  }
+}
 
 const IDB_NAME = "language-tutor";
 const IDB_STORE = "sqlite";
@@ -178,38 +227,9 @@ async function create(): Promise<BrowserDbHandle> {
   let sqlite: SqlJsDatabase;
   if (stored) {
     sqlite = new SQL.Database(stored);
-    // Additive self-heal: an image persisted by an older build may miss
-    // tables added since (e.g. vocab_entries). DDL is CREATE TABLE/INDEX
-    // only, so replaying it and swallowing "already exists" errors acts as
-    // a poor-man's forward migration.
-    for (const stmt of DDL) {
-      try {
-        sqlite.run(stmt);
-      } catch {
-        /* already exists */
-      }
-    }
-    // Column additions can't ride CREATE TABLE replay (the table already
-    // exists), so ADD COLUMN explicitly. Each is idempotent via try/catch on
-    // "duplicate column" — safe to run every boot. (T-031 schema v7.)
-    for (const stmt of COLUMN_HEALS) {
-      try {
-        sqlite.run(stmt);
-      } catch {
-        /* column already exists */
-      }
-    }
-    // The translations unique key gained native_language (T-031). Rebuild the
-    // index so an old image's (target, source) index becomes (target, native,
-    // source); DROP+CREATE is idempotent.
-    try {
-      sqlite.run("DROP INDEX IF EXISTS `translation_text_idx`");
-      sqlite.run(
-        "CREATE UNIQUE INDEX `translation_text_idx` ON `translations` (`target_language`,`native_language`,`source_text`)"
-      );
-    } catch {
-      /* index already in desired shape */
-    }
+    // Additive self-heal: an image persisted by an older build may miss tables
+    // or columns added since (see healImage).
+    healImage(sqlite);
   } else {
     sqlite = new SQL.Database();
     for (const stmt of DDL) sqlite.run(stmt);
@@ -268,8 +288,14 @@ async function create(): Promise<BrowserDbHandle> {
       sqlite.close();
       sqlite = new SQL.Database(bytes);
       sqlite.run("PRAGMA foreign_keys = ON");
+      // An imported save may have been exported by an older build: heal it
+      // before it becomes live, exactly like a stored image on boot. The save
+      // version gate cannot catch this for additive no-bump changes (T-079).
+      healImage(sqlite);
       live = drizzle(sqlite, { schema });
-      await idbPut(bytes);
+      // Persist the HEALED image, not the raw input, so the next boot starts
+      // from a current-shape image.
+      await idbPut(sqlite.export());
     },
     takeSnapshot: () => doSnapshot(),
     restoreSnapshot: async (key: string) => {
@@ -283,8 +309,10 @@ async function create(): Promise<BrowserDbHandle> {
       sqlite.close();
       sqlite = new SQL.Database(bytes);
       sqlite.run("PRAGMA foreign_keys = ON");
+      // Snapshots can predate a schema addition just like an imported save.
+      healImage(sqlite);
       live = drizzle(sqlite, { schema });
-      await idbPut(bytes); // snapshot becomes the live image
+      await idbPut(sqlite.export()); // healed snapshot becomes the live image
     },
   };
 

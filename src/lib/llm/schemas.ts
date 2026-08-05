@@ -147,6 +147,36 @@ export function salvageLessonContent(raw: unknown): unknown {
   return { ...obj, exercises: kept };
 }
 
+// -- Curriculum pedagogy prompt (T-079) --------------------------------------
+// Stage 1 of the two-stage curriculum pipeline: the deep tier writes the
+// PEDAGOGICAL BODY of the curriculum prompt for one (target, native) language
+// pair. Code then wraps that body with the fixed data contract (unit/node
+// counts, xp ranges, JSON shape) in `chapterPrompt`. Structured output rather
+// than free text so the model cannot wrap the body in a chat preamble, and so
+// a degenerate response fails validation loudly instead of silently producing
+// a contentless curriculum prompt.
+export const CurriculumPedagogySchema = z.object({
+  // 400 chars is far below any usable body (real ones run 1500-4000) but well
+  // above "Tamam." — it catches refusals and truncations, not style variance.
+  pedagogy: z.string().min(400),
+});
+export type CurriculumPedagogyContent = z.infer<typeof CurriculumPedagogySchema>;
+
+/**
+ * What `profiles.curriculum_pedagogy` stores. The body is stamped with the
+ * language pair it was written for: the whole premise of T-079 is that the
+ * prompt is pair-specific, and `nativeLanguage` is editable (PATCH
+ * /api/profile), so a stale stamp must trigger a regeneration. Same idea as
+ * `curricula.contentLang`. `targetLanguage` is immutable per profile but
+ * stamped anyway so the stored value is self-describing for T-080's UI.
+ */
+export type CurriculumPedagogy = {
+  pedagogy: string;
+  targetLanguage: string;
+  nativeLanguage: string;
+  generatedAt: string;
+};
+
 // -- Curriculum re-translation (T-031) ---------------------------------------
 // Curriculum titles/descriptions are plain columns (not a lang map), so when
 // the learner's native language changes they're re-translated in place. The

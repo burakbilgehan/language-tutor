@@ -1,8 +1,10 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
-import { CurriculumSchema } from "@/lib/llm/schemas";
+import { CurriculumSchema, CurriculumPedagogySchema } from "@/lib/llm/schemas";
+import type { CurriculumPedagogy } from "@/lib/llm/schemas";
 import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
+import { curriculumPedagogyPrompt } from "@/lib/llm/prompts/curriculum-pedagogy";
 import { grammarIndexFor } from "@/lib/grammar-index";
 import { AppError } from "@/lib/errors";
 import {
@@ -204,6 +206,82 @@ function buildPriorSummary(
 }
 
 /**
+ * Reads the stored pedagogy body if it is still valid for the profile's
+ * CURRENT language pair. `nativeLanguage` is editable (PATCH /api/profile) and
+ * the whole premise of T-079 is that the prompt is pair-specific, so a body
+ * written for a Turkish speaker must not be reused after a switch to English.
+ * Same staleness idea as `curricula.contentLang`. Returns null when absent,
+ * stale, or malformed (a hand-edited or truncated value must not poison the
+ * chapter prompt; regenerating costs one deep call and is always recoverable).
+ */
+export function readStoredPedagogy(
+  profile: typeof tables.profiles.$inferSelect
+): string | null {
+  const stored = profile.curriculumPedagogy as CurriculumPedagogy | null;
+  if (!stored || typeof stored.pedagogy !== "string") return null;
+  if (!stored.pedagogy.trim()) return null;
+  if (stored.targetLanguage !== profile.targetLanguage) return null;
+  if (stored.nativeLanguage !== (profile.nativeLanguage ?? "tr")) return null;
+  return stored.pedagogy;
+}
+
+/**
+ * T-079 stage 1. Returns the pedagogical body of this profile's curriculum
+ * prompt, generating it with the deep tier on first use and persisting it on
+ * the profile. Every later chapter (every extend) reuses the stored body, so
+ * the meta-call is paid for once per profile, not once per level.
+ *
+ * Persisting happens IMMEDIATELY on success, before the caller spends the
+ * (much longer) chapter call: otherwise a chapter failure would burn a second
+ * deep-tier meta-call on every retry.
+ *
+ * There is deliberately NO hardcoded fallback body. If the meta-call fails the
+ * error propagates and the chapter is marked errored: a silent generic
+ * fallback would quietly produce exactly the hand-generalized curricula this
+ * ticket exists to eliminate.
+ */
+export async function ensureCurriculumPedagogy(
+  db: AppDb,
+  gen: Gen,
+  profileId: string
+): Promise<string> {
+  const profile = db
+    .select()
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, profileId))
+    .limit(1)
+    .get();
+  if (!profile) throw new Error("Profil bulunamadı");
+
+  const existing = readStoredPedagogy(profile);
+  if (existing) return existing;
+
+  const { system, prompt } = curriculumPedagogyPrompt({ profile });
+  const result = await gen.generateJson({
+    system,
+    prompt,
+    schema: CurriculumPedagogySchema,
+    fixtureKey: "curriculum-pedagogy",
+    tier: "deep",
+    timeoutMs: 300_000,
+    label: `müfredat pedagojisi: ${profile.targetLanguage}/${profile.nativeLanguage ?? "tr"}`,
+  });
+
+  const stored: CurriculumPedagogy = {
+    pedagogy: result.pedagogy,
+    targetLanguage: profile.targetLanguage,
+    nativeLanguage: profile.nativeLanguage ?? "tr",
+    generatedAt: new Date().toISOString(),
+  };
+  db.update(tables.profiles)
+    .set({ curriculumPedagogy: stored })
+    .where(eq(tables.profiles.id, profileId))
+    .run();
+
+  return result.pedagogy;
+}
+
+/**
  * Generates ONE chapter (a level of the profile's scheme: JLPT/HSK/CEFR) and
  * appends it to the profile's single curriculum. The first chapter creates
  * the curriculum; later chapters stitch onto the existing prereq chain.
@@ -289,9 +367,21 @@ export async function generateChapter(
     ? undefined
     : buildPriorSummary(db, curriculumId, profile.targetLanguage, level);
 
-  const { system, prompt } = chapterPrompt({ profile, level, priorSummary });
-
   try {
+    // T-079 two-stage pipeline. Stage 1 (once per profile, reused by every
+    // extend) writes the pedagogy for this language pair; stage 2 wraps it
+    // with the data contract. Both run inside this try so a stage-1 failure
+    // marks the chapter errored like any other generation failure, and both
+    // run inline here, which is also what static mode needs (no jobs table
+    // there: the sequential awaits ARE the pipeline).
+    const pedagogy = await ensureCurriculumPedagogy(db, gen, profileId);
+    const { system, prompt } = chapterPrompt({
+      profile,
+      level,
+      pedagogy,
+      priorSummary,
+    });
+
     const chapter = await gen.generateJson({
       system,
       prompt,

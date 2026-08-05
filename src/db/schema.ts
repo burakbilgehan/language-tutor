@@ -11,6 +11,7 @@ import type {
   SideQuestPayload,
   KanjiContent,
   VocabContent,
+  CurriculumPedagogy,
 } from "@/lib/llm/schemas";
 import type { LangKeyed } from "@/lib/llm/lang-content";
 
@@ -33,6 +34,15 @@ export const profiles = sqliteTable("profiles", {
   minutesPerWeek: integer("minutes_per_week").notNull(),
   interests: text("interests", { mode: "json" }).notNull().$type<string[]>(),
   motivation: text("motivation").notNull().default(""),
+  // T-079: the pedagogical body of this profile's curriculum prompt, written
+  // once by the deep tier for this (target language, native language) pair and
+  // reused by every chapter generation. Null/absent = generate on first use.
+  // Nullable and additive on purpose: old saves keep importing unchanged (no
+  // SAVE_SCHEMA_VERSION bump), they simply generate the body when they next
+  // extend. `nativeLanguage` is stamped so a profile that switches native
+  // language regenerates instead of reusing a body written for the old pair.
+  curriculumPedagogy: text("curriculum_pedagogy", { mode: "json" })
+    .$type<CurriculumPedagogy>(),
   // Exactly one profile is active at a time; getActiveProfile() self-heals
   // legacy rows where no flag is set.
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(false),
