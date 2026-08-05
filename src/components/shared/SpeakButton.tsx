@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { stripFurigana } from "@/lib/jp";
 import { ttsLangTag, ttsRateFor, hasVoiceFor } from "@/lib/tts";
 import { useProfileMeta } from "@/lib/use-profile-meta";
+import { useStrings } from "@/lib/i18n/use-strings";
+
+const S = {
+  tr: { listen: "Dinle" },
+  en: { listen: "Listen" },
+};
 
 /**
  * Free TTS via the browser's Web Speech API — no server, no tokens.
@@ -34,6 +40,7 @@ export function SpeakButton({
   className?: string;
 }) {
   const profileMeta = useProfileMeta();
+  const t = useStrings(S);
   const resolvedLang = lang ?? ttsLangTag(profileMeta?.targetLanguage) ?? null;
   const [available, setAvailable] = useState(false);
 
@@ -91,7 +98,8 @@ export function SpeakButton({
     <button
       type="button"
       onClick={speak}
-      title="Dinle"
+      title={t.listen}
+      aria-label={t.listen}
       className={`select-none rounded-full px-1.5 text-sm opacity-60 transition-opacity hover:opacity-100 ${className ?? ""}`}
     >
       🔊

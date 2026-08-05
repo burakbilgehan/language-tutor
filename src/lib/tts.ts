@@ -52,8 +52,14 @@ function synth(): SpeechSynthesis | null {
  * getVoices() asynchronously and fire `voiceschanged` once ready; others
  * (Safari, when the list is truly empty) never fire it at all. This covers
  * both: resolves immediately if voices are already there, otherwise waits
- * once for the event with a short timeout fallback so a silent browser
- * doesn't hang the caller.
+ * once for the event with a timeout fallback so a silent browser doesn't
+ * hang the caller.
+ *
+ * Only a non-empty result is cached. Caching an empty list would be wrong
+ * whenever the 300ms-ish fallback wins the race against a Chrome voice list
+ * that is still populating (common on a cold page load): every future call
+ * would keep returning [] for the page's lifetime, hiding every speaker
+ * button even after voices actually become available.
  */
 export function getVoicesAsync(): Promise<SpeechSynthesisVoice[]> {
   const s = synth();
@@ -70,12 +76,12 @@ export function getVoicesAsync(): Promise<SpeechSynthesisVoice[]> {
   voicesPromise = new Promise((resolve) => {
     const finish = () => {
       const v = s.getVoices();
-      voicesCache = v;
+      if (v.length > 0) voicesCache = v;
       voicesPromise = null;
       resolve(v);
     };
     s.addEventListener("voiceschanged", finish, { once: true });
-    setTimeout(finish, 300);
+    setTimeout(finish, 1500);
   });
   return voicesPromise;
 }
