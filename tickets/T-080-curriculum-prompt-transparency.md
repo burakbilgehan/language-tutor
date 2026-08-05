@@ -71,3 +71,13 @@ Deliberately NOT covered: the extend flow (`startExtend`) has no Customize
 door. The ticket scopes this to curriculum generation, and an edited body is
 reused by every extend anyway, so the wording is customizable before the
 curriculum exists and stays in force from there on.
+`previewCurriculumPrompt` still accepts an explicit `level` so an extend-side
+door can be added later without touching core; both wired doors pass none,
+which mirrors `generateChapter(levelArg=null)` = the scheme's first level.
+
+Verified: `npm test` (227 pass, 7 of them the new staleness truth table),
+`npm run build:static`, the sql.js parity harness (its T-079 assertions
+included), and a fixture-mode exercise of the whole customize path (23
+assertions) covering preview, edit, save, reject-too-short, generate-with-edit,
+stale-keep, force-regenerate and unedited-stale-discard. Real-browser
+click-through of the two doors was not performed; that remains manual.
