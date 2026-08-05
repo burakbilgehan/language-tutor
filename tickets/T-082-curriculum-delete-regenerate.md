@@ -90,7 +90,20 @@ profileId, so it would append a stale chapter into the freshly regenerated one.
 `discardLesson` is looser by design; a running lesson job is flipped to
 `cancelled` because its writer only upserts that one node's lesson.
 
-Verified: `npm test` (249 pass, 14 new in `src/lib/curriculum-delete.test.ts`
+An adversarial review pass attacked the six load-bearing claims (no breaking
+orphans, FK-safe order, exactly one `available` head, static persistence,
+guarded UI, `requireAuth` first); all survived, and it surfaced one real
+defect. `curricula` has no unique index on `profile_id`, so one-per-profile is
+convention (a single guarded insert site) rather than structure; the delete
+resolved with `.limit(1)` and would therefore have left a duplicate's units and
+nodes behind, producing exactly the locked-head dead map described above. It
+now deletes every curriculum row for the profile. Adding the unique index would
+be the structural fix but forces a SAVE_SCHEMA_VERSION bump, so it is
+documented in the module instead. Known-dangling, verified harmless:
+`srs_cards.sourceLessonId` (written, never read), `chat_sessions.contextNodeId`
+(null-guarded at its one dereference) and `xp_events.refId` (no consumer).
+
+Verified: `npm test` (250 pass, 15 new in `src/lib/curriculum-delete.test.ts`
 against a real better-sqlite3 DB built from the shipped DDL with
 `foreign_keys = ON`, so an out-of-order delete would fail there), the auth
 walker, `npm run build:static`, the sql.js parity harness (unchanged, and it
