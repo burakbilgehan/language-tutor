@@ -20,6 +20,8 @@ export function lessonPrompt(opts: {
 }) {
   const lang = languageName(opts.profile.targetLanguage);
   const native = nativeLanguageName(opts.profile.nativeLanguage);
+  const isCjk =
+    opts.profile.targetLanguage === "ja" || opts.profile.targetLanguage === "zh";
 
   const jaRules =
     opts.profile.targetLanguage === "ja"
@@ -28,7 +30,11 @@ export function lessonPrompt(opts: {
         ? ` Hanzi kullanmaktan kaçınma: seviyeye uygun temel hanzileri erken tanıt ve kullan; hanzi içeren HER metinde pinyin okunuşu köşeli parantezle ekle: 我[wǒ]是[shì]学生[xuésheng]. Öğrenci cevaplarını PINYIN ile yazar (klavyesinde hanzi yok) ve ton işareti YAZAMAYABİLİR — YAZARAK cevaplanan alıştırmalarda (fill_blank/translate/free_response) answer/accept_also parantezsiz olsun ve ton işaretsiz sade pinyin varyantını da ekle (ör. "wǒ shì" için "wo shi"). mcq'da ise options pinyin parantezli olabilir; answer, seçeneğin parantezler dahil BİREBİR kopyası olmalı.`
         : "";
 
-  const system = `Sen sıcak ve sabırlı bir ${lang} öğretmenisin. Ana dili ${native} olan öğrencilere ders içeriği hazırlıyorsun. Açıklamalar ${native} dilinde, hedef dildeki her metnin okunuşu (reading, latin harfli) mutlaka verilir.${jaRules} Sadece istenen JSON'u döndür.`;
+  const readingClause = isCjk
+    ? " hedef dildeki her metnin okunuşu (reading, latin harfli) mutlaka verilir."
+    : ` hedef dil zaten Latin alfabesiyle yazıldığı için "reading" alanlarını boş bırak.`;
+
+  const system = `Sen sıcak ve sabırlı bir ${lang} öğretmenisin. Ana dili ${native} olan öğrencilere ders içeriği hazırlıyorsun. Açıklamalar ${native} dilinde,${readingClause}${jaRules} Sadece istenen JSON'u döndür.`;
 
   const boss =
     opts.node.lessonType === "boss"
@@ -62,7 +68,7 @@ ${boss}${
   }
 Bu ders için içerik üret:
 - "explanation_tr": Markdown, ${native} dilinde, samimi bir öğretmen sesi. Konuyu sıfırdan ve net anlat.
-- "examples": 3-6 örnek. "target" hedef dilde, "reading" latin okunuş, "translation_tr" ${native} çeviri.
+- "examples": 3-6 örnek. "target" hedef dilde, ${isCjk ? `"reading" latin okunuş, ` : ""}"translation_tr" ${native} çeviri.
 - "grammar_notes": varsa 1-3 kısa not.
 - "vocab": bu derste geçen 3-8 yeni kelime (SRS kartına dönüşecek).
 - "exercises": 6-10 karışık alıştırma:
@@ -77,10 +83,23 @@ Alıştırma KALİTE kuralları (çok önemli, ihlal etme):
 - SADECE ÖĞRETİLEN ÖGELERİ SINA: bir alıştırmanın doğru cevabı, ancak BU derste (vocab/examples/explanation içinde) veya önceki derslerde öğretilmiş bir kelime/kalıp olabilir. Öğretilmemiş bir kelimeyi tek doğru cevap yapan soru KURMA — öğrenci bilemeyeceği bir kelimeden puan kaybetmemeli.
 - Soru cevabı ELE VERMESİN: cevap veya bariz kalıbı soru metninde geçmesin; konuyu bilmeyen biri sırf soru tarzından doğru cevabı tahmin edememeli.
 - KANONİK SIRA YASAK: ögeleri asla sözlük/tablo sırasıyla sorma veya sıralatma (a-i-u-e-o, ka-ki-ku-ke-ko gibi diziler ezbere biliniyor, hiçbir şey ölçmez). Rastgele alt kümeler ve karışık sırayla çalıştır.
-- YÖN ÇEŞİTLİLİĞİ: tanıma ile üretimi karıştır — hedef dil→${native}, ${native}→hedef dil, yazı→okunuş, okunuş→yazı yönlerinin en az üçü derste bulunsun.
-- MCQ çeldiricileri gerçekten yanıltıcı olsun: sık karıştırılan GERÇEK alternatifler (başka bir öğretilmiş kelime, akla yatkın farklı bir okunuş/anlam); bariz saçma seçenek koyma. YASAK KALIP: dört seçeneğin aynı kelimenin tek diakritik/işaret farkıyla yazılmış varyantları olması (かぞく/かそく/がぞく/かぞぐ gibi dakuten avı, ya da pinyin'de sırf ton farkı) — bu dil değil "noktayı bul" testi ölçer. Böyle bir karışıklık (ör. rendaku) gerçekten öğretildiyse EN FAZLA BİR çeldirici o kalıptan olabilir; kalanlar farklı kelime/okunuşlar olmalı.
-- YAZI SİSTEMİ DE SORULSUN: derste/önceki derslerde öğretilen kanji/hanzi sınanacak ögedir — bazı alıştırmalar okunuşu veya anlamı hedeflesin (ör. "'これは 本 です' cümlesindeki 本 kelimesinin okunuşunu romaji ile yaz" → hon). ELE VERME: bir kelimenin okunuşu/anlamı test ediliyorsa o kelimeye alıştırma metninde okunuş parantezi EKLEME; test edilmeyen diğer kelimelere ekle. Cümledeki en öğretici öge dururken önemsiz ögeyi boşluk yapma.
-- İyi soru kalıpları (örnek): "Bu 4 kanadan hangisi 'nu' okunur?" (benzer görünümlüler arasından: ぬ/め/ね/わ), "Hangisi な satırından DEĞİLDİR?", karışık bir listeden belirli sesi/harfi ayıklatma. Kötü kalıp (yasak): "X satırındaki harfleri sırasıyla yaz" — ezberlenmiş dizi, hiçbir şey ölçmez.
+- YÖN ÇEŞİTLİLİĞİ: tanıma ile üretimi karıştır — ${
+    isCjk
+      ? `hedef dil→${native}, ${native}→hedef dil, yazı→okunuş, okunuş→yazı yönlerinin en az üçü derste bulunsun.`
+      : `hem hedef dil→${native} hem ${native}→hedef dil yönü derste bulunsun; üretim (yazma) ağırlıklı olsun.`
+  }
+- MCQ çeldiricileri gerçekten yanıltıcı olsun: sık karıştırılan GERÇEK alternatifler (başka bir öğretilmiş kelime, akla yatkın farklı bir okunuş/anlam); bariz saçma seçenek koyma. YASAK KALIP: dört seçeneğin aynı kelimenin tek diakritik/işaret farkıyla yazılmış varyantları olması (${
+    isCjk
+      ? "かぞく/かそく/がぞく/かぞぐ gibi dakuten avı, ya da pinyin'de sırf ton farkı"
+      : "aynı kelimenin tek harf ya da aksan farkıyla yazılmış uydurma varyantları"
+  }) — bu dil değil "noktayı bul" testi ölçer. Böyle bir karışıklık${isCjk ? " (ör. rendaku)" : ""} gerçekten öğretildiyse EN FAZLA BİR çeldirici o kalıptan olabilir; kalanlar farklı kelime/okunuşlar olmalı.
+${
+    isCjk
+      ? `- YAZI SİSTEMİ DE SORULSUN: derste/önceki derslerde öğretilen kanji/hanzi sınanacak ögedir — bazı alıştırmalar okunuşu veya anlamı hedeflesin (ör. "'これは 本 です' cümlesindeki 本 kelimesinin okunuşunu romaji ile yaz" → hon). ELE VERME: bir kelimenin okunuşu/anlamı test ediliyorsa o kelimeye alıştırma metninde okunuş parantezi EKLEME; test edilmeyen diğer kelimelere ekle. Cümledeki en öğretici öge dururken önemsiz ögeyi boşluk yapma.
+- İyi soru kalıpları (örnek): "Bu 4 kanadan hangisi 'nu' okunur?" (benzer görünümlüler arasından: ぬ/め/ね/わ), "Hangisi な satırından DEĞİLDİR?", karışık bir listeden belirli sesi/harfi ayıklatma. Kötü kalıp (yasak): "X satırındaki harfleri sırasıyla yaz" — ezberlenmiş dizi, hiçbir şey ölçmez.`
+      : `- SES/TELAFFUZ SORUSU YASAK: uygulamada ses yok. "Hangisinde X sesi var/yok?", "X harfi nasıl okunur?" gibi sorular cevabı yazımın içinde gösterir, hiçbir şey ölçmez; harf/ses ayıklatma kalıbı KURMA. Telaffuz bilgisi en fazla açıklama metninde kısa bir not olabilir.
+- İyi soru kalıpları (örnek): doğru artikel/cins seçimi, cümlede doğru fiil formunu seçme veya yazma, karışık verilen kelimelerden doğru sırada cümle kurma, ${native}↔hedef dil çeviri, bağlama uygun kelime seçimi. Kötü kalıp (yasak): harf sayma/ayıklama, alfabe sırası, yazımdan okunabilen her tür soru.`
+  }
 - Açıklama/örnek bölümünde geçen bir cümleyi alıştırmada AYNEN tekrar kullanma; her alıştırma farklı bir öge veya beceriyi hedeflesin.
 - TEKRAR LİMİTİ (kesin kural): aynı kelime/kalıp/ifade derste EN FAZLA 2 alıştırmada test edilebilir (biri tanıma, biri üretim olacak şekilde) — üçüncü kez sorma. Ders konusu darsa (ör. 2-3 kalıptan ibaretse) 10'a tamamlamak için aynı şeyi varyasyonla tekrar sorma; bunun yerine alıştırma sayısını düşür (6 yeter) veya önceki derslerin ögeleriyle birleştiren karma sorular kur.
 - ZORLUK MERDİVENİ: ilk 1-2 alıştırma ısınma olabilir, son 2-3 alıştırma gerçekten zorlayıcı olsun (birleştirme, üretim, istisna/tuzak durumu).${

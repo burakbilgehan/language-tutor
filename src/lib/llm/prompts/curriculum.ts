@@ -80,6 +80,27 @@ export function chapterPrompt({ profile, level, priorSummary }: ChapterPromptInp
 - Dilbilgisi iddiaları teknik olarak doğru olsun (ör. 了'nın tamamlanma ve durum-değişimi kullanımlarını karıştırma; 不/没 ayrımı doğru anlatılsın).`
       : "";
 
+  // Latin-script languages (nl, fr and every future CEFR fallback): the CJK
+  // guardrails above never applied here, so early curricula shipped alphabet
+  // units and pronunciation-check nodes; a no-audio app cannot teach those,
+  // and the learner already reads Latin script.
+  const latinCore =
+    profile.targetLanguage !== "ja" && profile.targetLanguage !== "zh"
+      ? `\n- DİNLEME/TELAFFUZ DERSİ KOYMA (uygulamada ses yok): "zor sesler", "telaffuz kontrolü", "dinleme" gibi düğümler YASAK. Telaffuz en fazla bir dilbilgisi/yazım dersinin içinde kısa bir not olabilir, asla ayrı ders olamaz.
+- ALFABE ÜNİTESİ KURMA: öğrenci Latin alfabesini zaten okuyor. Dile özgü yazım özellikleri (ikili harfler, aksan işaretleri) ilk ünitelerde GERÇEK kelimeler üzerinden ve en fazla tek bir düğümde işlensin; ünitenin tamamını yazıma ayırma.
+- İlk üniteden itibaren gerçek iletişim öğret: selamlaşma, kendini tanıtma, gerçek cümleler ve kalıplar.`
+      : "";
+
+  const nlExtras =
+    profile.targetLanguage === "nl"
+      ? `\n- Hollandaca'ya özgü: her isim artikeliyle (de/het) birlikte öğretilsin; de/het ayrımı, V2 kelime sırası, ayrılabilir fiiller ve "er" kullanımı seviyelere yayılarak düzenli işlensin.`
+      : "";
+
+  const frExtras =
+    profile.targetLanguage === "fr"
+      ? `\n- Fransızca'ya özgü: her isim artikeliyle (le/la/un/une) öğretilsin; fiil çekim grupları (-er/-ir/-re), aksan işaretleri (é/è/ç) ve elision (l'/j'/d') erkenden ve düzenli işlensin.`
+      : "";
+
   const jaExtras =
     profile.targetLanguage === "ja"
       ? (isFirst
@@ -89,7 +110,7 @@ export function chapterPrompt({ profile, level, priorSummary }: ChapterPromptInp
         ? (isFirst
             ? `\n- Çince'ye özgü: müfredat pinyin sistemi ve dört ton ile başlamalı. HANZİ'Yİ ERTELEME: en temel hanziler (一二三, 人, 我, 你, 好, 是...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı.`
             : `\n- Çince'ye özgü: bu seviyede yeni hanziler ve o seviyeye özgü dilbilgisi ağırlıklı ilerlesin; pinyin zaten öğrenildi, tekrar etme.`) + zhCore
-        : "";
+        : latinCore + nlExtras + frExtras;
 
   const priorBlock = priorSummary
     ? `\nŞU KONULAR ÖNCEKİ BÖLÜMLERDE ZATEN ÖĞRETİLDİ — TEKRARLAMA, sadece bu seviyeye özgü YENİ dilbilgisi ve kelime dağarcığını ilerlet:\n${priorSummary}\n`
@@ -116,7 +137,7 @@ Kurallar:
 - Üniteler mantıklı bir öğrenme sırası izlemeli; temalar öğrencinin ilgi alanlarına bağlansın.
 - Her ünitenin son düğümü "checkpoint" ya da "boss" olmalı (boss = üniteyi taçlandıran zorlu görev). Diğerleri "lesson".
 - xp_reward: lesson 20-35, checkpoint 40-50, boss 60-80.
-- "theme" alanı kısa bir ingilizce etiket (ör: "kana", "food", "travel").
+- "theme" alanı kısa bir ingilizce etiket (ör: ${profile.targetLanguage === "ja" ? `"kana", ` : ""}"food", "travel", "grammar").
 - "objectives" her düğüm için 1-3 somut öğrenme hedefi (${native} dilinde).
 ${titleRule}
 ${jaExtras}
