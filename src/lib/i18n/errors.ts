@@ -79,6 +79,16 @@ const CATALOG: Record<ErrorCode, { tr: Msg; en: Msg }> = {
     en: () =>
       "The pedagogy text is too short (400 characters minimum). Add a little more detail.",
   },
+  curriculum_job_running: {
+    tr: () =>
+      "Şu anda bir müfredat üretimi sürüyor. Ayarlar → İş kuyruğu bölümünden durdurup tekrar dene.",
+    en: () =>
+      "A curriculum generation is still running. Stop it under Settings → Job queue and try again.",
+  },
+  invalid_level: {
+    tr: () => "Geçersiz seviye.",
+    en: () => "Invalid level.",
+  },
   unauthorized: {
     tr: () =>
       "Bu sunucu bir erişim token'ı ile korunuyor. Adres çubuğuna /api/auth?token=… yazarak giriş yapabilirsin.",

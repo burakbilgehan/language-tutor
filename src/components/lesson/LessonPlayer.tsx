@@ -24,9 +24,11 @@ import {
   completeNodeApi,
   attemptApi,
   regenerateLesson,
+  lessonDiscard,
   retryLessonGen,
   llmConfigGet,
 } from "@/lib/client-api";
+import { AppError } from "@/lib/errors";
 import { diagnoseGenerationFailure } from "@/lib/llm-diagnosis";
 import {
   subscribeLessonGen,
@@ -66,6 +68,11 @@ const S = {
     regenPlaceholder: "İsteğe bağlı geri bildirim...",
     regenSubmit: "Yeniden üret",
     regenCancel: "Vazgeç",
+    // T-082
+    discardSubmit: "🗑️ Bu dersi at",
+    discardConfirm:
+      "Bu dersin içeriği ve alıştırmaları silinecek; dersi bir daha açtığında sıfırdan üretilecek. Tamamlanma durumun ve XP'in korunur. Emin misin?",
+    discardFailed: "Ders atılamadı",
     examples: "Örnekler",
     grammarNotes: "Gramer notları",
     toExercises: "Alıştırmalara geç →",
@@ -120,6 +127,11 @@ const S = {
     regenPlaceholder: "Optional feedback...",
     regenSubmit: "Regenerate",
     regenCancel: "Cancel",
+    // T-082
+    discardSubmit: "🗑️ Discard this lesson",
+    discardConfirm:
+      "This lesson's content and exercises will be deleted; it will be generated from scratch the next time you open it. Your completion state and XP are kept. Are you sure?",
+    discardFailed: "Could not discard the lesson",
     examples: "Examples",
     grammarNotes: "Grammar notes",
     toExercises: "Go to exercises →",
@@ -360,6 +372,25 @@ export function LessonPlayer({
     [nodeId, open, diagnose]
   );
 
+  // T-082. Throw the cached lesson away WITHOUT generating a replacement now:
+  // the node regenerates on its next open. Distinct from regenerate() above,
+  // which spends a generation immediately and keeps the user waiting. Node
+  // completion state and XP are untouched, so the map is unaffected; the user
+  // is returned to it because there is no longer a lesson to display.
+  const discard = useCallback(async () => {
+    if (!window.confirm(t.discardConfirm)) return;
+    setShowRegenForm(false);
+    setRegenFeedback("");
+    try {
+      await lessonDiscard(nodeId);
+      exit();
+    } catch (e) {
+      if (!stopped.current) {
+        setError(e instanceof AppError ? localize(e) : t.discardFailed);
+      }
+    }
+  }, [nodeId, exit, t, localize]);
+
   const finish = useCallback(async () => {
     const body = await completeNodeApi(nodeId);
     setCompletion({ xpAwarded: body.xpAwarded, newCards: body.newCards });
@@ -518,6 +549,16 @@ export function LessonPlayer({
               <CozyButton onClick={() => regenerate(regenFeedback)}>
                 {t.regenSubmit}
               </CozyButton>
+              {/* T-082. Discard sits beside regenerate because it answers the
+                  same complaint ("this lesson is bad") with the opposite
+                  trade: no LLM call now, fresh content on next open. Kept a
+                  plain danger-text button, not a second vermilion action. */}
+              <button
+                onClick={() => void discard()}
+                className="rounded-full bg-surface-2 px-4 py-2 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+              >
+                {t.discardSubmit}
+              </button>
               <button
                 onClick={() => {
                   setShowRegenForm(false);
