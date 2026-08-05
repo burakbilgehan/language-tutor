@@ -44,23 +44,41 @@ export interface ChapterPromptInput {
   priorSummary?: string;
 }
 
+/** The chapter prompt split at the one seam the user is allowed to edit. */
+export interface ChapterPromptParts {
+  system: string;
+  /** Locked contract text that precedes the pedagogy body. */
+  before: string;
+  /** T-079 stage 1 output; the ONLY editable region (T-080). */
+  pedagogy: string;
+  /** Locked contract text that follows the pedagogy body. */
+  after: string;
+}
+
 /**
  * Builds the prompt for ONE chapter (a level of the profile's scheme:
- * JLPT/HSK/CEFR). The first chapter frames a from-zero journey; later
- * chapters generate only that level's units and are told what prior chapters
- * already covered so they don't repeat it.
+ * JLPT/HSK/CEFR), split into the locked contract halves and the editable
+ * pedagogy body between them. The first chapter frames a from-zero journey;
+ * later chapters generate only that level's units and are told what prior
+ * chapters already covered so they don't repeat it.
  *
  * The per-language pedagogy that used to live here as hand-written `jaCore` /
  * `zhCore` / `latinCore` / `nlExtras` / `frExtras` blocks is gone (T-079):
  * hand-generalizing to every new language did not scale and ignored the
  * learner's native language entirely. It now arrives as `pedagogy`.
+ *
+ * T-080 shows this prompt to the user before generation: the `before`/`after`
+ * halves render read-only and `pedagogy` renders in an editable textarea.
+ * `chapterPrompt` is nothing but `before + pedagogy + after`, so what the UI
+ * displays is byte-for-byte what generation sends; there is no second copy of
+ * the copy to drift.
  */
-export function chapterPrompt({
+export function chapterPromptParts({
   profile,
   level,
   pedagogy,
   priorSummary,
-}: ChapterPromptInput) {
+}: ChapterPromptInput): ChapterPromptParts {
   const lang = languageName(profile.targetLanguage);
   const native = nativeLanguageName(profile.nativeLanguage);
   const isFirst = level === firstLevel(profile.targetLanguage);
@@ -75,10 +93,11 @@ export function chapterPrompt({
     intermediate: "orta seviyede",
   };
 
-  // Stage 1's output, verbatim. Placed in its own clearly-labelled section so
-  // the model can tell pedagogy from contract; the meta-prompt is explicitly
-  // forbidden from emitting contract rules, which keeps the two from fighting.
-  const pedagogyBlock = `\nBU DİL ÇİFTİ İÇİN PEDAGOJİ TALİMATI (uy):\n${pedagogy.trim()}\n`;
+  // Stage 1's output goes verbatim between `before` and `after`, in its own
+  // clearly-labelled section so the model can tell pedagogy from contract; the
+  // meta-prompt is explicitly forbidden from emitting contract rules, which
+  // keeps the two from fighting. The label lines belong to the LOCKED halves:
+  // the user edits the body, not the framing that marks it as pedagogy.
 
   // Chapter position is structural, not pedagogical, so it stays in the
   // wrapper: only the wrapper knows whether this is the first chapter.
@@ -94,7 +113,7 @@ export function chapterPrompt({
     ? `- "title": tüm müfredat için kısa, motive edici bir başlık (${native} dilinde).`
     : `- "title": bu bölüm için kısa bir başlık (${native} dilinde); genel müfredat başlığı zaten mevcut.`;
 
-  const prompt = `Öğrenci profili:
+  const before = `Öğrenci profili:
 - Hedef dil: ${lang}
 - Ana dili: ${native}
 - Başlangıç seviyesi: ${levelText[profile.selfLevel]}
@@ -102,7 +121,12 @@ export function chapterPrompt({
 - Hedefleri: ${profile.goals.join(", ")}
 - İlgi alanları: ${profile.interests.join(", ")}
 - Motivasyonu (kendi sözleriyle): "${profile.motivation}"
-${priorBlock}${pedagogyBlock}
+${priorBlock}
+BU DİL ÇİFTİ İÇİN PEDAGOJİ TALİMATI (uy):
+`;
+
+  const after = `
+
 Şu an **${levelLabel}** seviyesi için müfredat bölümü ("chapter") tasarla.
 Bu seviyenin hedefi: ${LEVEL_GOAL[level] ?? "seviyeye uygun ilerleme"}.
 
@@ -117,7 +141,20 @@ ${titleRule}${continuationRule}
 
 Sadece şemaya uygun JSON döndür.`;
 
-  return { system, prompt };
+  return { system, before, pedagogy: pedagogy.trim(), after };
+}
+
+/**
+ * The prompt actually sent to the model: the locked halves with the pedagogy
+ * body between them. Kept as the single assembly point so the transparency UI
+ * (T-080) and generation can never disagree about what gets sent.
+ */
+export function chapterPrompt(input: ChapterPromptInput) {
+  const parts = chapterPromptParts(input);
+  return {
+    system: parts.system,
+    prompt: parts.before + parts.pedagogy + parts.after,
+  };
 }
 
 /**

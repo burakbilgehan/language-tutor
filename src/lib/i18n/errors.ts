@@ -73,6 +73,12 @@ const CATALOG: Record<ErrorCode, { tr: Msg; en: Msg }> = {
     tr: () => "Müfredat çevirisi tamamlanamadı, tekrar dene.",
     en: () => "Curriculum translation couldn't complete, try again.",
   },
+  pedagogy_too_short: {
+    tr: () =>
+      "Pedagoji metni çok kısa (en az 400 karakter). Biraz daha ayrıntı ekle.",
+    en: () =>
+      "The pedagogy text is too short (400 characters minimum). Add a little more detail.",
+  },
   unauthorized: {
     tr: () =>
       "Bu sunucu bir erişim token'ı ile korunuyor. Adres çubuğuna /api/auth?token=… yazarak giriş yapabilirsin.",
