@@ -4,6 +4,7 @@ import fs from "node:fs";
 import initSqlJs from "sql.js";
 import { drizzle } from "drizzle-orm/sql-js";
 import * as schema from "@/db/schema";
+import { healImage } from "@/db/browser";
 import { srsDue, srsReview } from "@/core/srs";
 import { getActiveProfile } from "@/core/profile";
 import { totalXp } from "@/core/xp";
@@ -15,6 +16,13 @@ const SQL = await initSqlJs({
 const bytes = fs.readFileSync("data/app.db");
 const sqlite = new SQL.Database(bytes);
 sqlite.run("PRAGMA foreign_keys = ON");
+// `data/app.db` is a real, possibly OLD image: it predates every schema
+// addition made since it was last written. The browser never loads an image
+// without healing it first (boot, save import, snapshot restore all call
+// healImage), so the harness replays the same heal. This is the old-save
+// proof: drop the call and an image missing a column added since throws in
+// getActiveProfile, because drizzle enumerates every declared column.
+healImage(sqlite);
 const db = drizzle(sqlite, { schema });
 
 let fail = 0;
@@ -235,10 +243,36 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   const schema = await import("@/db/schema");
   const { eq } = await import("drizzle-orm");
 
-  const fixture = fsx.readFileSync("src/lib/llm/fixtures/curriculum.json", "utf8");
+  // T-079: chapter generation is now TWO calls (pedagogy meta-prompt, then the
+  // chapter itself), so the mock must dispatch by fixtureKey instead of
+  // returning the curriculum fixture for everything. The call log doubles as
+  // the evidence for the "generated once, reused on every extend" rule below.
+  const chapterFixture = fsx.readFileSync(
+    "src/lib/llm/fixtures/curriculum.json",
+    "utf8"
+  );
+  const pedagogyFixture = fsx.readFileSync(
+    "src/lib/llm/fixtures/curriculum-pedagogy.json",
+    "utf8"
+  );
+  const genCalls: string[] = [];
+  let lastChapterPrompt = "";
   const mockGen = {
-    async generateJson(o: { schema: { parse: (x: unknown) => unknown } }) {
-      return o.schema.parse(JSON.parse(fixture));
+    async generateJson(o: {
+      fixtureKey: string;
+      prompt: string;
+      schema: { parse: (x: unknown) => unknown };
+    }) {
+      genCalls.push(o.fixtureKey);
+      if (o.fixtureKey === "curriculum-pedagogy") {
+        return o.schema.parse(JSON.parse(pedagogyFixture));
+      }
+      if (o.fixtureKey === "curriculum") {
+        // The wrapper must actually carry the stage-1 body into the chapter
+        // prompt; a silently-dropped pedagogy block would still "pass".
+        lastChapterPrompt = o.prompt;
+      }
+      return o.schema.parse(JSON.parse(chapterFixture));
     },
     async generateText() {
       return "mock";
@@ -301,6 +335,60 @@ check("export SQLite imajı", header === "SQLite format 3", `${(out.length / 1e6
   const top = cur ? topChapterLevel(db as never, cur.id, "ko") : null;
   check("generateChapter ilk bölüm", top === "A1", `→ chapter=${top}`);
   check("A2'ye uzayabilir", nextLevelFor("ko", top ?? "") === "A2");
+
+  // ---- T-079: iki aşamalı üretim (pedagoji meta-prompt + bölüm) -----------
+  const { readStoredPedagogy } = await import("@/core/curriculum-gen");
+  const afterFirst = db.select().from(schema.profiles)
+    .where(eq(schema.profiles.id, fresh!.id)).limit(1).get();
+  const storedPedagogy = afterFirst ? readStoredPedagogy(afterFirst) : null;
+  check(
+    "T-079 aşama 1 profile yazıldı",
+    !!storedPedagogy && storedPedagogy.length > 400,
+    `→ ${storedPedagogy?.length ?? 0} karakter`
+  );
+  check(
+    "T-079 aşama 1 dil çifti damgalı",
+    (afterFirst?.curriculumPedagogy as { targetLanguage?: string; nativeLanguage?: string } | null)
+      ?.targetLanguage === "ko" &&
+      (afterFirst?.curriculumPedagogy as { nativeLanguage?: string } | null)
+        ?.nativeLanguage === "tr"
+  );
+  check(
+    "T-079 pedagoji gövdesi bölüm promptuna girdi",
+    !!storedPedagogy && lastChapterPrompt.includes(storedPedagogy.trim().slice(0, 120)),
+    `→ prompt ${lastChapterPrompt.length} karakter`
+  );
+  check(
+    "T-079 ilk bölüm iki çağrı yaptı",
+    genCalls.length === 2 && genCalls[0] === "curriculum-pedagogy" &&
+      genCalls[1] === "curriculum",
+    `→ ${genCalls.join(", ")}`
+  );
+
+  // Uzatma (extend): saklanan pedagoji YENİDEN KULLANILMALI, ikinci bir
+  // meta-çağrı yapılmamalı. Biletin çekirdek kuralı bu.
+  const callsBeforeExtend = genCalls.length;
+  await generateChapter(db as never, mockGen, fresh!.id, "A2", {
+    modelUsed: "fixture",
+  });
+  const extendCalls = genCalls.slice(callsBeforeExtend);
+  check(
+    "T-079 uzatma pedagojiyi yeniden kullanır (meta-çağrı YOK)",
+    extendCalls.length === 1 && extendCalls[0] === "curriculum",
+    `→ ${extendCalls.join(", ") || "hiç"}`
+  );
+
+  // Ana dil değişirse damga bayatlar → yeniden üretilmeli (çift bağımlı prompt).
+  db.update(schema.profiles).set({ nativeLanguage: "en" })
+    .where(eq(schema.profiles.id, fresh!.id)).run();
+  const afterSwitch = db.select().from(schema.profiles)
+    .where(eq(schema.profiles.id, fresh!.id)).limit(1).get();
+  check(
+    "T-079 ana dil değişince pedagoji bayatlar",
+    afterSwitch ? readStoredPedagogy(afterSwitch) === null : false
+  );
+  db.update(schema.profiles).set({ nativeLanguage: "tr" })
+    .where(eq(schema.profiles.id, fresh!.id)).run();
 
   const unitIds = new Set(
     db.select().from(schema.units).all()

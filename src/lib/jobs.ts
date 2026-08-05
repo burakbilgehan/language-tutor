@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db, tables } from "@/db";
 import { getProvider, LlmError } from "@/lib/llm/provider";
@@ -21,27 +21,12 @@ import {
   cancelAllJobs as coreCancelAllJobs,
   resumePendingJobs as coreResumePendingJobs,
 } from "@/core/jobs";
-import {
-  CurriculumSchema,
-  GrammarTopicSchema,
-  KanjiContentSchema,
-  LessonSchema,
-} from "@/lib/llm/schemas";
 import type { KanjiContent, LessonContent } from "@/lib/llm/schemas";
 import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
-import { chapterPrompt } from "@/lib/llm/prompts/curriculum";
-import { lessonPrompt } from "@/lib/llm/prompts/lesson";
-import { grammarPrompt } from "@/lib/llm/prompts/grammar";
-import { kanjiPrompt } from "@/lib/llm/prompts/kanji";
-import { grammarIndexFor } from "@/lib/grammar-index";
-import { getStrugglesLine } from "@/lib/struggles";
-import {
-  levelOrdinal,
-  isLevelOf,
-  levelOrdinalFor,
-  remapLegacyLevel,
-  schemeFor,
-} from "@/lib/curriculum/levels";
+// NOTE: the prompt builders, LLM schemas, grammar index and level helpers used
+// to be imported here; they moved to src/core/* with the generation logic and
+// the imports were left behind unused. Dropped with T-079, which had to touch
+// the chapterPrompt import anyway (its signature gained the pedagogy body).
 
 type JobType = (typeof tables.generationJobs.$inferSelect)["jobType"];
 

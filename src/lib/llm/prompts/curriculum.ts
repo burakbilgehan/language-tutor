@@ -32,6 +32,14 @@ const LEVEL_GOAL: Record<string, string> = {
 export interface ChapterPromptInput {
   profile: Profile;
   level: string;
+  /**
+   * T-079 stage 1 output: the pedagogical body written by the deep tier for
+   * this (target, native) language pair, stored on the profile and reused by
+   * every chapter. This function is the WRAPPER around it: everything here is
+   * the fixed data contract (counts, xp ranges, JSON shape, output language),
+   * and the pedagogy body is forbidden from restating any of it.
+   */
+  pedagogy: string;
   /** Compact summary of already-taught units/grammar (empty for the first chapter). */
   priorSummary?: string;
 }
@@ -41,8 +49,18 @@ export interface ChapterPromptInput {
  * JLPT/HSK/CEFR). The first chapter frames a from-zero journey; later
  * chapters generate only that level's units and are told what prior chapters
  * already covered so they don't repeat it.
+ *
+ * The per-language pedagogy that used to live here as hand-written `jaCore` /
+ * `zhCore` / `latinCore` / `nlExtras` / `frExtras` blocks is gone (T-079):
+ * hand-generalizing to every new language did not scale and ignored the
+ * learner's native language entirely. It now arrives as `pedagogy`.
  */
-export function chapterPrompt({ profile, level, priorSummary }: ChapterPromptInput) {
+export function chapterPrompt({
+  profile,
+  level,
+  pedagogy,
+  priorSummary,
+}: ChapterPromptInput) {
   const lang = languageName(profile.targetLanguage);
   const native = nativeLanguageName(profile.nativeLanguage);
   const isFirst = level === firstLevel(profile.targetLanguage);
@@ -57,60 +75,16 @@ export function chapterPrompt({ profile, level, priorSummary }: ChapterPromptInp
     intermediate: "orta seviyede",
   };
 
-  // Pedagogical guardrails distilled from reviewing generated curricula:
-  // counters and the full こそあど system were missing, the kanji volume fell
-  // far short of the level's set, and a listening lesson was promised even
-  // though the app has no audio. Applies to every JA chapter.
-  const jaCore =
-    profile.targetLanguage === "ja"
-      ? `\n- Sayaçlar (助数詞: 〜つ, 〜人, 〜本, 〜枚, 〜時...) seviyeye uygun kapsamda MUTLAKA işlensin — JLPT bunları yoğun sınar.
-- İşaret sistemleri bütün öğretilsin: これ/それ/あれ tek başına yetmez; ここ/そこ/あそこ/どこ ve この/その/あの da kapsanmalı.
-- Kanji düğümlerini ünitelere dağıt ve seviyenin kanji setinin çekirdeğini (en sık kullanılan yarısını) müfredat İÇİNDE öğret; tekrar/sınav düğümleri yalnızca öğretilen kanjileri kapsasın — öğretilmemiş kanji sayısı vaat etme.
-- DİNLEME/telaffuz dersi KOYMA (uygulamada ses yok); okuma, yazma ve diyalog çözümleme odaklı kal.
-- Dilbilgisi iddiaları teknik olarak doğru olsun (ör. い-sıfatı geçmişi 〜かった'dır, でした ile birleşmez).`
-      : "";
+  // Stage 1's output, verbatim. Placed in its own clearly-labelled section so
+  // the model can tell pedagogy from contract; the meta-prompt is explicitly
+  // forbidden from emitting contract rules, which keeps the two from fighting.
+  const pedagogyBlock = `\nBU DİL ÇİFTİ İÇİN PEDAGOJİ TALİMATI (uy):\n${pedagogy.trim()}\n`;
 
-  // Same guardrail spirit for Mandarin: measure words and tones are the HSK
-  // analogues of counters/kana, and the app still has no audio.
-  const zhCore =
-    profile.targetLanguage === "zh"
-      ? `\n- Ölçü sözcükleri (量词: 个, 本, 张, 只, 条, 杯...) seviyeye uygun kapsamda MUTLAKA işlensin — HSK bunları yoğun sınar.
-- Her yeni kelime ve örnek pinyin + ton işaretiyle verilsin; ton ayrımları (mā/má/mǎ/mà) yazılı olarak vurgulansın.
-- DİNLEME/telaffuz dersi KOYMA (uygulamada ses yok); ton eğitimini yazılı pinyin üzerinden, okuma ve diyalog çözümleme odaklı işle.
-- Dilbilgisi iddiaları teknik olarak doğru olsun (ör. 了'nın tamamlanma ve durum-değişimi kullanımlarını karıştırma; 不/没 ayrımı doğru anlatılsın).`
-      : "";
-
-  // Latin-script languages (nl, fr and every future CEFR fallback): the CJK
-  // guardrails above never applied here, so early curricula shipped alphabet
-  // units and pronunciation-check nodes; a no-audio app cannot teach those,
-  // and the learner already reads Latin script.
-  const latinCore =
-    profile.targetLanguage !== "ja" && profile.targetLanguage !== "zh"
-      ? `\n- DİNLEME/TELAFFUZ DERSİ KOYMA (uygulamada ses yok): "zor sesler", "telaffuz kontrolü", "dinleme" gibi düğümler YASAK. Telaffuz en fazla bir dilbilgisi/yazım dersinin içinde kısa bir not olabilir, asla ayrı ders olamaz.
-- ALFABE ÜNİTESİ KURMA: öğrenci Latin alfabesini zaten okuyor. Dile özgü yazım özellikleri (ikili harfler, aksan işaretleri) ilk ünitelerde GERÇEK kelimeler üzerinden ve en fazla tek bir düğümde işlensin; ünitenin tamamını yazıma ayırma.
-- İlk üniteden itibaren gerçek iletişim öğret: selamlaşma, kendini tanıtma, gerçek cümleler ve kalıplar.`
-      : "";
-
-  const nlExtras =
-    profile.targetLanguage === "nl"
-      ? `\n- Hollandaca'ya özgü: her isim artikeliyle (de/het) birlikte öğretilsin; de/het ayrımı, V2 kelime sırası, ayrılabilir fiiller ve "er" kullanımı seviyelere yayılarak düzenli işlensin.`
-      : "";
-
-  const frExtras =
-    profile.targetLanguage === "fr"
-      ? `\n- Fransızca'ya özgü: her isim artikeliyle (le/la/un/une) öğretilsin; fiil çekim grupları (-er/-ir/-re), aksan işaretleri (é/è/ç) ve elision (l'/j'/d') erkenden ve düzenli işlensin.`
-      : "";
-
-  const jaExtras =
-    profile.targetLanguage === "ja"
-      ? (isFirst
-          ? `\n- Japonca'ya özgü: müfredat hiragana ile başlamalı (seviye sıfırsa), katakana erken gelmeli. KANJI'Yİ ERTELEME: en temel kanjiler (一二三, 人, 日, 月, 本...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı.`
-          : `\n- Japonca'ya özgü: bu seviyede yeni kanjiler ve o seviyeye özgü dilbilgisi ağırlıklı ilerlesin; kana zaten öğrenildi, tekrar etme.`) + jaCore
-      : profile.targetLanguage === "zh"
-        ? (isFirst
-            ? `\n- Çince'ye özgü: müfredat pinyin sistemi ve dört ton ile başlamalı. HANZİ'Yİ ERTELEME: en temel hanziler (一二三, 人, 我, 你, 好, 是...) ilk ünitelerden itibaren kademeli olarak tanıtılmalı ve sonraki ünitelerde doğal olarak kullanılmalı.`
-            : `\n- Çince'ye özgü: bu seviyede yeni hanziler ve o seviyeye özgü dilbilgisi ağırlıklı ilerlesin; pinyin zaten öğrenildi, tekrar etme.`) + zhCore
-        : latinCore + nlExtras + frExtras;
+  // Chapter position is structural, not pedagogical, so it stays in the
+  // wrapper: only the wrapper knows whether this is the first chapter.
+  const continuationRule = isFirst
+    ? ""
+    : `\n- Bu ilk bölüm DEĞİL: temel/giriş konularını baştan öğretme, bu seviyeye özgü YENİ konularla ilerle.`;
 
   const priorBlock = priorSummary
     ? `\nŞU KONULAR ÖNCEKİ BÖLÜMLERDE ZATEN ÖĞRETİLDİ — TEKRARLAMA, sadece bu seviyeye özgü YENİ dilbilgisi ve kelime dağarcığını ilerlet:\n${priorSummary}\n`
@@ -128,7 +102,7 @@ export function chapterPrompt({ profile, level, priorSummary }: ChapterPromptInp
 - Hedefleri: ${profile.goals.join(", ")}
 - İlgi alanları: ${profile.interests.join(", ")}
 - Motivasyonu (kendi sözleriyle): "${profile.motivation}"
-${priorBlock}
+${priorBlock}${pedagogyBlock}
 Şu an **${levelLabel}** seviyesi için müfredat bölümü ("chapter") tasarla.
 Bu seviyenin hedefi: ${LEVEL_GOAL[level] ?? "seviyeye uygun ilerleme"}.
 
@@ -137,10 +111,9 @@ Kurallar:
 - Üniteler mantıklı bir öğrenme sırası izlemeli; temalar öğrencinin ilgi alanlarına bağlansın.
 - Her ünitenin son düğümü "checkpoint" ya da "boss" olmalı (boss = üniteyi taçlandıran zorlu görev). Diğerleri "lesson".
 - xp_reward: lesson 20-35, checkpoint 40-50, boss 60-80.
-- "theme" alanı kısa bir ingilizce etiket (ör: ${profile.targetLanguage === "ja" ? `"kana", ` : ""}"food", "travel", "grammar").
+- "theme" alanı kısa bir ingilizce etiket (ör: "food", "travel", "grammar").
 - "objectives" her düğüm için 1-3 somut öğrenme hedefi (${native} dilinde).
-${titleRule}
-${jaExtras}
+${titleRule}${continuationRule}
 
 Sadece şemaya uygun JSON döndür.`;
 
