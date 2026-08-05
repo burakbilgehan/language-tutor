@@ -90,8 +90,12 @@ function activeCurriculumJobs(
  * Deletion order is child-to-parent because foreign keys are enforced in BOTH
  * runtimes (`PRAGMA foreign_keys = ON` in src/db/index.ts and src/db/browser.ts):
  *   attempts → exercises → lessons → nodes → units → chapters → curriculum.
- * Sets are addressed by subquery rather than by collecting thousands of ids
- * into an `inArray` literal (same pattern as src/core/llm-gen.ts).
+ * The attempts/exercises sweep is addressed by SUBQUERY rather than by binding
+ * one parameter per exercise (same pattern as src/core/llm-gen.ts). The
+ * node/lesson id lists are still bound, which is fine at this scale: a full
+ * six-level curriculum is a few hundred nodes, while the measured bound-
+ * parameter ceiling is ~20k on sql.js (the tighter of the two runtimes) and
+ * 32k on better-sqlite3.
  *
  * The whole thing runs in ONE transaction. A partial delete would be worse
  * than no delete: `generateChapter` marks its head node `available` only when
