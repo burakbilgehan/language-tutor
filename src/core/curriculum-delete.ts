@@ -90,12 +90,13 @@ function activeCurriculumJobs(
  * Deletion order is child-to-parent because foreign keys are enforced in BOTH
  * runtimes (`PRAGMA foreign_keys = ON` in src/db/index.ts and src/db/browser.ts):
  *   attempts → exercises → lessons → nodes → units → chapters → curriculum.
- * The attempts/exercises sweep is addressed by SUBQUERY rather than by binding
- * one parameter per exercise (same pattern as src/core/llm-gen.ts). The
- * node/lesson id lists are still bound, which is fine at this scale: a full
- * six-level curriculum is a few hundred nodes, while the measured bound-
- * parameter ceiling is ~20k on sql.js (the tighter of the two runtimes) and
- * 32k on better-sqlite3.
+ * Only the `attempts` delete is addressed by SUBQUERY (same pattern as
+ * src/core/llm-gen.ts), because exercises are the widest set by far: one row
+ * per question rather than per lesson. The exercise/lesson/node deletes bind
+ * their id lists as parameters, which is fine at this scale: a full six-level
+ * curriculum is a few hundred nodes and a few thousand exercises, against a
+ * measured bound-parameter ceiling of ~20k on sql.js (the tighter of the two
+ * runtimes) and 32k on better-sqlite3.
  *
  * The whole thing runs in ONE transaction. A partial delete would be worse
  * than no delete: `generateChapter` marks its head node `available` only when
@@ -115,19 +116,28 @@ export function deleteCurriculum(
   db: AppDb,
   profileId: string
 ): DeleteCurriculumResult {
-  const curriculum = db
-    .select()
+  // EVERY curriculum row for this profile, not just the first. The rest of the
+  // app assumes one-per-profile and there is exactly one insert site enforcing
+  // it (`generateChapter`, guarded by a preceding read), but `curricula` has no
+  // unique index on profile_id, so the invariant is convention rather than
+  // structure. A `.limit(1)` delete in that state would remove one curriculum
+  // and leave the other's units and nodes behind, which is precisely the
+  // partial-delete state described below: the regenerated head is chained
+  // behind a stale node and comes out `locked`. Deleting by profile costs
+  // nothing and cannot be wrong; adding the unique index would be the
+  // structural fix but forces a SAVE_SCHEMA_VERSION bump.
+  const curriculumIds = db
+    .select({ id: tables.curricula.id })
     .from(tables.curricula)
     .where(eq(tables.curricula.profileId, profileId))
-    .limit(1)
-    .get();
-  if (!curriculum) throw new AppError("curriculum_missing");
-  const curriculumId = curriculum.id;
+    .all()
+    .map((c) => c.id);
+  if (curriculumIds.length === 0) throw new AppError("curriculum_missing");
 
   const unitIds = db
     .select({ id: tables.units.id })
     .from(tables.units)
-    .where(eq(tables.units.curriculumId, curriculumId))
+    .where(inArray(tables.units.curriculumId, curriculumIds))
     .all()
     .map((u) => u.id);
 
@@ -182,7 +192,7 @@ export function deleteCurriculum(
   const chapterCount = db
     .select({ id: tables.curriculumChapters.id })
     .from(tables.curriculumChapters)
-    .where(eq(tables.curriculumChapters.curriculumId, curriculumId))
+    .where(inArray(tables.curriculumChapters.curriculumId, curriculumIds))
     .all().length;
 
   const deleted: CurriculumDeletionCounts = {
@@ -218,13 +228,13 @@ export function deleteCurriculum(
       tx.delete(tables.nodes).where(inArray(tables.nodes.id, nodeIds)).run();
     }
     tx.delete(tables.units)
-      .where(eq(tables.units.curriculumId, curriculumId))
+      .where(inArray(tables.units.curriculumId, curriculumIds))
       .run();
     tx.delete(tables.curriculumChapters)
-      .where(eq(tables.curriculumChapters.curriculumId, curriculumId))
+      .where(inArray(tables.curriculumChapters.curriculumId, curriculumIds))
       .run();
     tx.delete(tables.curricula)
-      .where(eq(tables.curricula.id, curriculumId))
+      .where(inArray(tables.curricula.id, curriculumIds))
       .run();
   });
 

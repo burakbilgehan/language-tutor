@@ -268,6 +268,49 @@ test("delete: another profile's curriculum is untouched", () => {
   assert.equal(survivor?.profileId, "p2");
 });
 
+test("delete: duplicate curricula for one profile are ALL removed", () => {
+  // The app assumes one curriculum per profile and there is a single guarded
+  // insert site enforcing it, but `curricula` has no unique index on
+  // profile_id, so nothing structural prevents a second row. A delete that
+  // took only the first would leave the other's units and nodes behind, and a
+  // regenerate would then chain its new head behind that stale node and come
+  // out `locked` — a dead map with no error. Pinned because the failure is
+  // silent.
+  const db = testDb();
+  seedProfile(db, "p1");
+  db.insert(schema.curricula)
+    .values({ id: "p1-cur-2", profileId: "p1", title: "dupe", status: "ready" })
+    .run();
+  db.insert(schema.units)
+    .values({
+      id: "p1-unit-2",
+      curriculumId: "p1-cur-2",
+      level: "A1",
+      position: 9,
+      titleTr: "stale",
+    })
+    .run();
+  db.insert(schema.nodes)
+    .values({
+      id: "p1-n-stale",
+      unitId: "p1-unit-2",
+      position: 0,
+      nodeType: "main",
+      titleTr: "stale",
+      objectives: [],
+      status: "available",
+    })
+    .run();
+
+  const result = deleteCurriculum(db, "p1");
+
+  assert.equal(countOf(db, schema.curricula as never), 0);
+  assert.equal(countOf(db, schema.units as never), 0);
+  assert.equal(countOf(db, schema.nodes as never), 0, "no stale node survives");
+  assert.equal(result.deleted.units, 2);
+  assert.equal(result.deleted.nodes, 3);
+});
+
 test("delete: no curriculum → curriculum_missing, nothing destroyed", () => {
   const db = testDb();
   seedProfile(db, "p1");
