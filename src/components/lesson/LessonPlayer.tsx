@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -32,6 +33,7 @@ import {
   cancelLessonGen,
   clearLessonGen,
 } from "@/lib/lesson-gen-store";
+import { seededShuffle } from "@/lib/shuffle";
 
 const S = {
   tr: {
@@ -637,6 +639,18 @@ function ExerciseCard({
     };
   }, []);
 
+  // T-078: LLM-generated mcq options almost always place the correct answer
+  // first. Shuffle at render time, seeded on the exercise id so the order
+  // stays stable across re-renders and after grading (no mid-exercise
+  // reorder), but varies between exercises. Grading compares the selected
+  // option's TEXT against `answer` (core/lesson.ts attemptExercise), so
+  // display order never affects correctness.
+  const shuffledOptions = useMemo(
+    () =>
+      exercise.options ? seededShuffle(exercise.options, exercise.id) : null,
+    [exercise.options, exercise.id]
+  );
+
   const submit = async (value: string, selfVerdict?: boolean) => {
     setGrading(true);
     setGradeError(null);
@@ -697,9 +711,9 @@ function ExerciseCard({
       )}
 
       <div className="mt-5">
-        {exercise.type === "mcq" && exercise.options ? (
+        {exercise.type === "mcq" && shuffledOptions ? (
           <div className="grid gap-2">
-            {exercise.options.map((opt) => (
+            {shuffledOptions.map((opt) => (
               <button
                 key={opt}
                 disabled={!!result || grading}
