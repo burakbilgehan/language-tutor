@@ -7,6 +7,14 @@ file + a row here. This index is updated with every ticket change.
 
 | ID | Title | Status | Priority | Effort | Confidence |
 |---|---|---|---|---|---|
+| [T-078](T-078-mcq-option-shuffle.md) | MCQ option shuffle in the code layer (answer is always option A) | todo | p1 | S | high |
+| [T-079](T-079-metaprompt-curriculum.md) | Meta-prompt curriculum architecture: language-pair-specific prompts (deep tier) | todo | p1 | L | medium |
+| [T-080](T-080-curriculum-prompt-transparency.md) | Curriculum prompt transparency: show + edit pedagogy, contract locked | todo | p1 | M | medium |
+| [T-081](T-081-web-speech-tts.md) | TTS via Web Speech API: speaker buttons on vocab and examples | todo | p2 | M | high |
+| [T-082](T-082-curriculum-delete-regenerate.md) | Curriculum delete + regenerate with starting level; per-lesson delete | todo | p1 | M | medium |
+| [T-083](T-083-granular-placement.md) | Granular placement: start mid-level (parked, needs design ruling) | backlog | p3 | L | low |
+| [T-084](T-084-lesson-template-customization.md) | Lesson prompt template customization (phase 2 of transparency) | backlog | p3 | M | low |
+| [T-085](T-085-google-tts-byo-key.md) | Google Cloud TTS as optional BYO-key quality upgrade | backlog | p3 | M | medium |
 | [T-077](T-077-french-conjugator.md) | French conjugator view for /conjugate (fr is nav-gated until it exists) | backlog | p2 | M | medium |
 | [T-073](T-073-cancel-must-stick.md) | Cancel must stick: a cancelled lesson should not auto-regenerate | todo | p1 | S | high |
 | [T-075](T-075-coverage-ledger.md) | Coverage ledger: deterministic summary instead of the raw question list in the lesson prompt | todo | p1 | M | medium |
@@ -85,6 +93,27 @@ file + a row here. This index is updated with every ticket change.
 | [T-007](T-007-kanji-n1-tail.md) | Kanji N1 tail (moved to ops: blast panel) | wontfix | p3 | S | high |
 
 The roadmap sections below are historical sprint logs, newest first; they record decisions at the time they were made and may be superseded by later tickets.
+
+## Roadmap (2026-08-05): content quality waves (nl fallout)
+
+Context: the Dutch curriculum exposed CJK-biased prompts (alphabet units,
+written "pronunciation" exercises, answer-always-A). Rulings: shuffle in code;
+curriculum prompts generated per language pair by the deep tier; transparency
+at curriculum creation only; Web Speech TTS; delete/regenerate flows.
+The 2026-08-05 prompt hotfix (latinCore etc., uncommitted) is superseded by
+T-079 and gets dissolved there.
+
+- Wave C1 — T-078:sonnet T-079:opus — parallel; fences: player/practice UI vs
+  llm-prompts+core/curriculum-gen+schema; disjoint. T-079 merges last (schema).
+- Wave C2 — T-080:opus T-081:sonnet — parallel after C1; fences: wizard/
+  settings/client-api vs tts util+player/vocab surfaces. T-081 must not touch
+  client-api; T-080 must not touch LessonPlayer.
+- Wave C3 — T-082:opus — solo (destructive data ops both modes; overlaps C2's
+  settings surface, hence after).
+
+Not in a wave: T-083/T-084/T-085 (parked backlog, need rulings or field
+evidence). Hard order: C1 -> C2 -> C3 (dependency T-079 -> T-080/T-082 plus
+fence overlaps).
 
 ## Roadmap (2026-07-27): LLM connection UX waves
 
