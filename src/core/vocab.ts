@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import * as tables from "@/db/schema";
 import { vocabIndexFor } from "@/lib/vocab-index";
@@ -94,35 +94,43 @@ export function applyVocabSeed(
   db: AppDb,
   targetLanguage: string,
   seed: Record<string, VocabContent>,
-  nativeLanguage: NativeLang = "tr"
+  nativeLanguage: NativeLang = "tr",
+  seedLang: NativeLang = "tr"
 ): number {
-  // Seed content is Turkish — never apply to a non-tr profile (T-031).
-  if (nativeLanguage !== "tr") return 0;
-  const empty = db
+  // Same language contract as applyGrammarSeed (T-031, generalized
+  // 2026-08-07 for the per-native seed files): the seed file's language must
+  // match the profile's native language, and "empty" means THE SEED'S
+  // LANGUAGE SLOT is empty — not merely status pending/error — so a
+  // tr-filled row still gains its en half after a native switch.
+  if (seedLang !== nativeLanguage) return 0;
+  const candidates = db
     .select({
       id: tables.vocabEntries.id,
       word: tables.vocabEntries.word,
       content: tables.vocabEntries.content,
+      status: tables.vocabEntries.status,
     })
     .from(tables.vocabEntries)
     .where(
       and(
         eq(tables.vocabEntries.targetLanguage, targetLanguage),
-        inArray(tables.vocabEntries.status, ["pending", "error"])
+        ne(tables.vocabEntries.status, "generating")
       )
     )
     .all();
   let filled = 0;
-  for (const row of empty) {
+  for (const row of candidates) {
     const content = seed[row.word];
     if (!content) continue;
-    // Merge, not replace — an error/pending row may hold the other language's
-    // content from an interrupted generation (T-031).
+    if (readLangContent(row.content, seedLang)) continue;
+    // Merge, not replace — the row may hold the other language's content
+    // from an interrupted generation or the other seed (T-031).
     db.update(tables.vocabEntries)
       .set({
-        content: mergeLangContent(row.content, "tr", content),
-        status: "ready",
-        generatedAt: new Date(),
+        content: mergeLangContent(row.content, seedLang, content),
+        ...(row.status === "ready"
+          ? {}
+          : { status: "ready" as const, generatedAt: new Date() }),
       })
       .where(eq(tables.vocabEntries.id, row.id))
       .run();

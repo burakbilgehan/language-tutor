@@ -14,19 +14,21 @@ export const runtime = "nodejs";
 // Paketlenmiş seed (public/vocab-seed/<lang>.json) sunuculu modda da yeni
 // profilleri besler. Dosya profil başına en fazla bir kez okunur.
 const seedCache = new Map<string, Record<string, VocabContent> | null>();
-function loadSeed(lang: string) {
-  if (!seedCache.has(lang)) {
+function loadSeed(lang: string, native: string = "tr") {
+  const key = `${lang}:${native}`;
+  if (!seedCache.has(key)) {
     try {
+      const file = native === "tr" ? `${lang}.json` : `${lang}.${native}.json`;
       const raw = fs.readFileSync(
-        path.join(process.cwd(), "public", "vocab-seed", `${lang}.json`),
+        path.join(process.cwd(), "public", "vocab-seed", file),
         "utf8"
       );
-      seedCache.set(lang, JSON.parse(raw).words ?? null);
+      seedCache.set(key, JSON.parse(raw).words ?? null);
     } catch {
-      seedCache.set(lang, null);
+      seedCache.set(key, null);
     }
   }
-  return seedCache.get(lang) ?? null;
+  return seedCache.get(key) ?? null;
 }
 
 // Deliberately NO auto-queue on list open (unlike /api/kanji): vocab is
@@ -43,8 +45,11 @@ export async function GET(req: Request) {
   const nativeLang = (profile.nativeLanguage ?? "tr") as NativeLang;
   let entries = listVocab(db, profile.targetLanguage, nativeLang);
   if (entries.some((e) => e.status === "pending" || e.status === "error")) {
-    const seed = loadSeed(profile.targetLanguage);
-    if (seed && applyVocabSeed(db, profile.targetLanguage, seed, nativeLang) > 0) {
+    const seed = loadSeed(profile.targetLanguage, nativeLang);
+    if (
+      seed &&
+      applyVocabSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
+    ) {
       entries = listVocab(db, profile.targetLanguage, nativeLang);
     }
   }

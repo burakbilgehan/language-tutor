@@ -26,27 +26,34 @@ const rows = db
   )
   .all() as { lang: string; word: string; content: string }[];
 
-const byLang = new Map<string, Record<string, unknown>>();
+// Content kolonu {tr:...,en:...} dil-anahtarlı (T-031). Her native için ayrı
+// dosya: tr -> <lang>.json, en -> <lang>.en.json (sıfırdan o dil için
+// üretilmiş içerik). Kısmi export sorun değil; applyVocabSeed boşları
+// doldurur, dosya büyüdükçe fark uygulanır.
 let skipped = 0;
-for (const r of rows) {
-  // T-031 sonrası content kolonu {tr:...,en:...} dil-anahtarlı; seed düz tr taşır.
-  const parsed = VocabContentSchema.safeParse(
-    readLangContent(JSON.parse(r.content), "tr")
-  );
-  if (!parsed.success) {
-    skipped++;
-    console.warn(`ATLA ${r.lang}/${r.word}: şemaya uymuyor`);
-    continue;
+for (const native of ["tr", "en"] as const) {
+  const byLang = new Map<string, Record<string, unknown>>();
+  for (const r of rows) {
+    const payload = readLangContent(JSON.parse(r.content), native);
+    if (!payload) continue;
+    const parsed = VocabContentSchema.safeParse(payload);
+    if (!parsed.success) {
+      skipped++;
+      console.warn(`ATLA ${r.lang}/${r.word} (${native}): şemaya uymuyor`);
+      continue;
+    }
+    if (!byLang.has(r.lang)) byLang.set(r.lang, {});
+    byLang.get(r.lang)![r.word] = parsed.data;
   }
-  if (!byLang.has(r.lang)) byLang.set(r.lang, {});
-  byLang.get(r.lang)![r.word] = parsed.data;
-}
-
-fs.mkdirSync(OUT_DIR, { recursive: true });
-for (const [lang, words] of byLang) {
-  const file = path.join(OUT_DIR, `${lang}.json`);
-  fs.writeFileSync(file, JSON.stringify({ version: 1, words }));
-  const kb = Math.round(fs.statSync(file).size / 1024);
-  console.log(`${file}: ${Object.keys(words).length} kelime, ${kb} KB`);
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  for (const [lang, words] of byLang) {
+    const file = path.join(
+      OUT_DIR,
+      native === "tr" ? `${lang}.json` : `${lang}.${native}.json`
+    );
+    fs.writeFileSync(file, JSON.stringify({ version: 1, words }));
+    const kb = Math.round(fs.statSync(file).size / 1024);
+    console.log(`${file}: ${Object.keys(words).length} kelime (${native}), ${kb} KB`);
+  }
 }
 if (skipped) console.log(`${skipped} kelime şema uyumsuzluğundan atlandı`);

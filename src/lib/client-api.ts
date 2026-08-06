@@ -373,10 +373,10 @@ export async function kanjiList(): Promise<{
   // Boş girişleri paketlenmiş seed'den doldur (LLM'siz dolu kanji sözlüğü).
   if (entries.some((e) => e.status === "pending" || e.status === "error")) {
     const { fetchKanjiSeed } = await import("@/lib/kanji-seed");
-    const seed = await fetchKanjiSeed(profile.targetLanguage);
+    const seed = await fetchKanjiSeed(profile.targetLanguage, nativeLang);
     if (
       seed &&
-      coreK.applyKanjiSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+      coreK.applyKanjiSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
     ) {
       entries = coreK.listKanji(db, profile.targetLanguage, nativeLang);
     }
@@ -410,10 +410,10 @@ export async function kanjiDetail(char: string): Promise<{
   }
   if (entry && (entry.status === "pending" || entry.status === "error")) {
     const { fetchKanjiSeed } = await import("@/lib/kanji-seed");
-    const seed = await fetchKanjiSeed(profile.targetLanguage);
+    const seed = await fetchKanjiSeed(profile.targetLanguage, nativeLang);
     if (
       seed &&
-      coreK.applyKanjiSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+      coreK.applyKanjiSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
     ) {
       entry = coreK.findKanji(db, profile.targetLanguage, char) ?? entry;
       persistSoon();
@@ -478,10 +478,10 @@ export async function vocabList(): Promise<{ entries: VocabEntrySummary[] }> {
   // Boş girişleri paketlenmiş seed'den doldur (LLM'siz tam sözlük).
   if (entries.some((e) => e.status === "pending" || e.status === "error")) {
     const { fetchVocabSeed } = await import("@/lib/vocab-seed");
-    const seed = await fetchVocabSeed(profile.targetLanguage);
+    const seed = await fetchVocabSeed(profile.targetLanguage, nativeLang);
     if (
       seed &&
-      coreV.applyVocabSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+      coreV.applyVocabSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
     ) {
       entries = coreV.listVocab(db, profile.targetLanguage, nativeLang);
     }
@@ -516,10 +516,10 @@ export async function vocabDetail(word: string): Promise<{
   }
   if (entry && (entry.status === "pending" || entry.status === "error")) {
     const { fetchVocabSeed } = await import("@/lib/vocab-seed");
-    const seed = await fetchVocabSeed(profile.targetLanguage);
+    const seed = await fetchVocabSeed(profile.targetLanguage, nativeLang);
     if (
       seed &&
-      coreV.applyVocabSeed(db, profile.targetLanguage, seed, nativeLang) > 0
+      coreV.applyVocabSeed(db, profile.targetLanguage, seed, nativeLang, nativeLang) > 0
     ) {
       entry = coreV.findVocab(db, profile.targetLanguage, word) ?? entry;
       persistSoon();

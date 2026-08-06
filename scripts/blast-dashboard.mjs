@@ -147,15 +147,13 @@ function resetGenerating() {
   } finally { db.close(); }
 }
 
-function spawnRunner(id, conc) {
-  const { kind, target, native, level } = parseBlockId(id);
+function spawnRunner(ids, conc) {
   resetGenerating();
   const log = openSync(LOG_PATH, "a");
   const child = spawn(
     "npx",
     ["tsx", "--tsconfig", "tsconfig.json", "scripts/blast-runner.ts",
-      "--kind", kind, "--lang", target, "--level", level, "--native", native,
-      "--conc", String(conc)],
+      "--blocks", ids.join(","), "--conc", String(conc)],
     {
       cwd: ROOT,
       env: { ...process.env, LLM_CONCURRENCY: String(conc) },
@@ -164,6 +162,27 @@ function spawnRunner(id, conc) {
     }
   );
   child.unref();
+}
+
+// Biten blokların içeriğini pakete akıt: seed + başlık export'u. Fire and
+// forget; export scriptleri DB'yi readonly açar, koşan runner'la çakışmaz.
+const EXPORT_SCRIPT = {
+  grammar: "scripts/export-grammar-seed.ts",
+  kanji: "scripts/export-kanji-seed.ts",
+  vocab: "scripts/export-vocab-seed.ts",
+};
+function spawnSeedExport(kinds) {
+  for (const kind of new Set(kinds)) {
+    const script = EXPORT_SCRIPT[kind];
+    if (!script) continue;
+    const log = openSync(LOG_PATH, "a");
+    const child = spawn("npx", ["tsx", "--tsconfig", "tsconfig.json", script], {
+      cwd: ROOT,
+      detached: true,
+      stdio: ["ignore", log, log],
+    });
+    child.unref();
+  }
 }
 
 function stopAll() {
@@ -192,7 +211,9 @@ function tick() {
     const b = catalog.find((x) => x.id === id);
     return b ? b.pending + b.busy : 0;
   };
-  if (q.current && readRunProgress().progress?.quota) {
+  // current eski kayıtlarda string olabilir; her yerde dizi olarak ele al
+  const current = q.current ? (Array.isArray(q.current) ? q.current : [q.current]) : [];
+  if (current.length && readRunProgress().progress?.quota) {
     q.quotaUntil = Date.now() + 15 * 60_000;
     q.current = null;
     saveQueue(q);
@@ -203,23 +224,43 @@ function tick() {
     );
     return;
   }
-  if (q.current) {
-    if (pendingOf(q.current) === 0) {
-      q.order = q.order.filter((x) => x !== q.current);
-      delete q.attempts[q.current];
-    } else {
-      q.attempts[q.current] = (q.attempts[q.current] ?? 0) + 1;
-      if (q.attempts[q.current] >= 2) {
-        note(`takıldı, kuyruktan düştü: ${q.current} (2 deneme, hâlâ ${pendingOf(q.current)} eksik)`);
-        q.order = q.order.filter((x) => x !== q.current);
-        delete q.attempts[q.current];
+  if (current.length) {
+    const completedKinds = [];
+    let blamed = false;
+    for (const id of current) {
+      if (pendingOf(id) === 0) {
+        q.order = q.order.filter((x) => x !== id);
+        delete q.attempts[id];
+        completedKinds.push(parseBlockId(id).kind);
+      } else if (!blamed) {
+        // sadece sıradaki ilk eksik blok deneme yer; arkadakiler bu koşuda
+        // sıra kendilerine gelmemiş olabilir
+        blamed = true;
+        q.attempts[id] = (q.attempts[id] ?? 0) + 1;
+        if (q.attempts[id] >= 2) {
+          note(`takıldı, kuyruktan düştü: ${id} (2 deneme, hâlâ ${pendingOf(id)} eksik)`);
+          q.order = q.order.filter((x) => x !== id);
+          delete q.attempts[id];
+        }
       }
     }
+    if (completedKinds.length) spawnSeedExport(completedKinds);
     q.current = null;
     saveQueue(q);
   }
-  const next = q.order.find((id) => pendingOf(id) > 0);
-  if (!next) {
+  // Lookahead: kuyruğun başından, toplam item sayısı conc'un ~2 katına
+  // ulaşana kadar blok topla — küçük seviye blokları tek başına conc'u
+  // dolduramıyor, slotlar boş kalıyordu (32 conc'ta 5-6/dk gözlendi).
+  const batch = [];
+  let itemEstimate = 0;
+  for (const id of q.order) {
+    const p = pendingOf(id);
+    if (p === 0) continue;
+    batch.push(id);
+    itemEstimate += p;
+    if (itemEstimate >= q.conc * 2) break;
+  }
+  if (!batch.length) {
     if (q.order.length) {
       // sırada sadece zaten dolu bloklar kaldıysa temizle
       q.order = q.order.filter((id) => pendingOf(id) > 0);
@@ -229,13 +270,10 @@ function tick() {
     note("kuyruk bitti");
     return;
   }
-  if (next !== q.order[0]) {
-    q.order = [next, ...q.order.filter((x) => x !== next)];
-  }
-  q.current = next;
+  q.current = batch;
   q.quotaUntil = null;
   saveQueue(q);
-  spawnRunner(next, q.conc);
+  spawnRunner(batch, q.conc);
 }
 setInterval(tick, 2000);
 
@@ -324,7 +362,9 @@ function readState() {
       pending: b ? b.pending + b.busy : 0,
       total: b ? b.total : 0,
       done: b ? b.done : 0,
-      running: active && running && q.current === id,
+      running:
+        active && running &&
+        (Array.isArray(q.current) ? q.current.includes(id) : q.current === id),
       attempts: q.attempts[id] ?? 0,
     };
   });

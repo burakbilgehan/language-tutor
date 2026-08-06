@@ -59,3 +59,29 @@ for (const native of ["tr", "en"] as const) {
   }
 }
 if (skipped) console.log(`${skipped} konu şema uyumsuzluğundan atlandı`);
+
+// Sidebar/index başlıkları: en overlay (src/lib/grammar-index/titles.<lang>.en.json)
+// üretilen en içeriğin kendi başlığından beslenir — sayfa h1'i ile menü aynı
+// kaynaktan gelir, ayrı bir çeviri geçişi gerekmez. Mevcut girdiler korunur
+// (eski elle/MT girilmiş başlıklar), üretilmiş içerik başlığı her zaman ezer.
+const TITLES_DIR = "src/lib/grammar-index";
+const titleByLang = new Map<string, Record<string, string>>();
+for (const r of rows) {
+  const payload = readLangContent<{ title_tr?: string }>(JSON.parse(r.content), "en");
+  const title = payload?.title_tr?.trim();
+  if (!title) continue;
+  if (!titleByLang.has(r.lang)) titleByLang.set(r.lang, {});
+  titleByLang.get(r.lang)![r.slug] = title;
+}
+for (const [lang, titles] of titleByLang) {
+  const file = path.join(TITLES_DIR, `titles.${lang}.en.json`);
+  let existing: Record<string, string> = {};
+  try {
+    existing = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    // dosya yoksa sıfırdan yazılır (yeni dil için build statik importu ayrıca ister)
+  }
+  const merged = { ...existing, ...titles };
+  fs.writeFileSync(file, JSON.stringify(merged, null, 0) + "\n");
+  console.log(`${file}: ${Object.keys(merged).length} başlık (en)`);
+}

@@ -9,14 +9,19 @@ import type { KanjiContent } from "@/lib/llm/schemas";
 // (applyKanjiSeed yalnız boş satırları doldurur).
 const cache = new Map<string, Promise<Record<string, KanjiContent> | null>>();
 
+/** `native` "tr" -> <lang>.json; başka bir dil -> <lang>.<native>.json
+ * (sıfırdan o dil için üretilmiş içerik; dosya henüz yoksa null). */
 export function fetchKanjiSeed(
-  lang: string
+  lang: string,
+  native: string = "tr"
 ): Promise<Record<string, KanjiContent> | null> {
-  let p = cache.get(lang);
+  const key = `${lang}:${native}`;
+  let p = cache.get(key);
   if (!p) {
     p = (async () => {
       try {
-        const res = await fetch(withBase(`/kanji-seed/${lang}.json`));
+        const file = native === "tr" ? `${lang}.json` : `${lang}.${native}.json`;
+        const res = await fetch(withBase(`/kanji-seed/${file}`));
         if (!res.ok) return null;
         const body = (await res.json()) as {
           chars?: Record<string, KanjiContent>;
@@ -26,7 +31,7 @@ export function fetchKanjiSeed(
         return null;
       }
     })();
-    cache.set(lang, p);
+    cache.set(key, p);
   }
   return p;
 }

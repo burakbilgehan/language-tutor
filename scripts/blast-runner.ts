@@ -56,10 +56,18 @@ const level = arg("level") ?? "";
 const native = arg("native") ?? "tr";
 const conc = Math.max(1, Math.min(32, Number(arg("conc")) || 4));
 const useStub = process.argv.includes("--stub");
+// Çoklu blok modu: --blocks "grammar|ja|en|N5,kanji|ja|en|N4". Tek blok
+// seviyeleri küçük olduğunda (8-16 konu) paralellik blok boyutuna sıkışıyor
+// ve conc slotları boş kalıyordu; panel kuyruğun başından yeterli iş
+// biriktirip tek runner'a verir, öncelik sırası item sırasında korunur.
+const blocksArg = arg("blocks");
 
-if (!["grammar", "kanji", "vocab", "grammar-mt"].includes(kind) || !lang || !level) {
+if (
+  !blocksArg &&
+  (!["grammar", "kanji", "vocab", "grammar-mt"].includes(kind) || !lang || !level)
+) {
   console.error(
-    "usage: blast-runner --kind grammar|kanji|vocab|grammar-mt --lang <xx> --level <lv> [--native en] [--conc N] [--stub]"
+    "usage: blast-runner (--blocks id1,id2 | --kind grammar|kanji|vocab|grammar-mt --lang <xx> --level <lv>) [--native en] [--conc N] [--stub]"
   );
   process.exit(2);
 }
@@ -99,75 +107,106 @@ function done(): never {
   process.exit(0);
 }
 
-async function runDbKind() {
-  const gen = getProvider();
+type BlockSpec = { kind: string; lang: string; native: string; level: string };
+type WorkItem = {
+  blockKind: string;
+  rowId: string;
+  label: string;
+  override?: NativeLang;
+};
+
+function parseBlockSpec(id: string): BlockSpec {
+  const [k, l, n, lv] = id.split("|");
+  return { kind: k, lang: l, native: n, level: lv };
+}
+
+// native=tr: fill missing profile-native content (pending/error rows), the
+// original blast semantics. native=en (any non-tr): from-scratch generation
+// of that language's half into the SAME rows; pendingness is "the content
+// map has no such key", status is irrelevant and never touched.
+function rowsForBlock(b: BlockSpec): WorkItem[] {
   const statuses = ["pending", "error"] as const;
-  // native=tr: fill missing profile-native content (pending/error rows), the
-  // original blast semantics. native=en (any non-tr): from-scratch generation
-  // of that language's half into the SAME rows; pendingness is "the content
-  // map has no such key", status is irrelevant and never touched.
-  const override = native === "tr" ? undefined : (native as NativeLang);
-  type Row = { id: string; label: string };
-  let rows: Row[];
-  if (kind === "grammar") {
-    rows = db
+  const override = b.native === "tr" ? undefined : (b.native as NativeLang);
+  if (b.kind === "grammar") {
+    return db
       .select()
       .from(tables.grammarTopics)
       .where(
         and(
-          eq(tables.grammarTopics.targetLanguage, lang),
-          eq(tables.grammarTopics.level, level),
+          eq(tables.grammarTopics.targetLanguage, b.lang),
+          eq(tables.grammarTopics.level, b.level),
           ...(override ? [] : [inArray(tables.grammarTopics.status, statuses)])
         )
       )
       .all()
       .filter((r) => !override || readLangContent(r.content, override) === null)
-      .map((r) => ({ id: r.id, label: `g:${lang}/${r.slug}` }));
-  } else if (kind === "kanji") {
-    rows = db
+      .map((r) => ({
+        blockKind: b.kind,
+        rowId: r.id,
+        label: `g:${b.lang}/${r.slug}`,
+        override,
+      }));
+  }
+  if (b.kind === "kanji") {
+    return db
       .select()
       .from(tables.kanjiEntries)
       .where(
         and(
-          eq(tables.kanjiEntries.targetLanguage, lang),
-          eq(tables.kanjiEntries.level, level),
+          eq(tables.kanjiEntries.targetLanguage, b.lang),
+          eq(tables.kanjiEntries.level, b.level),
           ...(override ? [] : [inArray(tables.kanjiEntries.status, statuses)])
         )
       )
       .all()
       .filter((r) => !override || readLangContent(r.content, override) === null)
-      .map((r) => ({ id: r.id, label: `k:${r.char}` }));
-  } else {
-    rows = db
-      .select()
-      .from(tables.vocabEntries)
-      .where(
-        and(
-          eq(tables.vocabEntries.targetLanguage, lang),
-          eq(tables.vocabEntries.level, level),
-          ...(override ? [] : [inArray(tables.vocabEntries.status, statuses)])
-        )
-      )
-      .all()
-      .filter((r) => !override || readLangContent(r.content, override) === null)
-      .map((r) => ({ id: r.id, label: `v:${r.word}` }));
+      .map((r) => ({
+        blockKind: b.kind,
+        rowId: r.id,
+        label: `k:${r.char}`,
+        override,
+      }));
   }
-  console.log(
-    `RUN kind=${kind} lang=${lang} native=${native} level=${level} total=${rows.length} conc=${conc}`
-  );
-  await pool(rows, async (row) => {
+  return db
+    .select()
+    .from(tables.vocabEntries)
+    .where(
+      and(
+        eq(tables.vocabEntries.targetLanguage, b.lang),
+        eq(tables.vocabEntries.level, b.level),
+        ...(override ? [] : [inArray(tables.vocabEntries.status, statuses)])
+      )
+    )
+    .all()
+    .filter((r) => !override || readLangContent(r.content, override) === null)
+    .map((r) => ({
+      blockKind: b.kind,
+      rowId: r.id,
+      label: `v:${r.word}`,
+      override,
+    }));
+}
+
+async function runDbBlocks(specs: BlockSpec[]) {
+  const gen = getProvider();
+  // Öncelik blok sırasında: itemlar blok sırasıyla dizilir, havuz baştan
+  // tüketir — ilk blok biterken sonrakiler slotları doldurur.
+  const items = specs.flatMap(rowsForBlock);
+  const ids = specs.map((s) => [s.kind, s.lang, s.native, s.level].join("|"));
+  console.log(`RUN blocks=${ids.join(",")} total=${items.length} conc=${conc}`);
+  await pool(items, async (it) => {
     try {
-      if (kind === "grammar")
-        await generateGrammarContent(db as never, gen, row.id, override);
-      else if (kind === "kanji")
-        await generateKanjiContent(db as never, gen, row.id, override);
-      else await generateVocabContent(db as never, gen, row.id, override);
+      if (it.blockKind === "grammar")
+        await generateGrammarContent(db as never, gen, it.rowId, it.override);
+      else if (it.blockKind === "kanji")
+        await generateKanjiContent(db as never, gen, it.rowId, it.override);
+      else await generateVocabContent(db as never, gen, it.rowId, it.override);
       ok++;
-      console.log(`${ts()} OK ${row.label}`);
+      console.log(`${ts()} OK ${it.label}`);
     } catch (e) {
       if (e instanceof LlmQuotaError) return onQuota(e);
       fail++;
-      console.log(`${ts()} FAIL ${row.label}: ${(e as Error).message?.slice(0, 120)}`);
+      console.log(`${ts()} FAIL ${it.label}: ${(e as Error).message?.slice(0, 120)}`);
     }
   });
   done();
@@ -277,5 +316,10 @@ async function runMtKind() {
   done();
 }
 
-if (kind === "grammar-mt") runMtKind();
-else runDbKind();
+if (blocksArg) {
+  runDbBlocks(blocksArg.split(",").filter(Boolean).map(parseBlockSpec));
+} else if (kind === "grammar-mt") {
+  runMtKind();
+} else {
+  runDbBlocks([{ kind, lang, native, level }]);
+}

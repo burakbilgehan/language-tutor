@@ -26,27 +26,34 @@ const rows = db
   )
   .all() as { lang: string; char: string; content: string }[];
 
-const byLang = new Map<string, Record<string, unknown>>();
+// Content kolonu {tr:...,en:...} dil-anahtarlı (T-031). Her native için ayrı
+// dosya: tr -> <lang>.json, en -> <lang>.en.json (sıfırdan o dil için
+// üretilmiş içerik). Kısmi export sorun değil; applyKanjiSeed boşları
+// doldurur, dosya büyüdükçe fark uygulanır.
 let skipped = 0;
-for (const r of rows) {
-  // T-031 sonrası content kolonu {tr:...,en:...} dil-anahtarlı; seed düz tr taşır.
-  const parsed = KanjiContentSchema.safeParse(
-    readLangContent(JSON.parse(r.content), "tr")
-  );
-  if (!parsed.success) {
-    skipped++;
-    console.warn(`ATLA ${r.lang}/${r.char}: şemaya uymuyor`);
-    continue;
+for (const native of ["tr", "en"] as const) {
+  const byLang = new Map<string, Record<string, unknown>>();
+  for (const r of rows) {
+    const payload = readLangContent(JSON.parse(r.content), native);
+    if (!payload) continue;
+    const parsed = KanjiContentSchema.safeParse(payload);
+    if (!parsed.success) {
+      skipped++;
+      console.warn(`ATLA ${r.lang}/${r.char} (${native}): şemaya uymuyor`);
+      continue;
+    }
+    if (!byLang.has(r.lang)) byLang.set(r.lang, {});
+    byLang.get(r.lang)![r.char] = parsed.data;
   }
-  if (!byLang.has(r.lang)) byLang.set(r.lang, {});
-  byLang.get(r.lang)![r.char] = parsed.data;
-}
-
-fs.mkdirSync(OUT_DIR, { recursive: true });
-for (const [lang, chars] of byLang) {
-  const file = path.join(OUT_DIR, `${lang}.json`);
-  fs.writeFileSync(file, JSON.stringify({ version: 1, chars }));
-  const kb = Math.round(fs.statSync(file).size / 1024);
-  console.log(`${file}: ${Object.keys(chars).length} karakter, ${kb} KB`);
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  for (const [lang, chars] of byLang) {
+    const file = path.join(
+      OUT_DIR,
+      native === "tr" ? `${lang}.json` : `${lang}.${native}.json`
+    );
+    fs.writeFileSync(file, JSON.stringify({ version: 1, chars }));
+    const kb = Math.round(fs.statSync(file).size / 1024);
+    console.log(`${file}: ${Object.keys(chars).length} karakter (${native}), ${kb} KB`);
+  }
 }
 if (skipped) console.log(`${skipped} karakter şema uyumsuzluğundan atlandı`);
