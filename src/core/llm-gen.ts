@@ -243,11 +243,20 @@ export async function generateLessonContent(
   }
 }
 
-/** runGrammarJob'un üretim gövdesi. */
+/** runGrammarJob'un üretim gövdesi.
+ *
+ * `nativeLanguageOverride`: generate the payload for a specific native
+ * language instead of the owner profile's. Used by the batch runner to fill
+ * the en half of already-ready rows. An override run NEVER touches `status`:
+ * status describes the profile-native (tr) content lifecycle, and an error
+ * here must not flip a ready tr row to error (the tr blast would then
+ * regenerate and overwrite good content). Missing-en detection is done by
+ * the caller straight from the content map, no status needed. */
 export async function generateGrammarContent(
   db: AppDb,
   gen: Gen,
-  topicId: string
+  topicId: string,
+  nativeLanguageOverride?: NativeLang
 ): Promise<void> {
   const topic = db
     .select()
@@ -272,16 +281,21 @@ export async function generateGrammarContent(
     .all()
     .map((r) => r.title);
 
-  db.update(tables.grammarTopics)
-    .set({ status: "generating" })
-    .where(eq(tables.grammarTopics.id, topicId))
-    .run();
+  const native = (nativeLanguageOverride ??
+    profile?.nativeLanguage ??
+    "tr") as NativeLang;
+  if (!nativeLanguageOverride) {
+    db.update(tables.grammarTopics)
+      .set({ status: "generating" })
+      .where(eq(tables.grammarTopics.id, topicId))
+      .run();
+  }
 
   try {
     const { system, prompt } = grammarPrompt({
       topic,
       selfLevel: profile?.selfLevel ?? "zero",
-      nativeLanguage: profile?.nativeLanguage ?? "tr",
+      nativeLanguage: native,
       siblingTitles,
     });
     const content = await gen.generateJson({
@@ -303,30 +317,31 @@ export async function generateGrammarContent(
     delete content.source;
     db.update(tables.grammarTopics)
       .set({
-        content: mergeLangContent(
-          topic.content,
-          (profile?.nativeLanguage ?? "tr") as NativeLang,
-          content
-        ),
-        status: "ready",
-        generatedAt: new Date(),
+        content: mergeLangContent(topic.content, native, content),
+        ...(nativeLanguageOverride
+          ? {}
+          : { status: "ready" as const, generatedAt: new Date() }),
       })
       .where(eq(tables.grammarTopics.id, topicId))
       .run();
   } catch (err) {
-    db.update(tables.grammarTopics)
-      .set({ status: "error" })
-      .where(eq(tables.grammarTopics.id, topicId))
-      .run();
+    if (!nativeLanguageOverride) {
+      db.update(tables.grammarTopics)
+        .set({ status: "error" })
+        .where(eq(tables.grammarTopics.id, topicId))
+        .run();
+    }
     throw err;
   }
 }
 
-/** runKanjiJob'un üretim gövdesi. */
+/** runKanjiJob'un üretim gövdesi. `nativeLanguageOverride`: see
+ * generateGrammarContent — status is never touched on an override run. */
 export async function generateKanjiContent(
   db: AppDb,
   gen: Gen,
-  entryId: string
+  entryId: string,
+  nativeLanguageOverride?: NativeLang
 ): Promise<void> {
   const entry = db
     .select()
@@ -344,17 +359,22 @@ export async function generateKanjiContent(
     .limit(1)
     .get();
 
-  db.update(tables.kanjiEntries)
-    .set({ status: "generating" })
-    .where(eq(tables.kanjiEntries.id, entryId))
-    .run();
+  const native = (nativeLanguageOverride ??
+    profile?.nativeLanguage ??
+    "tr") as NativeLang;
+  if (!nativeLanguageOverride) {
+    db.update(tables.kanjiEntries)
+      .set({ status: "generating" })
+      .where(eq(tables.kanjiEntries.id, entryId))
+      .run();
+  }
 
   try {
     const { system, prompt } = kanjiPrompt({
       entry,
       selfLevel: profile?.selfLevel ?? "zero",
       interests: profile?.interests ?? [],
-      nativeLanguage: profile?.nativeLanguage,
+      nativeLanguage: native,
     });
     const content = await gen.generateJson({
       system,
@@ -366,30 +386,31 @@ export async function generateKanjiContent(
     });
     db.update(tables.kanjiEntries)
       .set({
-        content: mergeLangContent(
-          entry.content,
-          (profile?.nativeLanguage ?? "tr") as NativeLang,
-          content
-        ),
-        status: "ready",
-        generatedAt: new Date(),
+        content: mergeLangContent(entry.content, native, content),
+        ...(nativeLanguageOverride
+          ? {}
+          : { status: "ready" as const, generatedAt: new Date() }),
       })
       .where(eq(tables.kanjiEntries.id, entryId))
       .run();
   } catch (err) {
-    db.update(tables.kanjiEntries)
-      .set({ status: "error" })
-      .where(eq(tables.kanjiEntries.id, entryId))
-      .run();
+    if (!nativeLanguageOverride) {
+      db.update(tables.kanjiEntries)
+        .set({ status: "error" })
+        .where(eq(tables.kanjiEntries.id, entryId))
+        .run();
+    }
     throw err;
   }
 }
 
-/** runVocabJob'un üretim gövdesi. */
+/** runVocabJob'un üretim gövdesi. `nativeLanguageOverride`: see
+ * generateGrammarContent — status is never touched on an override run. */
 export async function generateVocabContent(
   db: AppDb,
   gen: Gen,
-  entryId: string
+  entryId: string,
+  nativeLanguageOverride?: NativeLang
 ): Promise<void> {
   const entry = db
     .select()
@@ -407,17 +428,22 @@ export async function generateVocabContent(
     .limit(1)
     .get();
 
-  db.update(tables.vocabEntries)
-    .set({ status: "generating" })
-    .where(eq(tables.vocabEntries.id, entryId))
-    .run();
+  const native = (nativeLanguageOverride ??
+    profile?.nativeLanguage ??
+    "tr") as NativeLang;
+  if (!nativeLanguageOverride) {
+    db.update(tables.vocabEntries)
+      .set({ status: "generating" })
+      .where(eq(tables.vocabEntries.id, entryId))
+      .run();
+  }
 
   try {
     const { system, prompt } = vocabPrompt({
       entry,
       selfLevel: profile?.selfLevel ?? "zero",
       interests: profile?.interests ?? [],
-      nativeLanguage: profile?.nativeLanguage,
+      nativeLanguage: native,
     });
     const content = await gen.generateJson({
       system,
@@ -429,21 +455,20 @@ export async function generateVocabContent(
     });
     db.update(tables.vocabEntries)
       .set({
-        content: mergeLangContent(
-          entry.content,
-          (profile?.nativeLanguage ?? "tr") as NativeLang,
-          content
-        ),
-        status: "ready",
-        generatedAt: new Date(),
+        content: mergeLangContent(entry.content, native, content),
+        ...(nativeLanguageOverride
+          ? {}
+          : { status: "ready" as const, generatedAt: new Date() }),
       })
       .where(eq(tables.vocabEntries.id, entryId))
       .run();
   } catch (err) {
-    db.update(tables.vocabEntries)
-      .set({ status: "error" })
-      .where(eq(tables.vocabEntries.id, entryId))
-      .run();
+    if (!nativeLanguageOverride) {
+      db.update(tables.vocabEntries)
+        .set({ status: "error" })
+        .where(eq(tables.vocabEntries.id, entryId))
+        .run();
+    }
     throw err;
   }
 }

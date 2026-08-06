@@ -27,6 +27,7 @@ import {
   generateVocabContent,
 } from "@/core/llm-gen";
 import { GrammarTopicSchema, type GrammarTopicContent } from "@/lib/llm/schemas";
+import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
 import { COLUMN_HEALS } from "@/db/heals";
 import { LlmEngine, StubEngine, type TranslateEngine } from "./mt/engine";
 import { translateGrammarTopic } from "./mt/translate-grammar-topic";
@@ -87,46 +88,54 @@ function done(): never {
 async function runDbKind() {
   const gen = getProvider();
   const statuses = ["pending", "error"] as const;
+  // native=tr: fill missing profile-native content (pending/error rows), the
+  // original blast semantics. native=en (any non-tr): from-scratch generation
+  // of that language's half into the SAME rows; pendingness is "the content
+  // map has no such key", status is irrelevant and never touched.
+  const override = native === "tr" ? undefined : (native as NativeLang);
   type Row = { id: string; label: string };
   let rows: Row[];
   if (kind === "grammar") {
     rows = db
-      .select({ id: tables.grammarTopics.id, slug: tables.grammarTopics.slug })
+      .select()
       .from(tables.grammarTopics)
       .where(
         and(
           eq(tables.grammarTopics.targetLanguage, lang),
           eq(tables.grammarTopics.level, level),
-          inArray(tables.grammarTopics.status, statuses)
+          ...(override ? [] : [inArray(tables.grammarTopics.status, statuses)])
         )
       )
       .all()
+      .filter((r) => !override || readLangContent(r.content, override) === null)
       .map((r) => ({ id: r.id, label: `g:${lang}/${r.slug}` }));
   } else if (kind === "kanji") {
     rows = db
-      .select({ id: tables.kanjiEntries.id, char: tables.kanjiEntries.char })
+      .select()
       .from(tables.kanjiEntries)
       .where(
         and(
           eq(tables.kanjiEntries.targetLanguage, lang),
           eq(tables.kanjiEntries.level, level),
-          inArray(tables.kanjiEntries.status, statuses)
+          ...(override ? [] : [inArray(tables.kanjiEntries.status, statuses)])
         )
       )
       .all()
+      .filter((r) => !override || readLangContent(r.content, override) === null)
       .map((r) => ({ id: r.id, label: `k:${r.char}` }));
   } else {
     rows = db
-      .select({ id: tables.vocabEntries.id, word: tables.vocabEntries.word })
+      .select()
       .from(tables.vocabEntries)
       .where(
         and(
           eq(tables.vocabEntries.targetLanguage, lang),
           eq(tables.vocabEntries.level, level),
-          inArray(tables.vocabEntries.status, statuses)
+          ...(override ? [] : [inArray(tables.vocabEntries.status, statuses)])
         )
       )
       .all()
+      .filter((r) => !override || readLangContent(r.content, override) === null)
       .map((r) => ({ id: r.id, label: `v:${r.word}` }));
   }
   console.log(
@@ -134,9 +143,11 @@ async function runDbKind() {
   );
   await pool(rows, async (row) => {
     try {
-      if (kind === "grammar") await generateGrammarContent(db as never, gen, row.id);
-      else if (kind === "kanji") await generateKanjiContent(db as never, gen, row.id);
-      else await generateVocabContent(db as never, gen, row.id);
+      if (kind === "grammar")
+        await generateGrammarContent(db as never, gen, row.id, override);
+      else if (kind === "kanji")
+        await generateKanjiContent(db as never, gen, row.id, override);
+      else await generateVocabContent(db as never, gen, row.id, override);
       ok++;
       console.log(`${ts()} OK ${row.label}`);
     } catch (e) {

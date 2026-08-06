@@ -18,7 +18,6 @@ const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DB_PATH = join(ROOT, "data", "app.db");
-const SEED_DIR = join(ROOT, "public", "grammar-seed");
 const QUEUE_PATH = join(ROOT, "data", "blast-queue.json");
 const LOG_PATH = join(ROOT, "data", `blast-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.log`);
 const PORT = Number(process.env.PORT) || 4646;
@@ -34,7 +33,7 @@ const lvIdx = (lv) => {
   const i = LEVEL_ORDER.indexOf(lv);
   return i === -1 ? 99 : i;
 };
-const KIND_LABEL = { grammar: "Gramer", kanji: "Kanji", vocab: "Sözlük", "grammar-mt": "Gramer MT" };
+const KIND_LABEL = { grammar: "Gramer", kanji: "Kanji", vocab: "Sözlük" };
 
 // ---- katalog -------------------------------------------------------------
 
@@ -71,27 +70,30 @@ function readCatalog() {
         `SELECT target_language t, level, status, COUNT(*) c FROM vocab_entries WHERE target_language IN (${ph}) GROUP BY 1,2,3`
       ).all(...VOCAB_LANGS)) bump("vocab", r.t, "tr", r.level, r.status, r.c);
     }
-    // MT blokları: tr seed dosyası olan her dil için en çevirisinin doluluğu.
-    for (const f of readdirSync(SEED_DIR)) {
-      const lang = f.match(/^([a-z]{2})\.json$/)?.[1];
-      if (!lang) continue;
-      let trSeed;
-      try {
-        trSeed = JSON.parse(readFileSync(join(SEED_DIR, f), "utf8")).topics ?? {};
-      } catch { continue; }
-      const enPath = join(SEED_DIR, `${lang}.en.json`);
-      const enTopics = existsSync(enPath)
-        ? JSON.parse(readFileSync(enPath, "utf8")).topics ?? {}
-        : {};
-      const levelOf = new Map(
-        db.prepare("SELECT slug, level FROM grammar_topics WHERE target_language=?")
-          .all(lang).map((r) => [r.slug, r.level])
-      );
-      for (const slug of Object.keys(trSeed)) {
-        const lv = levelOf.get(slug) ?? "?";
-        const st = enTopics[slug] ? "ready" : "pending";
-        bump("grammar-mt", lang, "en", lv, st, 1);
+    // en blokları: aynı satırların İngilizce yarısı (sıfırdan native üretim,
+    // MT DEĞİL; MT katmanı kaldırıldı). Doluluk = content map'inde 'en'
+    // anahtarı; status'un konuyla ilgisi yok, tr yaşam döngüsünü anlatır.
+    const bumpEn = (kind, table, where = "1", params = []) => {
+      for (const r of db.prepare(
+        `SELECT target_language t, level, COUNT(*) c,
+                SUM(CASE WHEN content IS NOT NULL
+                     AND json_extract(content,'$.en') IS NOT NULL
+                    THEN 1 ELSE 0 END) e
+         FROM ${table} WHERE ${where} GROUP BY 1,2`
+      ).all(...params)) {
+        bump(kind, r.t, "en", r.level, "ready", r.e);
+        if (r.c - r.e > 0) bump(kind, r.t, "en", r.level, "pending", r.c - r.e);
       }
+    };
+    bumpEn("grammar", "grammar_topics");
+    bumpEn("kanji", "kanji_entries");
+    if (VOCAB_LANGS.length) {
+      bumpEn(
+        "vocab",
+        "vocab_entries",
+        `target_language IN (${VOCAB_LANGS.map(() => "?").join(",")})`,
+        VOCAB_LANGS
+      );
     }
     return [...blocks.values()].sort(
       (a, b) =>
@@ -285,8 +287,9 @@ function readState() {
     g.blocks.push({ ...b, inQueue: inQueue.has(b.id) });
   }
   groups.sort((a, b) => {
-    const mt = (k) => (k.startsWith("grammar-mt") ? 1 : 0);
-    return mt(a.key) - mt(b.key) || a.key.localeCompare(b.key);
+    // tr (owner-native) blokları önce, en blokları sonra
+    const en = (k) => (k.endsWith(":en") ? 1 : 0);
+    return en(a.key) - en(b.key) || a.key.localeCompare(b.key);
   });
   const byId = new Map(catalog.map((b) => [b.id, b]));
   const queue = q.order.map((id) => {
