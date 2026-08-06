@@ -4,29 +4,75 @@ import { languageName, nativeLanguageName } from "@/lib/profile-options";
 
 type Profile = typeof profiles.$inferSelect;
 
+// The prompt SCAFFOLDING follows the learner's native language (tr | en).
+// Historically every prompt was written in Turkish with `${native}`
+// interpolations; that worked, but T-080 shows this prompt to the user, and an
+// English-native learner reading "Sen deneyimli bir..." around English
+// fragments is broken transparency. tr stays canonical; en mirrors it.
+type PromptLang = "tr" | "en";
+const promptLang = (nativeLanguage: string | null): PromptLang =>
+  nativeLanguage === "en" ? "en" : "tr";
+
 // Per-level pedagogical goal, injected into the chapter prompt. Level strings
-// are globally unique across schemes (JLPT/HSK/CEFR), so one flat map.
-const LEVEL_GOAL: Record<string, string> = {
-  // JLPT (Japanese)
-  N5: "hayatta kalma temelleri: kana, temel selamlaşma, basit cümleler",
-  N4: "günlük basit iletişim: temel fiil çekimleri, yaygın kalıplar",
-  N3: "orta seviye: karmaşık cümle bağlaçları, günlük akıcılık",
-  N2: "orta-ileri: soyut konular, resmî/gayriresmî ayrımı, geniş kalıp dağarcığı",
-  N1: "ileri: edebî/akademik dil, incelikli nüanslar, keigo derinliği",
-  // HSK (Mandarin Chinese)
-  HSK1: "hayatta kalma temelleri: pinyin ve tonlar, temel cümle yapısı, selamlaşma (~150 kelime)",
-  HSK2: "günlük basit iletişim: zaman/yer ifadeleri, temel görünüş ekleri (~300 kelime)",
-  HSK3: "orta öncesi: günlük konularda akıcılık, temel 把/被 yapıları, tümleçler (~600 kelime)",
-  HSK4: "orta: soyut konulara giriş, karmaşık tümleçler, bağlaç zenginliği (~1200 kelime)",
-  HSK5: "orta-ileri: gazete/dizi düzeyi, yazılı dil kalıpları (~2500 kelime)",
-  HSK6: "ileri: doğal ve incelikli ifade, deyimler (成语), edebî yapılar (~5000 kelime)",
-  // CEFR (Dutch and any future language)
-  A1: "hayatta kalma temelleri: selamlaşma, kendini tanıtma, en temel cümleler",
-  A2: "günlük basit iletişim: rutin konular, basit geçmiş/gelecek zaman",
-  B1: "orta seviye: seyahat ve iş durumlarında kendini idare etme, görüş bildirme",
-  B2: "orta-ileri: soyut konular, akıcı tartışma, ayrıntılı metinler",
-  C1: "ileri: esnek ve etkin dil kullanımı, ince anlam ayrımları",
-  C2: "ustalaşma: neredeyse anadil düzeyi, incelikli üslup hâkimiyeti",
+// are globally unique across schemes (JLPT/HSK/CEFR), so one flat map per
+// scaffolding language.
+const LEVEL_GOAL: Record<PromptLang, Record<string, string>> = {
+  tr: {
+    // JLPT (Japanese)
+    N5: "hayatta kalma temelleri: kana, temel selamlaşma, basit cümleler",
+    N4: "günlük basit iletişim: temel fiil çekimleri, yaygın kalıplar",
+    N3: "orta seviye: karmaşık cümle bağlaçları, günlük akıcılık",
+    N2: "orta-ileri: soyut konular, resmî/gayriresmî ayrımı, geniş kalıp dağarcığı",
+    N1: "ileri: edebî/akademik dil, incelikli nüanslar, keigo derinliği",
+    // HSK (Mandarin Chinese)
+    HSK1: "hayatta kalma temelleri: pinyin ve tonlar, temel cümle yapısı, selamlaşma (~150 kelime)",
+    HSK2: "günlük basit iletişim: zaman/yer ifadeleri, temel görünüş ekleri (~300 kelime)",
+    HSK3: "orta öncesi: günlük konularda akıcılık, temel 把/被 yapıları, tümleçler (~600 kelime)",
+    HSK4: "orta: soyut konulara giriş, karmaşık tümleçler, bağlaç zenginliği (~1200 kelime)",
+    HSK5: "orta-ileri: gazete/dizi düzeyi, yazılı dil kalıpları (~2500 kelime)",
+    HSK6: "ileri: doğal ve incelikli ifade, deyimler (成语), edebî yapılar (~5000 kelime)",
+    // CEFR (Dutch and any future language)
+    A1: "hayatta kalma temelleri: selamlaşma, kendini tanıtma, en temel cümleler",
+    A2: "günlük basit iletişim: rutin konular, basit geçmiş/gelecek zaman",
+    B1: "orta seviye: seyahat ve iş durumlarında kendini idare etme, görüş bildirme",
+    B2: "orta-ileri: soyut konular, akıcı tartışma, ayrıntılı metinler",
+    C1: "ileri: esnek ve etkin dil kullanımı, ince anlam ayrımları",
+    C2: "ustalaşma: neredeyse anadil düzeyi, incelikli üslup hâkimiyeti",
+  },
+  en: {
+    N5: "survival basics: kana, basic greetings, simple sentences",
+    N4: "simple everyday communication: core verb conjugation, common patterns",
+    N3: "intermediate: complex sentence connectors, everyday fluency",
+    N2: "upper-intermediate: abstract topics, formal/informal register, a wide pattern repertoire",
+    N1: "advanced: literary/academic language, fine nuance, keigo in depth",
+    HSK1: "survival basics: pinyin and tones, basic sentence structure, greetings (~150 words)",
+    HSK2: "simple everyday communication: time/place expressions, basic aspect particles (~300 words)",
+    HSK3: "pre-intermediate: fluency on daily topics, basic 把/被 structures, complements (~600 words)",
+    HSK4: "intermediate: entry to abstract topics, complex complements, rich connectors (~1200 words)",
+    HSK5: "upper-intermediate: newspaper/TV-drama level, written-language patterns (~2500 words)",
+    HSK6: "advanced: natural and nuanced expression, idioms (成语), literary structures (~5000 words)",
+    A1: "survival basics: greetings, introducing yourself, the most basic sentences",
+    A2: "simple everyday communication: routine topics, simple past/future tenses",
+    B1: "intermediate: coping in travel and work situations, expressing opinions",
+    B2: "upper-intermediate: abstract topics, fluent discussion, detailed texts",
+    C1: "advanced: flexible and effective language use, fine shades of meaning",
+    C2: "mastery: near-native level, command of subtle style",
+  },
+};
+
+const SELF_LEVEL_TEXT: Record<PromptLang, Record<string, string>> = {
+  tr: {
+    zero: "hiç bilmiyor, sıfırdan başlıyor",
+    beginner: "çok az biliyor (birkaç kelime/selamlaşma)",
+    elementary: "temel seviyede (basit cümleler kurabiliyor)",
+    intermediate: "orta seviyede",
+  },
+  en: {
+    zero: "knows nothing, starting from scratch",
+    beginner: "knows very little (a few words/greetings)",
+    elementary: "elementary (can build simple sentences)",
+    intermediate: "intermediate",
+  },
 };
 
 export interface ChapterPromptInput {
@@ -81,17 +127,18 @@ export function chapterPromptParts({
 }: ChapterPromptInput): ChapterPromptParts {
   const lang = languageName(profile.targetLanguage);
   const native = nativeLanguageName(profile.nativeLanguage);
+  const pl = promptLang(profile.nativeLanguage);
   const isFirst = level === firstLevel(profile.targetLanguage);
   const levelLabel = levelDisplay(profile.targetLanguage, level);
+  const levelText = SELF_LEVEL_TEXT[pl][profile.selfLevel] ?? profile.selfLevel;
+  const levelGoal =
+    LEVEL_GOAL[pl][level] ??
+    (pl === "en" ? "level-appropriate progress" : "seviyeye uygun ilerleme");
 
-  const system = `Sen deneyimli bir ${lang} müfredat tasarımcısısın. Ana dili ${native} olan öğrenciler için kişiselleştirilmiş, oyunlaştırılmış dil müfredatları hazırlıyorsun. Tüm başlık ve açıklamalar ${native} dilinde olacak. Sadece istenen JSON'u döndür.`;
-
-  const levelText: Record<string, string> = {
-    zero: "hiç bilmiyor, sıfırdan başlıyor",
-    beginner: "çok az biliyor (birkaç kelime/selamlaşma)",
-    elementary: "temel seviyede (basit cümleler kurabiliyor)",
-    intermediate: "orta seviyede",
-  };
+  const system =
+    pl === "en"
+      ? `You are an experienced ${lang} curriculum designer. You build personalized, gamified language curricula for learners whose native language is ${native}. All titles and descriptions must be in ${native}. Return only the requested JSON.`
+      : `Sen deneyimli bir ${lang} müfredat tasarımcısısın. Ana dili ${native} olan öğrenciler için kişiselleştirilmiş, oyunlaştırılmış dil müfredatları hazırlıyorsun. Tüm başlık ve açıklamalar ${native} dilinde olacak. Sadece istenen JSON'u döndür.`;
 
   // Stage 1's output goes verbatim between `before` and `after`, in its own
   // clearly-labelled section so the model can tell pedagogy from contract; the
@@ -103,20 +150,41 @@ export function chapterPromptParts({
   // wrapper: only the wrapper knows whether this is the first chapter.
   const continuationRule = isFirst
     ? ""
-    : `\n- Bu ilk bölüm DEĞİL: temel/giriş konularını baştan öğretme, bu seviyeye özgü YENİ konularla ilerle.`;
+    : pl === "en"
+      ? `\n- This is NOT the first chapter: do not re-teach basics/introductions; move forward with NEW topics specific to this level.`
+      : `\n- Bu ilk bölüm DEĞİL: temel/giriş konularını baştan öğretme, bu seviyeye özgü YENİ konularla ilerle.`;
 
   const priorBlock = priorSummary
-    ? `\nŞU KONULAR ÖNCEKİ BÖLÜMLERDE ZATEN ÖĞRETİLDİ — TEKRARLAMA, sadece bu seviyeye özgü YENİ dilbilgisi ve kelime dağarcığını ilerlet:\n${priorSummary}\n`
+    ? pl === "en"
+      ? `\nTHE FOLLOWING WAS ALREADY TAUGHT IN EARLIER CHAPTERS. DO NOT REPEAT IT; advance only NEW grammar and vocabulary specific to this level:\n${priorSummary}\n`
+      : `\nŞU KONULAR ÖNCEKİ BÖLÜMLERDE ZATEN ÖĞRETİLDİ; TEKRARLAMA, sadece bu seviyeye özgü YENİ dilbilgisi ve kelime dağarcığını ilerlet:\n${priorSummary}\n`
     : "";
 
   const titleRule = isFirst
-    ? `- "title": tüm müfredat için kısa, motive edici bir başlık (${native} dilinde).`
-    : `- "title": bu bölüm için kısa bir başlık (${native} dilinde); genel müfredat başlığı zaten mevcut.`;
+    ? pl === "en"
+      ? `- "title": a short, motivating title for the whole curriculum (in ${native}).`
+      : `- "title": tüm müfredat için kısa, motive edici bir başlık (${native} dilinde).`
+    : pl === "en"
+      ? `- "title": a short title for this chapter (in ${native}); the overall curriculum title already exists.`
+      : `- "title": bu bölüm için kısa bir başlık (${native} dilinde); genel müfredat başlığı zaten mevcut.`;
 
-  const before = `Öğrenci profili:
+  const before =
+    pl === "en"
+      ? `Learner profile:
+- Target language: ${lang}
+- Native language: ${native}
+- Starting level: ${levelText}
+- Weekly time budget: ${profile.minutesPerWeek} minutes
+- Goals: ${profile.goals.join(", ")}
+- Interests: ${profile.interests.join(", ")}
+- Motivation (in their own words): "${profile.motivation}"
+${priorBlock}
+PEDAGOGY INSTRUCTION FOR THIS LANGUAGE PAIR (follow it):
+`
+      : `Öğrenci profili:
 - Hedef dil: ${lang}
 - Ana dili: ${native}
-- Başlangıç seviyesi: ${levelText[profile.selfLevel]}
+- Başlangıç seviyesi: ${levelText}
 - Haftalık ayırabileceği süre: ${profile.minutesPerWeek} dakika
 - Hedefleri: ${profile.goals.join(", ")}
 - İlgi alanları: ${profile.interests.join(", ")}
@@ -125,13 +193,30 @@ ${priorBlock}
 BU DİL ÇİFTİ İÇİN PEDAGOJİ TALİMATI (uy):
 `;
 
-  const after = `
+  const after =
+    pl === "en"
+      ? `
+
+Now design the curriculum chapter for the **${levelLabel}** level.
+The goal of this level: ${levelGoal}.
+
+Rules:
+- ${isFirst ? "8-14" : "3-6"} units, each with 4-8 lesson nodes. Produce content appropriate for ${levelLabel} ONLY; do not drift easier or harder.
+- Units must follow a sensible learning order; tie themes to the learner's interests.
+- The last node of every unit must be a "checkpoint" or a "boss" (boss = a demanding task crowning the unit). All others are "lesson".
+- xp_reward: lesson 20-35, checkpoint 40-50, boss 60-80.
+- "theme" is a short English tag (e.g. "food", "travel", "grammar").
+- "objectives": 1-3 concrete learning objectives per node (in ${native}).
+${titleRule}${continuationRule}
+
+Return only JSON matching the schema.`
+      : `
 
 Şu an **${levelLabel}** seviyesi için müfredat bölümü ("chapter") tasarla.
-Bu seviyenin hedefi: ${LEVEL_GOAL[level] ?? "seviyeye uygun ilerleme"}.
+Bu seviyenin hedefi: ${levelGoal}.
 
 Kurallar:
-- ${isFirst ? "8-14" : "3-6"} ünite ("units"), her ünitede 4-8 ders düğümü ("nodes"). SADECE ${levelLabel} seviyesine uygun içerik üret — daha kolay veya daha zor seviyeye kayma.
+- ${isFirst ? "8-14" : "3-6"} ünite ("units"), her ünitede 4-8 ders düğümü ("nodes"). SADECE ${levelLabel} seviyesine uygun içerik üret; daha kolay veya daha zor seviyeye kayma.
 - Üniteler mantıklı bir öğrenme sırası izlemeli; temalar öğrencinin ilgi alanlarına bağlansın.
 - Her ünitenin son düğümü "checkpoint" ya da "boss" olmalı (boss = üniteyi taçlandıran zorlu görev). Diğerleri "lesson".
 - xp_reward: lesson 20-35, checkpoint 40-50, boss 60-80.

@@ -102,6 +102,7 @@ BİÇİM VE SINIRLAR (çok önemli):
 - Madde işaretli, yoğun ve SOMUT olsun; genel geçer pedagoji lafı ("öğrenci merkezli olsun") yazma. Her madde bu dil çiftine özgü bir bilgi taşısın; hedef dilin gerçek örneklerini (kelime, ek, yapı) kullan.
 - Metin ${native} dilinde olsun.
 - SADECE pedagoji yaz. Şunları KESİNLİKLE YAZMA: JSON/şema talimatı, alan adları, ünite veya düğüm SAYISI, xp değerleri, "sadece JSON döndür" gibi ifadeler, çıktı dilinin ne olacağı. Bunların hepsi ayrı bir katmanda zaten var; senin yazdığın metin oraya gömülecek ve çelişki üretirse müfredat bozulur.
+- Okumaların/telaffuzun GÖSTERİM BİÇİMİ hakkında da talimat YAZMA ("okunuşu parantez içinde ver", "romaji ekle", furigana/pinyin notasyonu vb. YASAK). Gösterim uygulamanın katmanıdır: okumalar otomatik olarak karakterlerin ÜSTÜNDE (ruby/furigana) gösterilir ve kendi notasyonu zaten tanımlıdır. Sen NEYİN öğretileceğini yaz, nasıl dizileceğini değil.
 - Uzunluk: yaklaşık 250-450 kelime.
 
 ${REFERENCE_MATERIAL}
