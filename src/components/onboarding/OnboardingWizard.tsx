@@ -166,6 +166,9 @@ const S = {
     next: "Devam",
     preparing: "Hazırlanıyor...",
     start: "Yolculuğu Başlat ✨",
+    inlineGenTitle: "Müfredatın üretiliyor 🌱",
+    inlineGenBody:
+      "İlk seviye hazırlanıyor; bu birkaç dakika sürebilir. Bitince harita açılır ve kalan seviyeler arka planda sırayla eklenir, her biri bittikçe haritada görünür.",
     // T-080: üretim öncesi iki kapı.
     customize: "Promptu özelleştir",
     customizeHint:
@@ -266,6 +269,9 @@ const S = {
     next: "Continue",
     preparing: "Preparing...",
     start: "Start the Journey ✨",
+    inlineGenTitle: "Your curriculum is being generated 🌱",
+    inlineGenBody:
+      "The first level is being prepared; this can take a few minutes. The map opens when it lands, and the remaining levels are added in the background one by one, each appearing as it finishes.",
     customize: "Customize the prompt",
     customizeHint:
       "If you want to see the text that will build your curriculum and adjust the pedagogy section to suit you.",
@@ -293,6 +299,10 @@ export function OnboardingWizard() {
   // it keeps "customize, cancel, then generate" from creating a second row.
   const [profileId, setProfileId] = useState<string | null>(null);
   const [customizing, setCustomizing] = useState(false);
+  // Static-mode inline generation in progress: the whole wizard is replaced
+  // by a full-screen preparing state (server mode flips to GeneratingScreen
+  // via jobId almost immediately, so this barely flashes there).
+  const [inlineGen, setInlineGen] = useState(false);
   // Statikte ilk açılışta LLM bağlı değildir; son adımda sihirbazı gömerek
   // submit'ten önce bağlanma şansı ver (atlanabilir — hata mesajı yol gösterir).
   const llm = useLlmStatus();
@@ -639,6 +649,11 @@ export function OnboardingWizard() {
 
       let gen: { jobId?: string };
       try {
+        // Static mode runs the first level INLINE right here (minutes); the
+        // early return below swaps the whole wizard for a proper "your
+        // curriculum is being prepared" screen instead of a frozen-looking
+        // form with a busy button.
+        setInlineGen(true);
         gen = await curriculumGenerate(id);
       } catch (err) {
         // T-056: LLM yoksa müfredat üretimi ATLANIR — kişiselleştirme bir
@@ -665,6 +680,7 @@ export function OnboardingWizard() {
       setJobId(gen.jobId);
     } catch (err) {
       setError(localizeError(err, resolveUiLang(draft.uiLanguage)));
+      setInlineGen(false);
     } finally {
       setSubmitting(false);
     }
@@ -685,6 +701,28 @@ export function OnboardingWizard() {
           }}
           onCancel={() => setCustomizing(false)}
         />
+      </div>
+    );
+  }
+
+  // Static-mode inline generation: a real screen, not a busy button. Shown
+  // until the first level lands and the full reload to /map happens (the map
+  // then chains and displays the remaining levels one by one).
+  if (inlineGen && !error) {
+    const gt = pick(S, draft.uiLanguage);
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="h-2.5 w-2.5 animate-bounce rounded-full bg-indigo"
+              style={{ animationDelay: `${i * 0.18}s` }}
+            />
+          ))}
+        </div>
+        <h1 className="font-serif text-2xl font-semibold">{gt.inlineGenTitle}</h1>
+        <p className="text-sm text-ink-soft">{gt.inlineGenBody}</p>
       </div>
     );
   }
@@ -1234,11 +1272,15 @@ export function OnboardingWizard() {
                 <LlmSetupWizard onDone={() => setLlmDone(true)} />
               </div>
             )}
-            {/* T-080 second door. Only where an LLM exists: without one there
-                is no prompt to preview, and generation is skipped anyway. Soft
+            {/* T-080 second door. ALWAYS rendered: the old `llm.configured ||
+                llmDone` gate hid it exactly when the user had just connected a
+                provider through the setup block above but the stale status
+                probe had not caught up yet, so the door silently vanished.
+                Without an LLM the customizer itself shows the localized
+                llm_unconfigured error, which is honest and discoverable. Soft
                 variant on purpose; "Start the journey" below is this screen's
                 one dominant action. */}
-            {(llm.configured || llmDone) && (
+            {(
               <div className="mt-6 rounded-xl border-2 border-surface-2 bg-background p-4">
                 <p className="mb-3 text-sm text-ink-soft">{t.customizeHint}</p>
                 <CozyButton
