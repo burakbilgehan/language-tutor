@@ -10,6 +10,7 @@ import { AppError } from "@/lib/errors";
 import { localizeError } from "@/lib/i18n/errors";
 import { resolveUiLang } from "@/lib/i18n/use-localize-error";
 import { markVisited } from "@/lib/visited-flag";
+import { requestCurriculumChain } from "@/lib/curriculum-chain";
 import {
   profileData,
   createProfileApi,
@@ -653,7 +654,10 @@ export function OnboardingWizard() {
         throw err;
       }
       if (!gen.jobId) {
-        // Statik mod: üretim inline tamamlandı — full reload, profil meta cache tazelensin (T-013).
+        // Statik mod: ilk seviye inline tamamlandı; kalan seviyeleri harita
+        // zincirlemeye devam etsin (2026-08-06: tek üretim tüm şemayı kapsar).
+        // Full reload, profil meta cache tazelensin (T-013).
+        requestCurriculumChain(id);
         window.location.href = withBase("/map");
         return;
       }

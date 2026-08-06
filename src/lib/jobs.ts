@@ -23,6 +23,7 @@ import {
 } from "@/core/jobs";
 import type { KanjiContent, LessonContent } from "@/lib/llm/schemas";
 import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import { nextLevelFor } from "@/lib/curriculum/levels";
 // NOTE: the prompt builders, LLM schemas, grammar index and level helpers used
 // to be imported here; they moved to src/core/* with the generation logic and
 // the imports were left behind unused. Dropped with T-079, which had to touch
@@ -458,6 +459,19 @@ export async function runJob(jobId: string) {
       .set({ status: "done", finishedAt: new Date() })
       .where(eq(tables.generationJobs.id, jobId))
       .run();
+    // A finished chapter chains the next level automatically, all the way to
+    // the scheme's top (Burak's ruling, 2026-08-06): one "generate" produces
+    // the FULL curriculum, chapter by chapter, each seeing the prior summary.
+    // Cancelling any job in the chain stops it (the cancel check above
+    // returns before this line), and an error stops it too (we never get
+    // here). createJob's dedupe makes a concurrent manual extend harmless.
+    if (job.jobType === "chapter" || job.jobType === "curriculum") {
+      const profileId =
+        job.jobType === "curriculum"
+          ? job.refId
+          : job.refId.slice(0, job.refId.lastIndexOf(":"));
+      chainNextChapter(profileId);
+    }
   } catch (err) {
     const raw = err instanceof LlmError ? err.rawOutput : undefined;
     db.update(tables.generationJobs)
@@ -497,6 +511,31 @@ async function runVocabJob(entryId: string) {
  * or null if the curriculum has no main nodes yet. Using the actual chain
  * (not a position sort) is the correct way to find the append target.
  */
+/** Enqueue the next level of the profile's scheme after a chapter lands;
+ * no-op at the scheme's top or when profile/curriculum is gone (deleted
+ * mid-chain). */
+function chainNextChapter(profileId: string) {
+  const profile = db
+    .select()
+    .from(tables.profiles)
+    .where(eq(tables.profiles.id, profileId))
+    .limit(1)
+    .get();
+  if (!profile) return;
+  const curriculum = db
+    .select()
+    .from(tables.curricula)
+    .where(eq(tables.curricula.profileId, profileId))
+    .limit(1)
+    .get();
+  if (!curriculum) return;
+  const top = coreTopChapterLevel(db, curriculum.id, profile.targetLanguage);
+  const next = top ? nextLevelFor(profile.targetLanguage, top) : null;
+  if (!next) return;
+  const nextJobId = createJob("chapter", `${profileId}:${next}`);
+  void runJob(nextJobId);
+}
+
 async function runChapterJob(profileId: string, levelArg: string | null) {
   await generateChapter(db, getProvider(), profileId, levelArg, {
     modelUsed: process.env.LLM_PROVIDER === "fixture" ? "fixture" : "deep",

@@ -7,6 +7,7 @@ import { useLocalizeError } from "@/lib/i18n/use-localize-error";
 import { AppError } from "@/lib/errors";
 import { withBase } from "@/lib/base-path";
 import { schemeFor, levelDisplay } from "@/lib/curriculum/levels";
+import { requestCurriculumChain } from "@/lib/curriculum-chain";
 import {
   profileData,
   roadmap,
@@ -161,7 +162,9 @@ export function CurriculumSection() {
         window.location.href = withBase("/map");
         return;
       }
-      // Static mode: generation ran inline and is finished.
+      // Static mode: the first (chosen) level ran inline; the map chains the
+      // remaining levels to the scheme's top from here.
+      requestCurriculumChain(profile.id);
       window.location.href = withBase("/map");
     } catch (e) {
       setError(e instanceof AppError ? localize(e) : t.failed);

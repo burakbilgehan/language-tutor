@@ -30,6 +30,7 @@ import {
   primeLessonWindow,
   retryLessonGen,
 } from "@/lib/client-api";
+import { CHAIN_KEY } from "@/lib/curriculum-chain";
 import {
   subscribeLessonGen,
   lessonGenState,
@@ -47,9 +48,10 @@ const S = {
     preparing: (lvl: string) =>
       `${lvl} hazırlanıyor... Bu birkaç dakika sürebilir.`,
     nextLevelFallback: "Sonraki seviye",
-    nextAutoPre: "Bu seviyeyi bitirince ",
-    nextAutoPost: " otomatik açılır — ya da şimdi hazırlayabilirsin.",
-    prepareNext: (lvl: string) => `Sonraki seviyeyi hazırla (${lvl})`,
+    nextAutoPre: "Devam edersen ",
+    nextAutoPost:
+      " ile başlayıp kalan tüm seviyeler sırayla hazırlanır; her seviye bittikçe haritada görünür.",
+    prepareNext: (lvl: string) => `Kalan seviyeleri hazırla (${lvl} ve sonrası)`,
     allDone: (lvl: string) =>
       `Tüm seviyeler (${lvl}'e kadar) tamamlandı. Sözlük + gramer artık senin.`,
     review: "Tekrar",
@@ -116,9 +118,9 @@ const S = {
     preparing: (lvl: string) =>
       `Preparing ${lvl}... This can take a few minutes.`,
     nextLevelFallback: "The next level",
-    nextAutoPre: "Finish this level and ",
-    nextAutoPost: " unlocks automatically — or you can prepare it now.",
-    prepareNext: (lvl: string) => `Prepare the next level (${lvl})`,
+    nextAutoPre: "Continue and every remaining level is prepared in order, starting with ",
+    nextAutoPost: "; each one appears on the map as it finishes.",
+    prepareNext: (lvl: string) => `Prepare the remaining levels (${lvl} onward)`,
     allDone: (lvl: string) =>
       `All levels (up to ${lvl}) completed. The dictionary + grammar are yours now.`,
     review: "Review",
@@ -412,19 +414,57 @@ export function RoadmapView() {
     if (!profileId) return;
     setExtendError(null);
     setExtendBusy(true);
+    // One click prepares EVERYTHING that remains, to the scheme's top. In
+    // static mode the chain is driven from here (the auto-chain effect below
+    // re-fires this function per level via the sessionStorage flag); in server
+    // mode the job runner chains server-side, so the flag is dropped.
+    try {
+      sessionStorage.setItem(CHAIN_KEY, profileId);
+    } catch {
+      /* sessionStorage unavailable: single-level extend still works */
+    }
     try {
       const j = await curriculumExtend(profileId);
       if (j.jobId) {
+        try {
+          sessionStorage.removeItem(CHAIN_KEY);
+        } catch {}
         setExtendJobId(j.jobId); // server mode: the job poller takes over
         return;
       }
       await loadRoadmap(); // static inline: the chapter is ready, show it
     } catch (e) {
+      try {
+        sessionStorage.removeItem(CHAIN_KEY); // an error stops the chain
+      } catch {}
       setExtendError(localize(e));
     } finally {
       setExtendBusy(false);
     }
   };
+
+  // Static-mode chain driver: while the flag names this profile and levels
+  // remain, keep extending; each pass renders the freshly landed chapter
+  // before the next one starts. The flag is set by the extend click above and
+  // by onboarding/regenerate right after their inline first chapter, so a
+  // plain page visit never spends tokens on its own.
+  useEffect(() => {
+    if (!profileId || !data || extendBusy || extendJobId) return;
+    if (data.isGenerating != null) return;
+    let flagged = false;
+    try {
+      flagged = sessionStorage.getItem(CHAIN_KEY) === profileId;
+    } catch {}
+    if (!flagged) return;
+    if (!data.nextLevel) {
+      try {
+        sessionStorage.removeItem(CHAIN_KEY); // scheme complete
+      } catch {}
+      return;
+    }
+    void startExtend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, profileId, extendBusy, extendJobId]);
 
   const [retranslating, setRetranslating] = useState(false);
   const startRetranslate = async () => {
