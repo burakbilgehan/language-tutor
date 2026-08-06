@@ -130,7 +130,11 @@ export class LlmEngine implements TranslateEngine {
 
   constructor(
     private targetLanguage: string,
-    private nativeLanguage: string
+    private nativeLanguage: string,
+    // "fast" (haiku) handles most topics; callers may escalate a stubborn
+    // topic to "balanced" (sonnet) when haiku keeps translating inline CJK
+    // descriptors embedded in the Turkish prose despite the instruction.
+    private tier: "fast" | "balanced" = "fast"
   ) {}
 
   async translate(texts: string[]): Promise<string[]> {
@@ -153,7 +157,11 @@ export class LlmEngine implements TranslateEngine {
       `${native}-speaking learners. Translate each item's "text" from Turkish to ` +
       `${native}. Preserve ${lang} sentences and any bracket-notation reading ` +
       `(e.g. 漢字[かんじ] or 学习[xuéxí]) EXACTLY as written, character for ` +
-      `character — never translate, alter, or drop them. Return every item's "id" ` +
+      `character — never translate, alter, or drop them. This includes single ` +
+      `${lang} characters inside mixed terms: every contiguous run of ${lang} ` +
+      `script in the source must reappear verbatim in your translation. For ` +
+      `example です・ます形 must stay です・ます形 (NOT "です・ます form"), and ` +
+      `た形 must stay た形 (NOT "た form"). Return every item's "id" ` +
       `unchanged, and return EVERY id you were given — never omit one. Return only ` +
       `the requested JSON.`;
     const prompt =
@@ -167,7 +175,7 @@ export class LlmEngine implements TranslateEngine {
       prompt,
       schema,
       fixtureKey: "grammar-mt",
-      tier: "fast",
+      tier: this.tier,
       timeoutMs: 120_000,
     });
     const byId = new Map(result.items.map((it) => [it.id, it.text]));

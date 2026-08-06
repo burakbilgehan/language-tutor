@@ -80,7 +80,19 @@ export async function translateGrammarTopic(
     const restored = engine.needsProtection
       ? restoreText(mtOut, inputs[i].placeholders).restored
       : mtOut;
-    if (countUnpreservedRuns(slots[i].text, restored) > 0) placeholderFailures++;
+    if (countUnpreservedRuns(slots[i].text, restored) > 0) {
+      // A field that lost a CJK run REVERTS to its source text instead of
+      // carrying the mangled translation: one untranslated field is the
+      // accepted quality floor (same ruling as the untranslated table cells,
+      // T-064), a lost target-language run is not. Callers see the count and
+      // decide how many reverted fields they tolerate. This also absorbs the
+      // check's one known false-positive class: a lone connector particle
+      // between two preserved runs ("A と B karşılaştırması"), which any
+      // correct translation renders as "and" — no engine can pass that.
+      placeholderFailures++;
+      slots[i].set(slots[i].text);
+      return;
+    }
     slots[i].set(restored);
   });
 

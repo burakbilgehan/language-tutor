@@ -27,8 +27,20 @@ import {
   generateVocabContent,
 } from "@/core/llm-gen";
 import { GrammarTopicSchema, type GrammarTopicContent } from "@/lib/llm/schemas";
+import { COLUMN_HEALS } from "@/db/heals";
 import { LlmEngine, StubEngine, type TranslateEngine } from "./mt/engine";
 import { translateGrammarTopic } from "./mt/translate-grammar-topic";
+
+// The live app.db may predate additive schema changes (heals normally replay
+// on save import, which a long-running local DB never goes through); without
+// this, any generate* that reads profiles throws "no such column".
+for (const stmt of COLUMN_HEALS) {
+  try {
+    db.$client.exec(stmt);
+  } catch {
+    // duplicate column = already healed
+  }
+}
 
 const SEED_DIR = "public/grammar-seed";
 
@@ -166,7 +178,41 @@ async function runMtKind() {
   console.log(
     `RUN kind=${kind} lang=${lang} native=${native} level=${level} total=${slugs.length} conc=${conc}`
   );
-  const engine: TranslateEngine = useStub ? new StubEngine() : new LlmEngine(lang, native);
+  const fastEngine: TranslateEngine = useStub ? new StubEngine() : new LlmEngine(lang, native);
+  // Escalation lane for the stubborn tail: some tr seed fields embed inline
+  // CJK descriptors in the Turkish prose ("geçişli/変化しない bir fiildir");
+  // haiku sometimes translates those despite the instruction and the
+  // preservation check rightly rejects the topic. Sonnet holds the line.
+  const balancedEngine: TranslateEngine = useStub
+    ? new StubEngine()
+    : new LlmEngine(lang, native, "balanced");
+  // Fields that lose a CJK run are REVERTED to their Turkish source inside
+  // translateGrammarTopic (never mangled); `reverted` reports how many. The
+  // fast lane demands a perfect topic; the sonnet lane may ship up to
+  // MAX_REVERTED untranslated fields — the accepted quality floor (T-064
+  // table-cell ruling) — so a lone connector particle the check can never
+  // accept ("A と B") stops looping the whole block forever.
+  const MAX_REVERTED = 3;
+  type Attempt =
+    | { ok: true; content: GrammarTopicContent; reverted: number }
+    | { ok: false; reason: string };
+  const attempt = async (
+    topic: GrammarTopicContent,
+    engine: TranslateEngine,
+    maxReverted: number
+  ): Promise<Attempt> => {
+    try {
+      const { content, placeholderFailures } = await translateGrammarTopic(topic, engine);
+      if (placeholderFailures > maxReverted)
+        return { ok: false, reason: `${placeholderFailures} alanda CJK/bracket bozuldu` };
+      const revalidated = GrammarTopicSchema.safeParse(content);
+      if (!revalidated.success)
+        return { ok: false, reason: "çeviri sonrası şemaya uymuyor" };
+      return { ok: true, content: revalidated.data, reverted: placeholderFailures };
+    } catch (e) {
+      return { ok: false, reason: (e as Error).message?.slice(0, 120) ?? "bilinmeyen hata" };
+    }
+  };
   await pool(slugs, async (slug) => {
     const label = `mt:${lang}->${native}/${slug}`;
     const parsed = GrammarTopicSchema.safeParse(raw.topics[slug]);
@@ -175,29 +221,25 @@ async function runMtKind() {
       console.log(`${ts()} FAIL ${label}: tr seed şemaya uymuyor`);
       return;
     }
-    try {
-      const { content, placeholderFailures } = await translateGrammarTopic(parsed.data, engine);
-      if (placeholderFailures > 0) {
-        fail++;
-        console.log(`${ts()} FAIL ${label}: ${placeholderFailures} alanda CJK/bracket bozuldu`);
-        return;
-      }
-      const revalidated = GrammarTopicSchema.safeParse(content);
-      if (!revalidated.success) {
-        fail++;
-        console.log(`${ts()} FAIL ${label}: çeviri sonrası şemaya uymuyor`);
-        return;
-      }
-      // Incremental write after every success: a killed run keeps its progress
-      // (workers are concurrent but JS is single-threaded, writes don't race).
-      existing.topics[slug] = revalidated.data;
-      fs.writeFileSync(outPath, JSON.stringify(existing));
-      ok++;
-      console.log(`${ts()} OK ${label}`);
-    } catch (e) {
-      fail++;
-      console.log(`${ts()} FAIL ${label}: ${(e as Error).message?.slice(0, 120)}`);
+    let result = await attempt(parsed.data, fastEngine, 0);
+    if (!result.ok) {
+      console.log(`${ts()} RETRY ${label}: ${result.reason} -> sonnet`);
+      result = await attempt(parsed.data, balancedEngine, MAX_REVERTED);
     }
+    if (!result.ok) {
+      fail++;
+      console.log(`${ts()} FAIL ${label}: ${result.reason}`);
+      return;
+    }
+    // Incremental write after every success: a killed run keeps its progress
+    // (workers are concurrent but JS is single-threaded, writes don't race).
+    existing.topics[slug] = result.content;
+    fs.writeFileSync(outPath, JSON.stringify(existing));
+    ok++;
+    console.log(
+      `${ts()} OK ${label}` +
+        (result.reverted > 0 ? ` (${result.reverted} alan çevrilmeden kaldı)` : "")
+    );
   });
   done();
 }

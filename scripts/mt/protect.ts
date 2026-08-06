@@ -9,15 +9,24 @@
 // This is deliberately a generic PROSE transform, not grammar-schema-specific,
 // so kanji/vocab seeds (T-064 phase 2) can reuse it unchanged.
 
-// Bracket notation: one or more non-space/non-bracket chars, immediately
-// followed by [reading]. Matches 漢字[かんじ] and 学习[xuéxí] alike.
-const BRACKET_RE = /[^\s[\]]+\[[^\]]+\]/g;
+// Bracket notation: a CJK/kana base immediately followed by [reading].
+// Matches 漢字[かんじ] and 学习[xuéxí] alike. The base is anchored to CJK
+// script on purpose: the old catch-all prefix swallowed adjacent Latin
+// punctuation ("(五段[...]", "'五段[...]'"), and countUnpreservedRuns then
+// demanded that punctuation back VERBATIM in the translation; a legitimate
+// English rendering that moves a paren or requotes failed the check
+// deterministically, so the same topics fell out of every MT run.
+const BRACKET_RE = /[぀-ヿ㐀-鿿豈-﫿々〆〇]+\[[^\]]+\]/g;
 
 // Bare CJK/kana runs with no bracket reading (e.g. a lone は or a hanzi
 // mentioned inline without furigana). Hiragana/katakana + CJK unified
-// ideographs + CJK punctuation ranges.
+// ideographs + compatibility ideographs + iteration marks (々〆〇). CJK
+// punctuation is deliberately NOT part of a run: it splits runs instead
+// ("...、..." becomes two runs), because a translation may legitimately
+// rewrite punctuation while every lexical run still survives; that survival
+// is the invariant that actually matters.
 const CJK_RE =
-  /[぀-ヿ㐀-鿿豈-﫿　-〿]+/g;
+  /[぀-ヿ㐀-鿿豈-﫿々〆〇]+/g;
 
 // Sentinel token shape: letters only, NO DIGITS. Measured against the Argos
 // engine (scripts/mt/setup-argos.sh): a digit-bearing token like
