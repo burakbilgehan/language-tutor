@@ -12,6 +12,7 @@ export {
   LlmTimeoutError,
   LlmAuthError,
   LlmParseError,
+  LlmQuotaError,
 } from "./provider-types";
 
 import type { ModelTier, LlmProvider } from "./provider-types";

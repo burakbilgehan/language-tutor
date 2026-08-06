@@ -1,4 +1,5 @@
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
+import { outputLanguageGuard } from "./output-language";
 
 type VocabEntry = typeof import("@/db/schema").vocabEntries.$inferSelect;
 
@@ -24,7 +25,8 @@ export function vocabPrompt(opts: {
   const system =
     `Sen ana dili ${native} olan öğrenciler için ${lang} kelime sözlüğü yazan bir sözlükbilimcisin. ` +
     "Kelimenin okunuşu sana verilir — asla değiştirme, yeni okunuş uydurma. " +
-    `Görevin ${native} dilinde anlamlar, kullanım notu ve gerçek, doğal örnekler üretmek.${scriptRule} Sadece istenen JSON'u döndür.`;
+    `Görevin ${native} dilinde anlamlar, kullanım notu ve gerçek, doğal örnekler üretmek.${scriptRule} Sadece istenen JSON'u döndür.` +
+    outputLanguageGuard(opts.nativeLanguage);
 
   // 量词 (measure words) are a zh-only concept; ja carries no classifiers, so
   // the reference line and the classifier_note instruction are dropped for ja

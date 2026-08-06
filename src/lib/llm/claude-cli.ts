@@ -9,6 +9,7 @@ import {
   LlmError,
   LlmAuthError,
   LlmTimeoutError,
+  LlmQuotaError,
   modelForTier,
 } from "./provider";
 import { enqueue } from "./queue";
@@ -96,6 +97,14 @@ function runCli(opts: {
         );
       }
       const combined = stdout + "\n" + stderr;
+      // Max aboneliğinin 5 saatlik penceresi/oran limiti: içerik hatası değil,
+      // "bekle ve yeniden dene" sinyali. CLI mesajı çoğu zaman reset saatini
+      // de taşır ("...resets 3am"), ham çıktıyı hata nesnesinde koru.
+      const QUOTA_RE =
+        /usage limit|rate limit|limit reached|resets at|resets \d|too many requests|overloaded|429/i;
+      if (QUOTA_RE.test(combined) && code !== 0) {
+        return reject(new LlmQuotaError("Claude kotası/limiti dolu", combined));
+      }
       if (/\/login|authentication|not logged in|oauth/i.test(combined) && code !== 0) {
         return reject(
           new LlmAuthError(
@@ -116,6 +125,11 @@ function runCli(opts: {
         return reject(new LlmError("CLI çıktısı JSON değil", stdout));
       }
       if (envelope.is_error) {
+        if (QUOTA_RE.test(envelope.result ?? "")) {
+          return reject(
+            new LlmQuotaError("Claude kotası/limiti dolu", envelope.result)
+          );
+        }
         if (/\/login|authentication|oauth/i.test(envelope.result ?? "")) {
           return reject(
             new LlmAuthError(

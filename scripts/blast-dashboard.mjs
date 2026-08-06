@@ -111,9 +111,12 @@ function readCatalog() {
 function loadQueue() {
   try {
     const q = JSON.parse(readFileSync(QUEUE_PATH, "utf8"));
-    return { order: q.order ?? [], attempts: q.attempts ?? {}, current: q.current ?? null, conc: q.conc ?? 8 };
+    return {
+      order: q.order ?? [], attempts: q.attempts ?? {}, current: q.current ?? null,
+      conc: q.conc ?? 8, quotaUntil: q.quotaUntil ?? null,
+    };
   } catch {
-    return { order: [], attempts: {}, current: null, conc: 8 };
+    return { order: [], attempts: {}, current: null, conc: 8, quotaUntil: null };
   }
 }
 function saveQueue(q) {
@@ -180,11 +183,26 @@ function tick() {
   if (!active) return;
   if (runnerPids().length) return;
   const q = loadQueue();
+  // Kota bekleme modu: süre dolana kadar hiçbir şey spawn etme. Süre dolunca
+  // sıradaki blok normal spawn edilir; kota hâlâ kapalıysa runner saniyeler
+  // içinde QUOTA ile döner ve pencere yeniden kurulur (ucuz probe döngüsü).
+  if (q.quotaUntil && Date.now() < q.quotaUntil) return;
   const catalog = readCatalog();
   const pendingOf = (id) => {
     const b = catalog.find((x) => x.id === id);
     return b ? b.pending + b.busy : 0;
   };
+  if (q.current && readRunProgress().progress?.quota) {
+    q.quotaUntil = Date.now() + 15 * 60_000;
+    q.current = null;
+    saveQueue(q);
+    note(
+      `kota/limit dolu; blok düşürülmedi, ${new Date(q.quotaUntil)
+        .toTimeString()
+        .slice(0, 5)}'te yeniden denenecek`
+    );
+    return;
+  }
   if (q.current) {
     if (pendingOf(q.current) === 0) {
       q.order = q.order.filter((x) => x !== q.current);
@@ -215,6 +233,7 @@ function tick() {
     q.order = [next, ...q.order.filter((x) => x !== next)];
   }
   q.current = next;
+  q.quotaUntil = null;
   saveQueue(q);
   spawnRunner(next, q.conc);
 }
@@ -236,7 +255,11 @@ function readRunProgress() {
     const okN = run.filter((l) => / OK /.test(l)).length;
     const failN = run.filter((l) => / FAIL /.test(l)).length;
     const doneLine = run.find((l) => l.startsWith("DONE"));
-    progress = { total, ok: okN, fail: failN, finished: Boolean(doneLine) };
+    progress = {
+      total, ok: okN, fail: failN, finished: Boolean(doneLine),
+      // runner kota/limit yüzünden kesildi: FAIL değil, "bekle ve dene" sinyali
+      quota: run.some((l) => /\] QUOTA /.test(l)),
+    };
   }
   const evLines = lines.filter((l) => /^\[\d\d:\d\d:\d\d\] (OK|FAIL) /.test(l));
   const events = evLines.slice(-30).reverse().map((l) => {
@@ -309,6 +332,7 @@ function readState() {
     active, running, conc: q.conc, groups, queue, progress, events, notes,
     ratePerMin, avgDurSec,
     current: q.current,
+    quotaUntil: q.quotaUntil,
     now: new Date().toTimeString().slice(0, 8),
   };
 }
@@ -481,7 +505,10 @@ async function poll(){
   let s; try { s = await (await fetch("/api/state")).json(); } catch { return; }
   document.getElementById("clock").textContent = s.now;
   const st = document.getElementById("status");
-  st.textContent = s.active ? (s.running ? "çalışıyor · conc " + s.conc : "sıradaki blok bekleniyor")
+  const inQuotaWait = s.active && s.quotaUntil && s.quotaUntil > Date.now();
+  st.textContent = inQuotaWait
+    ? "kota bekleniyor · deneme " + new Date(s.quotaUntil).toTimeString().slice(0, 5)
+    : s.active ? (s.running ? "çalışıyor · conc " + s.conc : "sıradaki blok bekleniyor")
     : (s.running ? "runner yaşıyor (sahipsiz)" : "durdu");
   st.className = "pill " + (s.active || s.running ? "on" : "off");
   document.getElementById("btnStart").textContent = s.active ? "Yeniden başlat" : "Başlat";

@@ -1,4 +1,5 @@
 import { nativeLanguageName } from "@/lib/profile-options";
+import { outputLanguageGuard } from "./output-language";
 
 type KanjiEntry = typeof import("@/db/schema").kanjiEntries.$inferSelect;
 
@@ -14,7 +15,8 @@ export function kanjiPrompt(opts: {
   const system =
     `Sen ana dili ${native} olan öğrenciler için Japonca kanji referansı yazan bir sözlükbilimcisin. ` +
     "Okunuşlar sana verilir — asla yeni okunuş uydurma. " +
-    `Görevin ${native} dilinde anlamlar ve gerçek, yaygın örnek kelimeler üretmek. Sadece istenen JSON'u döndür.`;
+    `Görevin ${native} dilinde anlamlar ve gerçek, yaygın örnek kelimeler üretmek. Sadece istenen JSON'u döndür.` +
+    outputLanguageGuard(opts.nativeLanguage);
 
   const prompt = `Kanji: ${entry.char} (JLPT ${entry.level})
 Onyomi: ${entry.onyomi.join("、") || "—"}

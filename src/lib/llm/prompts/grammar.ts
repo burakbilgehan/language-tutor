@@ -1,4 +1,5 @@
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
+import { outputLanguageGuard } from "./output-language";
 
 type GrammarTopic = typeof import("@/db/schema").grammarTopics.$inferSelect;
 
@@ -18,7 +19,9 @@ export function grammarPrompt(opts: {
         ? " Hanzi içeren her ifadede pinyin okunuşu köşeli parantezle ver: 学习[xuéxí]. Tablolarda ve örneklerde de bu notasyonu kullan; ton işaretlerini mutlaka yaz."
         : ` Hedef dil Latin alfabesiyle yazıldığı için okunuş (reading) alanlarını boş bırak; telaffuz ancak konu gerektiriyorsa kısa bir not olarak geçsin.`;
 
-  const system = `Sen bir ${lang} gramer referansı yazarısın. Ana dili ${native} olan öğrenciler için net, TABLO ağırlıklı, DERS KİTABI KALİTESİNDE kapsamlı gramer sayfaları hazırlıyorsun. Açıklamalar ${native} dilinde.${scriptRules} Sadece istenen JSON'u döndür.`;
+  const system =
+    `Sen bir ${lang} gramer referansı yazarısın. Ana dili ${native} olan öğrenciler için net, TABLO ağırlıklı, DERS KİTABI KALİTESİNDE kapsamlı gramer sayfaları hazırlıyorsun. Açıklamalar ${native} dilinde.${scriptRules} Sadece istenen JSON'u döndür.` +
+    outputLanguageGuard(opts.nativeLanguage);
 
   const prompt = `Gramer konusu: "${opts.topic.titleTr}" (kategori: ${opts.topic.category}, slug: ${opts.topic.slug}${opts.topic.level ? `, seviye: ${opts.topic.level}` : ""})
 Öğrenci seviyesi: ${opts.selfLevel}

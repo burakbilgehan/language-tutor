@@ -28,6 +28,7 @@ import {
 } from "@/core/llm-gen";
 import { GrammarTopicSchema, type GrammarTopicContent } from "@/lib/llm/schemas";
 import { readLangContent, type NativeLang } from "@/lib/llm/lang-content";
+import { LlmQuotaError } from "@/lib/llm/provider-types";
 import { COLUMN_HEALS } from "@/db/heals";
 import { LlmEngine, StubEngine, type TranslateEngine } from "./mt/engine";
 import { translateGrammarTopic } from "./mt/translate-grammar-topic";
@@ -71,11 +72,24 @@ let ok = 0;
 let fail = 0;
 const t0 = Date.now();
 
+// Kota/limit bitince kalan itemları çiğnemeden koşuyu kes: her item bir
+// başarısız çağrı daha yakar ve panel FAIL zannedip bloğu düşürür. QUOTA
+// satırı panelin "bekle ve yeniden dene" moduna geçme sinyalidir; deneme
+// sayılmaz. (scripts/blast-dashboard.mjs bu satırı parse eder.)
+let quotaHit = false;
+function onQuota(e: LlmQuotaError) {
+  if (!quotaHit) {
+    quotaHit = true;
+    const detail = (e.rawOutput ?? e.message).replace(/\s+/g, " ").slice(0, 160);
+    console.log(`${ts()} QUOTA ${detail}`);
+  }
+}
+
 async function pool<T>(items: T[], work: (item: T) => Promise<void>) {
   let i = 0;
   await Promise.all(
     Array.from({ length: Math.min(conc, items.length) }, async () => {
-      while (i < items.length) await work(items[i++]);
+      while (i < items.length && !quotaHit) await work(items[i++]);
     })
   );
 }
@@ -151,6 +165,7 @@ async function runDbKind() {
       ok++;
       console.log(`${ts()} OK ${row.label}`);
     } catch (e) {
+      if (e instanceof LlmQuotaError) return onQuota(e);
       fail++;
       console.log(`${ts()} FAIL ${row.label}: ${(e as Error).message?.slice(0, 120)}`);
     }
@@ -221,6 +236,7 @@ async function runMtKind() {
         return { ok: false, reason: "çeviri sonrası şemaya uymuyor" };
       return { ok: true, content: revalidated.data, reverted: placeholderFailures };
     } catch (e) {
+      if (e instanceof LlmQuotaError) throw e;
       return { ok: false, reason: (e as Error).message?.slice(0, 120) ?? "bilinmeyen hata" };
     }
   };
@@ -232,10 +248,16 @@ async function runMtKind() {
       console.log(`${ts()} FAIL ${label}: tr seed şemaya uymuyor`);
       return;
     }
-    let result = await attempt(parsed.data, fastEngine, 0);
-    if (!result.ok) {
-      console.log(`${ts()} RETRY ${label}: ${result.reason} -> sonnet`);
-      result = await attempt(parsed.data, balancedEngine, MAX_REVERTED);
+    let result: Attempt;
+    try {
+      result = await attempt(parsed.data, fastEngine, 0);
+      if (!result.ok) {
+        console.log(`${ts()} RETRY ${label}: ${result.reason} -> sonnet`);
+        result = await attempt(parsed.data, balancedEngine, MAX_REVERTED);
+      }
+    } catch (e) {
+      if (e instanceof LlmQuotaError) return onQuota(e);
+      throw e;
     }
     if (!result.ok) {
       fail++;

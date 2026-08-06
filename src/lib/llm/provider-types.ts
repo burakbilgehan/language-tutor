@@ -79,3 +79,7 @@ export class LlmCancelledError extends LlmError {
 }
 export class LlmAuthError extends LlmError {}
 export class LlmParseError extends LlmError {}
+/** The provider refused because the subscription/API quota or rate limit is
+ * exhausted (Max 5-hour window, 429, overloaded). Batch tooling treats this
+ * as "pause and retry later", never as a content failure. */
+export class LlmQuotaError extends LlmError {}
