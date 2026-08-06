@@ -115,7 +115,14 @@ export interface FuriganaSegment {
   reading?: string;
 }
 
-const FURIGANA_RE = /([一-鿿々-〇]+)\[([^\]]+)\]/g;
+// The base is a kanji run plus optional trailing hiragana, because the LLM
+// also emits whole-word readings that include okurigana (三つ[みっつ],
+// 食べる[たべる]). Backtracking keeps this safe for unbracketed kanji BEFORE
+// the annotated word (駅で本[ほん] still matches only 本[ほん]: the 駅 branch
+// dies when it meets 本 instead of "["). Without the kana tail these segments
+// fail to match entirely, so the brackets render raw AND the TTS speaks both
+// the kanji and its reading ("mittsu mittsu").
+const FURIGANA_RE = /([一-鿿々-〇]+[ぁ-ゟ]*)\[([^\]]+)\]/g;
 
 export function parseFurigana(text: string): FuriganaSegment[] {
   const segments: FuriganaSegment[] = [];

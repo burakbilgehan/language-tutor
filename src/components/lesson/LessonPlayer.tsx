@@ -746,7 +746,12 @@ function ExerciseCard({
         </div>
       </div>
 
-      <h2 className="text-lg font-semibold">{exercise.promptTr}</h2>
+      {/* promptTr is native-language text but embeds target-language words,
+          which arrive in reading-bracket notation just like targetText; raw
+          brackets were rendering here (T-076). */}
+      <h2 className="text-lg font-semibold">
+        <Furigana text={exercise.promptTr} lang={cjkLang} />
+      </h2>
       {exercise.targetText && (
         <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-background p-4 text-xl">
           <Furigana text={exercise.targetText} lang={cjkLang} />

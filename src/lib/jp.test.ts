@@ -60,6 +60,28 @@ test("furigana parsing and stripping", () => {
   assert.equal(stripFurigana("furigana yok"), "furigana yok");
 });
 
+test("furigana: whole-word readings with okurigana", () => {
+  // The LLM also emits readings covering kanji + trailing okurigana; these
+  // used to fail the regex entirely, rendering raw brackets and making the
+  // TTS speak both the kanji and its reading.
+  assert.deepEqual(parseFurigana("すしを 三つ[みっつ] ください。"), [
+    { text: "すしを " },
+    { text: "三つ", reading: "みっつ" },
+    { text: " ください。" },
+  ]);
+  assert.equal(stripFurigana("すしを 三つ[みっつ] ください。"), "すしを 三つ ください。");
+  assert.deepEqual(parseFurigana("食べる[たべる]"), [
+    { text: "食べる", reading: "たべる" },
+  ]);
+  // Unbracketed kanji before the annotated word must not be swallowed into
+  // the base: only 本 carries the reading here.
+  assert.deepEqual(parseFurigana("駅で本[ほん]を"), [
+    { text: "駅で" },
+    { text: "本", reading: "ほん" },
+    { text: "を" },
+  ]);
+});
+
 test("hasJapanese detection", () => {
   assert.ok(hasJapanese("こんにちは"));
   assert.ok(hasJapanese("日本"));
