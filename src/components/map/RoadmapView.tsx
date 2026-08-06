@@ -392,7 +392,7 @@ export function RoadmapView() {
   // profile that finished onboarding without an LLM and connected one later.
   // Server mode returns a jobId (GeneratingScreen polls it); static mode runs
   // inline and resolves when the chapter is ready.
-  const startGenerate = async () => {
+  const startGenerate = async (opts?: { auto?: boolean }) => {
     if (!profileId) return;
     setGenBusy(true);
     setGenError(null);
@@ -404,11 +404,42 @@ export function RoadmapView() {
       }
       await loadRoadmap(); // static inline: chapter is ready (or notReady stays)
     } catch (e) {
+      // Auto-start (chain flag from onboarding) on a profile with no LLM is
+      // the legitimate T-056 no-LLM path, not an error: drop the flag quietly
+      // and let the hub show its library + connect card as before.
+      if (
+        opts?.auto &&
+        e instanceof AppError &&
+        e.code === "llm_unconfigured"
+      ) {
+        try {
+          sessionStorage.removeItem(CHAIN_KEY);
+        } catch {}
+        return;
+      }
       setGenError(localize(e));
     } finally {
       setGenBusy(false);
     }
   };
+
+  // Onboarding (static) hands over here WITHOUT generating: it stamps the
+  // chain flag and SPA-navigates, so the user is free to roam the site while
+  // the map owns the whole generation. This effect starts the first level;
+  // once it lands, the extend-chain effect below carries the remaining levels
+  // to the scheme's top. Re-mounts mid-generation simply JOIN the in-flight
+  // call via client-api's per-profile dedupe, so navigation away and back
+  // shows the busy state again instead of starting a second generation.
+  useEffect(() => {
+    if (!notReady || !profileId || genBusy || genJobId) return;
+    let flagged = false;
+    try {
+      flagged = sessionStorage.getItem(CHAIN_KEY) === profileId;
+    } catch {}
+    if (!flagged) return;
+    void startGenerate({ auto: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notReady, profileId, genBusy, genJobId]);
 
   const startExtend = async () => {
     if (!profileId) return;

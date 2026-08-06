@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { withBase } from "@/lib/base-path";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
@@ -11,6 +12,7 @@ import { localizeError } from "@/lib/i18n/errors";
 import { resolveUiLang } from "@/lib/i18n/use-localize-error";
 import { markVisited } from "@/lib/visited-flag";
 import { requestCurriculumChain } from "@/lib/curriculum-chain";
+import { resetProfileMeta } from "@/lib/use-profile-meta";
 import {
   profileData,
   createProfileApi,
@@ -166,9 +168,6 @@ const S = {
     next: "Devam",
     preparing: "Hazırlanıyor...",
     start: "Yolculuğu Başlat ✨",
-    inlineGenTitle: "Müfredatın üretiliyor 🌱",
-    inlineGenBody:
-      "İlk seviye hazırlanıyor; bu birkaç dakika sürebilir. Bitince harita açılır ve kalan seviyeler arka planda sırayla eklenir, her biri bittikçe haritada görünür.",
     // T-080: üretim öncesi iki kapı.
     customize: "Promptu özelleştir",
     customizeHint:
@@ -269,9 +268,6 @@ const S = {
     next: "Continue",
     preparing: "Preparing...",
     start: "Start the Journey ✨",
-    inlineGenTitle: "Your curriculum is being generated 🌱",
-    inlineGenBody:
-      "The first level is being prepared; this can take a few minutes. The map opens when it lands, and the remaining levels are added in the background one by one, each appearing as it finishes.",
     customize: "Customize the prompt",
     customizeHint:
       "If you want to see the text that will build your curriculum and adjust the pedagogy section to suit you.",
@@ -279,6 +275,7 @@ const S = {
 };
 
 export function OnboardingWizard() {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>({
     targetLanguage: "ja",
@@ -299,10 +296,6 @@ export function OnboardingWizard() {
   // it keeps "customize, cancel, then generate" from creating a second row.
   const [profileId, setProfileId] = useState<string | null>(null);
   const [customizing, setCustomizing] = useState(false);
-  // Static-mode inline generation in progress: the whole wizard is replaced
-  // by a full-screen preparing state (server mode flips to GeneratingScreen
-  // via jobId almost immediately, so this barely flashes there).
-  const [inlineGen, setInlineGen] = useState(false);
   // Statikte ilk açılışta LLM bağlı değildir; son adımda sihirbazı gömerek
   // submit'ten önce bağlanma şansı ver (atlanabilir — hata mesajı yol gösterir).
   const llm = useLlmStatus();
@@ -647,13 +640,23 @@ export function OnboardingWizard() {
     try {
       const id = await ensureProfile();
 
+      if (IS_STATIC) {
+        // Static mode: do NOT run the multi-minute generation here; hand the
+        // user to the map immediately and let it own the whole chain (the
+        // chain flag makes the map auto-start the first level and continue to
+        // the scheme's top; the rest of the site stays usable meanwhile).
+        // SPA navigation on purpose: a full reload would kill nothing here,
+        // but the map's generation must survive later in-app navigation, and
+        // the profile-meta cache is reset explicitly instead (T-013's reason
+        // for the old full reload).
+        requestCurriculumChain(id);
+        resetProfileMeta();
+        router.push("/map");
+        return;
+      }
+
       let gen: { jobId?: string };
       try {
-        // Static mode runs the first level INLINE right here (minutes); the
-        // early return below swaps the whole wizard for a proper "your
-        // curriculum is being prepared" screen instead of a frozen-looking
-        // form with a busy button.
-        setInlineGen(true);
         gen = await curriculumGenerate(id);
       } catch (err) {
         // T-056: LLM yoksa müfredat üretimi ATLANIR — kişiselleştirme bir
@@ -680,11 +683,10 @@ export function OnboardingWizard() {
       setJobId(gen.jobId);
     } catch (err) {
       setError(localizeError(err, resolveUiLang(draft.uiLanguage)));
-      setInlineGen(false);
     } finally {
       setSubmitting(false);
     }
-  }, [draft.uiLanguage, ensureProfile]);
+  }, [draft.uiLanguage, ensureProfile, router]);
 
   // T-080: the customizer owns the screen while open. Saving the edited body
   // hands straight over to the ordinary generation path, which now reads the
@@ -701,28 +703,6 @@ export function OnboardingWizard() {
           }}
           onCancel={() => setCustomizing(false)}
         />
-      </div>
-    );
-  }
-
-  // Static-mode inline generation: a real screen, not a busy button. Shown
-  // until the first level lands and the full reload to /map happens (the map
-  // then chains and displays the remaining levels one by one).
-  if (inlineGen && !error) {
-    const gt = pick(S, draft.uiLanguage);
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-4 px-6 py-12 text-center">
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="h-2.5 w-2.5 animate-bounce rounded-full bg-indigo"
-              style={{ animationDelay: `${i * 0.18}s` }}
-            />
-          ))}
-        </div>
-        <h1 className="font-serif text-2xl font-semibold">{gt.inlineGenTitle}</h1>
-        <p className="text-sm text-ink-soft">{gt.inlineGenBody}</p>
       </div>
     );
   }

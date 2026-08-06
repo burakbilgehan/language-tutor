@@ -14,6 +14,17 @@ export interface ProfileMeta {
 let cached: ProfileMeta | null = null;
 let inflight: Promise<ProfileMeta | null> | null = null;
 
+/**
+ * Drops the module cache so the next mount refetches. Exists for the one flow
+ * that changes the active profile WITHOUT a full reload: static onboarding
+ * creates the profile and SPA-navigates straight to the map (a reload there
+ * would kill the in-context curriculum generation that follows).
+ */
+export function resetProfileMeta() {
+  cached = null;
+  inflight = null;
+}
+
 export function useProfileMeta(): ProfileMeta | null {
   const [meta, setMeta] = useState<ProfileMeta | null>(cached);
 

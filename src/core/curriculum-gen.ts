@@ -487,7 +487,18 @@ export async function generateChapter(
   gen: Gen,
   profileId: string,
   levelArg: string | null,
-  opts?: { modelUsed?: string }
+  opts?: {
+    modelUsed?: string;
+    /**
+     * Called right after stage 1's pedagogy body is stored on the profile,
+     * BEFORE the multi-minute chapter call. Static mode passes the browser
+     * DB's persist here: without it the pedagogy only reaches IndexedDB when
+     * the whole chapter lands, so closing the tab mid-chapter would throw
+     * away a paid deep-tier meta-call. With it, a reload finds the stored
+     * body and the next generate skips straight to the chapter.
+     */
+    onPedagogyReady?: () => void | Promise<void>;
+  }
 ): Promise<void> {
   const profile = db
     .select()
@@ -570,6 +581,7 @@ export async function generateChapter(
     // run inline here, which is also what static mode needs (no jobs table
     // there: the sequential awaits ARE the pipeline).
     const pedagogy = await ensureCurriculumPedagogy(db, gen, profileId);
+    await opts?.onPedagogyReady?.();
     const { system, prompt } = chapterPrompt({
       profile,
       level,

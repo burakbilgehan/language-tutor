@@ -344,7 +344,9 @@ async function maybeAutoExtendStatic(
   void (async () => {
     try {
       const gen = await browserGen();
-      await coreC.generateChapter(handle.db, gen, profileId, next);
+      await coreC.generateChapter(handle.db, gen, profileId, next, {
+        onPedagogyReady: () => handle.persistNow(),
+      });
       await handle.persistNow();
     } catch (err) {
       console.warn("[auto-extend] bölüm üretimi hata:", err);
@@ -863,7 +865,9 @@ async function curriculumExtendInline(profileId: string): Promise<{ jobId?: stri
   const top = coreC.topChapterLevel(handle.db, curriculum.id, profile.targetLanguage);
   const next = top ? nextLevelFor(profile.targetLanguage, top) : null;
   if (!next) throw new AppError("no_level_to_extend");
-  await coreC.generateChapter(handle.db, gen, profileId, next);
+  await coreC.generateChapter(handle.db, gen, profileId, next, {
+    onPedagogyReady: () => handle.persistNow(),
+  });
   await handle.persistNow();
   return {};
 }
@@ -1059,7 +1063,11 @@ export async function curriculumGenerate(
     const gen = await browserGen();
     const handle = await browserDb();
     const coreC = await import("@/core/curriculum-gen");
-    await coreC.generateChapter(handle.db, gen, profileId, level ?? null);
+    await coreC.generateChapter(handle.db, gen, profileId, level ?? null, {
+      // Persist as soon as the pedagogy body is stored: a tab closed during
+      // the multi-minute chapter call must not lose the paid meta-call.
+      onPedagogyReady: () => handle.persistNow(),
+    });
     await handle.persistNow();
     return {};
   });
