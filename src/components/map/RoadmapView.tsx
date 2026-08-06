@@ -230,6 +230,11 @@ export function RoadmapView() {
   const [error, setError] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [extendJobId, setExtendJobId] = useState<string | null>(null);
+  // Static mode runs the extend INLINE (no job table, no jobId): the await
+  // below is the whole multi-minute generation. Without this flag the click
+  // produced no visible state change at all and the map never refreshed when
+  // the chapter finally landed.
+  const [extendBusy, setExtendBusy] = useState(false);
   const [extendError, setExtendError] = useState<string | null>(null);
   const [openLessonId, setOpenLessonId] = useState<string | null>(null);
   // T-056: profil var ama müfredat yok (LLM'siz onboarding). Kör boş harita
@@ -406,11 +411,18 @@ export function RoadmapView() {
   const startExtend = async () => {
     if (!profileId) return;
     setExtendError(null);
+    setExtendBusy(true);
     try {
       const j = await curriculumExtend(profileId);
-      setExtendJobId(j.jobId ?? null);
+      if (j.jobId) {
+        setExtendJobId(j.jobId); // server mode: the job poller takes over
+        return;
+      }
+      await loadRoadmap(); // static inline: the chapter is ready, show it
     } catch (e) {
       setExtendError(localize(e));
+    } finally {
+      setExtendBusy(false);
     }
   };
 
@@ -658,7 +670,7 @@ export function RoadmapView() {
 
         {/* End-of-map: extend to the next level of the language's scheme */}
         <div className="my-10 flex flex-col items-center gap-3 text-center">
-          {data.isGenerating || extendJobId ? (
+          {data.isGenerating || extendJobId || extendBusy ? (
             <div className="flex flex-col items-center gap-2 rounded-cozy bg-surface px-6 py-5 shadow-cozy">
               <div className="flex gap-1.5">
                 {[0, 1, 2].map((i) => (
