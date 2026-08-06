@@ -811,6 +811,27 @@ export async function regenerateLesson(
   persistSoon();
 }
 
+// Static mode has no jobs table and therefore no (jobType, refId) dedupe:
+// without this guard every extra click on a generate/extend button (or an
+// impatient reload-and-click) would start a REAL second multi-minute LLM
+// generation and burn money. One in-flight chapter generation per profile;
+// concurrent callers JOIN the running one, exactly like createJob returning
+// the in-flight job id. The promise self-clears when it settles; a full page
+// reload kills the generation with the JS context, so a stale entry cannot
+// outlive the work it guards.
+const inflightChapterGen = new Map<string, Promise<{ jobId?: string }>>();
+
+function joinChapterGen(
+  profileId: string,
+  start: () => Promise<{ jobId?: string }>
+): Promise<{ jobId?: string }> {
+  const running = inflightChapterGen.get(profileId);
+  if (running) return running;
+  const p = start().finally(() => inflightChapterGen.delete(profileId));
+  inflightChapterGen.set(profileId, p);
+  return p;
+}
+
 export async function curriculumExtend(profileId: string): Promise<{ jobId?: string }> {
   if (!IS_STATIC) {
     return fetchJson("/api/curriculum/extend", {
@@ -819,6 +840,10 @@ export async function curriculumExtend(profileId: string): Promise<{ jobId?: str
       body: JSON.stringify({ profileId }),
     });
   }
+  return joinChapterGen(profileId, () => curriculumExtendInline(profileId));
+}
+
+async function curriculumExtendInline(profileId: string): Promise<{ jobId?: string }> {
   const gen = await browserGen();
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
@@ -1028,13 +1053,16 @@ export async function curriculumGenerate(
     });
   }
   // Statik: job kuyruğu yok — üretim inline (2-5 dk sürebilir; çağıran
-  // bekleme ekranını kendisi gösterir). jobId dönmez.
-  const gen = await browserGen();
-  const handle = await browserDb();
-  const coreC = await import("@/core/curriculum-gen");
-  await coreC.generateChapter(handle.db, gen, profileId, level ?? null);
-  await handle.persistNow();
-  return {};
+  // bekleme ekranını kendisi gösterir). jobId dönmez. Aynı profil için süren
+  // bir üretim varsa ikinci çağrı ONA katılır (yukarıdaki inflight dedupe).
+  return joinChapterGen(profileId, async () => {
+    const gen = await browserGen();
+    const handle = await browserDb();
+    const coreC = await import("@/core/curriculum-gen");
+    await coreC.generateChapter(handle.db, gen, profileId, level ?? null);
+    await handle.persistNow();
+    return {};
+  });
 }
 
 /**
