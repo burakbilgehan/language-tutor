@@ -107,11 +107,15 @@ export function applyGrammarSeed(
   for (const row of candidates) {
     const content = seed[row.slug];
     if (!content) continue;
-    // A FILLED slot is never overwritten, whatever its provenance — real LLM
-    // content obviously, but also prior MT content (re-applying a newer seed
-    // file over it is a deliberate non-goal for now: content only flows into
-    // gaps, never over anything a user may have already read).
-    if (readLangContent(row.content, seedLang)) continue;
+    // A filled slot is only overwritten in ONE case: the existing payload is
+    // machine-translated (source:"mt", the retired T-064 layer) and the seed
+    // entry is real content. The 2026-08-07 ruling replaced the en MT library
+    // with from-scratch en generation, so stale MT left in old browser
+    // images must yield to the real seed. Real content (user-generated or
+    // prior seed fill, no source marker) is never touched.
+    const existing = readLangContent<GrammarTopicContent>(row.content, seedLang);
+    if (existing && !(existing.source === "mt" && content.source !== "mt"))
+      continue;
     // Merge, don't replace: the row may hold the OTHER language's content
     // (tr seed fill, or an interrupted generation). Wholesale {lang: content}
     // would wipe it permanently (T-031).
