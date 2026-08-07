@@ -23,15 +23,16 @@ const VOCAB_LANGS = fs
   .readdirSync("src/lib/vocab-index")
   .map((f) => f.match(/^([a-z]{2})-data\.json$/)?.[1])
   .filter(Boolean) as string[];
-const rows = db
-  .prepare(
-    `SELECT target_language AS lang, word, content
-     FROM vocab_entries
-     WHERE status = 'ready' AND content IS NOT NULL
-     ORDER BY target_language, position`
-  )
-  .all()
-  .filter((r: { lang: string }) => VOCAB_LANGS.includes(r.lang)) as { lang: string; word: string; content: string }[];
+const rows = (
+  db
+    .prepare(
+      `SELECT target_language AS lang, word, content
+       FROM vocab_entries
+       WHERE status = 'ready' AND content IS NOT NULL
+       ORDER BY target_language, position`
+    )
+    .all() as { lang: string; word: string; content: string }[]
+).filter((r) => VOCAB_LANGS.includes(r.lang));
 
 // Content kolonu {tr:...,en:...} dil-anahtarlı (T-031). Her native için ayrı
 // dosya: tr -> <lang>.json, en -> <lang>.en.json (sıfırdan o dil için
