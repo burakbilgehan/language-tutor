@@ -17,6 +17,12 @@ if (!fs.existsSync(DB_PATH)) {
 }
 
 const db = new Database(DB_PATH, { readonly: true });
+// Yalnız statik indexi olan diller (reddedilen T-030'un ölü ja satırı seed
+// dosyası üretmesin).
+const VOCAB_LANGS = fs
+  .readdirSync("src/lib/vocab-index")
+  .map((f) => f.match(/^([a-z]{2})-data\.json$/)?.[1])
+  .filter(Boolean) as string[];
 const rows = db
   .prepare(
     `SELECT target_language AS lang, word, content
@@ -24,7 +30,8 @@ const rows = db
      WHERE status = 'ready' AND content IS NOT NULL
      ORDER BY target_language, position`
   )
-  .all() as { lang: string; word: string; content: string }[];
+  .all()
+  .filter((r: { lang: string }) => VOCAB_LANGS.includes(r.lang)) as { lang: string; word: string; content: string }[];
 
 // Content kolonu {tr:...,en:...} dil-anahtarlı (T-031). Her native için ayrı
 // dosya: tr -> <lang>.json, en -> <lang>.en.json (sıfırdan o dil için
