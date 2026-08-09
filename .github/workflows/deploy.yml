@@ -35,17 +35,6 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
-      # data/app.db is gitignored; db-reset.test.ts (and anything touching the
-      # dev DB) needs the schema to exist. --force skips the interactive
-      # confirmation — the DB is always fresh here, nothing to lose. The final
-      # node check exists because drizzle-kit exits 0 even when it fails to
-      # open the database (seen: missing data/ dir → TypeError, step green).
-      - name: Create app DB schema
-        run: |
-          mkdir -p data
-          npm run db:push -- --force
-          node -e "const r=require('better-sqlite3')('data/app.db').prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name='profiles'\").get(); if (!r) { console.error('schema push produced no tables'); process.exit(1); }"
-
       - name: App tests
         run: npm test
 

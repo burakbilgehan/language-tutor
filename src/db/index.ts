@@ -27,28 +27,10 @@ function liveDb(): Db {
   return (globalForDb.__db ??= createDb());
 }
 
-/**
- * Closes the current connection and clears the cache so the next `db` access
- * reopens against whatever file is now at DB_PATH. Used by save-import, which
- * swaps the underlying app.db file. Safe to call when no db exists yet.
- */
-export function resetDb() {
-  const existing = globalForDb.__db;
-  if (existing) {
-    try {
-      existing.$client.close();
-    } catch {
-      // already closed / never opened — ignore
-    }
-    globalForDb.__db = undefined;
-  }
-}
-
-// `db` is a lazy proxy: every property access resolves the live connection via
-// `liveDb()`, so after `resetDb()` the very next drizzle call transparently
-// reopens. This preserves the `import { db }` contract across all call sites
-// while making the file-swap in save-import safe (the module-eval `const`
-// could not be reassigned otherwise).
+// `db` is a lazy proxy: every property access resolves the live connection
+// via `liveDb()`, so the file is only opened on first real use. T-069: this
+// module is script-only tooling now (blast, seed exports, parity harness);
+// the app itself runs on sql.js in the browser (src/db/browser.ts).
 export const db: Db = new Proxy({} as Db, {
   get(_t, prop, receiver) {
     const target = liveDb();

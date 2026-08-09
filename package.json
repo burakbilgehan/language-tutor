@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "@k1low/hanzi-writer-data-jp": "^0.8.0",
-    "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.44.7",
     "hanzi-writer": "^3.7.3",
     "html2canvas-pro": "^2.2.4",
@@ -47,6 +46,7 @@
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.11.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
