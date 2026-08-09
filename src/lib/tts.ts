@@ -39,6 +39,32 @@ export function speakableText(text: string): string {
   return stripFurigana(text).replace(/[ \t]+/g, " ").trim();
 }
 
+// CJK letters (kana, han, iteration marks, long-vowel mark) plus the CJK
+// punctuation that can appear inside a sentence. ASCII/latin is deliberately
+// excluded: it is how translations and pinyin annotations are told apart
+// from the target-language sentence in mixed table cells.
+const CJK_RUN_RE =
+  /[぀-ヿ㐀-䶿一-鿿豈-﫿々〆ー。、！？；：，「」『』（）]+/g;
+const CJK_PUNCT_RE = /[。、！？；：，「」『』（）]/g;
+
+/**
+ * Extract the speakable target-language portion of a mixed-content cell,
+ * e.g. a grammar-table cell like "你是学生吗？[Nǐ shì xuésheng ma?] Are you a
+ * student?" -> "你是学生吗？". Reading brackets attached to CJK are stripped
+ * first (speakableText); standalone latin/pinyin/translation text never
+ * matches the CJK run. Returns the longest run, or null when the cell has no
+ * run of at least two CJK letters (a lone particle in a formation label is
+ * not worth a speaker button).
+ */
+export function cjkSpeakable(text: string): string | null {
+  const runs = speakableText(text).match(CJK_RUN_RE);
+  if (!runs) return null;
+  let best = "";
+  for (const r of runs) if (r.length > best.length) best = r;
+  const letters = best.replace(CJK_PUNCT_RE, "");
+  return letters.length >= 2 ? best : null;
+}
+
 let voicesCache: SpeechSynthesisVoice[] | null = null;
 let voicesPromise: Promise<SpeechSynthesisVoice[]> | null = null;
 

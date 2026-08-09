@@ -1,5 +1,7 @@
 import type { GrammarTable as GrammarTableData } from "@/lib/llm/schemas";
 import { Furigana } from "@/components/shared/Furigana";
+import { SpeakButton } from "@/components/shared/SpeakButton";
+import { cjkSpeakable } from "@/lib/tts";
 
 export function GrammarTable({
   table,
@@ -30,16 +32,22 @@ export function GrammarTable({
           <tbody>
             {table.rows.map((row, ri) => (
               <tr key={ri} className="odd:bg-background/60">
-                {row.map((cell, ci) => (
-                  <td
-                    key={ci}
-                    className={`border-b border-surface-2 px-3 py-2 ${
-                      ci === 0 ? "text-base font-medium" : ""
-                    }`}
-                  >
-                    <Furigana text={cell} lang={lang} />
-                  </td>
-                ))}
+                {row.map((cell, ci) => {
+                  // Cells mix the target sentence with readings and the
+                  // translation; speak only the extracted CJK sentence.
+                  const speakable = lang ? cjkSpeakable(cell) : null;
+                  return (
+                    <td
+                      key={ci}
+                      className={`border-b border-surface-2 px-3 py-2 ${
+                        ci === 0 ? "text-base font-medium" : ""
+                      }`}
+                    >
+                      <Furigana text={cell} lang={lang} />
+                      {speakable && <SpeakButton text={speakable} />}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

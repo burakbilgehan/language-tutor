@@ -123,6 +123,11 @@ export function VocabEntryView({ word }: { word: string }) {
         <h1 className="font-display text-3xl font-bold" lang={lang}>
           {entry.word}
         </h1>
+        <SpeakButton
+          text={entry.word}
+          lang={target === "ja" ? "ja-JP" : "zh-CN"}
+          className="text-lg"
+        />
         <div className="min-w-0">
           <div className="text-lg text-ink-soft">{entry.reading}</div>
           {entry.traditional && (
@@ -208,6 +213,7 @@ export function VocabEntryView({ word }: { word: string }) {
                       <span className="text-base">
                         <Furigana text={c.phrase} />
                       </span>
+                      <SpeakButton text={c.phrase} lang="zh-CN" />
                       <span className="text-sm text-ink-soft">
                         {c.meaning_tr}
                       </span>

@@ -277,6 +277,7 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
                             text={f.furigana}
                             className="font-display text-base leading-relaxed"
                           />
+                          <SpeakButton text={f.furigana} lang="ja-JP" />
                           {showRomaji && f.romaji && (
                             <div className="text-xs text-ink-soft">{f.romaji}</div>
                           )}
@@ -288,6 +289,7 @@ export function ConjugatorView({ targetLanguage }: { targetLanguage: string }) {
                                 text={f.example.ja}
                                 className="leading-relaxed"
                               />
+                              <SpeakButton text={f.example.ja} lang="ja-JP" />
                               <div className="text-xs text-ink-soft">
                                 {en ? f.example.en : f.example.tr}
                               </div>

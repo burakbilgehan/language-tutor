@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ttsLangTag, speakableText, ttsRateFor } from "./tts";
+import { ttsLangTag, speakableText, ttsRateFor, cjkSpeakable } from "./tts";
 
 test("ttsLangTag maps known target languages to BCP-47 voice tags", () => {
   assert.equal(ttsLangTag("ja"), "ja-JP");
@@ -39,6 +39,29 @@ test("speakableText collapses stray whitespace and trims", () => {
 test("speakableText handles empty input", () => {
   assert.equal(speakableText(""), "");
   assert.equal(speakableText("   "), "");
+});
+
+test("cjkSpeakable extracts the target-language sentence from a mixed cell", () => {
+  assert.equal(
+    cjkSpeakable("你是学生吗？[Nǐ shì xuésheng ma?] Are you a student?"),
+    "你是学生吗？"
+  );
+  assert.equal(cjkSpeakable("私は学生です。(I am a student)"), "私は学生です。");
+});
+
+test("cjkSpeakable strips attached reading brackets before extracting", () => {
+  assert.equal(cjkSpeakable("学生[xuésheng]是好人"), "学生是好人");
+  assert.equal(cjkSpeakable("漢字[かんじ]を書く"), "漢字を書く");
+});
+
+test("cjkSpeakable returns null without a run of two or more CJK letters", () => {
+  assert.equal(cjkSpeakable("Statement + 吗 = yes/no question"), null);
+  assert.equal(cjkSpeakable("Are you a student?"), null);
+  assert.equal(cjkSpeakable(""), null);
+});
+
+test("cjkSpeakable picks the longest run when several exist", () => {
+  assert.equal(cjkSpeakable("他很高。 vs 他很高吗？"), "他很高吗？");
 });
 
 test("ttsRateFor slows zh down for tone clarity, others read at a relaxed pace", () => {

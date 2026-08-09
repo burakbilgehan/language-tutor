@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import HanziWriter from "hanzi-writer";
 import { CozyButton } from "@/components/shared/CozyButton";
+import { SpeakButton } from "@/components/shared/SpeakButton";
 import { GOJUON, DAKUTEN, GOJUON_HEADERS, STROKE_KANA, type KanaCell } from "@/lib/kana";
 import type { KanjiContent } from "@/lib/llm/schemas";
 import { withBase } from "@/lib/base-path";
@@ -496,6 +497,7 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
             <span className="ml-3 text-ink-soft" lang="ja">
               {selectedKana.hira} / {selectedKana.kata}
             </span>
+            <SpeakButton text={selectedKana.hira} lang="ja-JP" />
           </section>
         )}
 
@@ -511,9 +513,19 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
               <dt className="font-semibold text-accent">Onyomi</dt>
-              <dd lang="ja">{detail.onyomi.join("、") || "—"}</dd>
+              <dd lang="ja">
+                {detail.onyomi.join("、") || "—"}
+                {detail.onyomi.length > 0 && (
+                  <SpeakButton text={detail.onyomi.join("、")} lang="ja-JP" />
+                )}
+              </dd>
               <dt className="font-semibold text-accent">Kunyomi</dt>
-              <dd lang="ja">{detail.kunyomi.join("、") || "—"}</dd>
+              <dd lang="ja">
+                {detail.kunyomi.join("、") || "—"}
+                {detail.kunyomi.length > 0 && (
+                  <SpeakButton text={detail.kunyomi.join("、")} lang="ja-JP" />
+                )}
+              </dd>
               <dt className="font-semibold text-accent">{t.meaning}</dt>
               <dd>
                 {detail.content
@@ -542,6 +554,13 @@ export function StrokeTrainer({ initialChar }: { initialChar?: string } = {}) {
                       <span lang="ja" className="text-sm text-ink-soft">
                         {ex.reading}
                       </span>
+                      {/* Speak the kana reading, not the kanji word: the
+                          entry's own reading beats whatever the voice would
+                          guess for an isolated compound. */}
+                      <SpeakButton
+                        text={ex.reading || ex.word}
+                        lang="ja-JP"
+                      />
                       <span className="text-sm font-medium">
                         {ex.meaning_tr}
                       </span>
