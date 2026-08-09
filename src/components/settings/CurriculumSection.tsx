@@ -154,16 +154,9 @@ export function CurriculumSection() {
       // provider) the delete still stands and the user is told so, rather than
       // the whole action appearing to have done nothing.
       setPhase("generating");
-      const gen = await curriculumGenerate(profile.id, level);
-      if (gen.jobId) {
-        // Server mode: the chapter job runs in the background and the map's
-        // own not-ready poller picks it up, exactly as it does after
-        // onboarding. Nothing to wait for here.
-        window.location.href = withBase("/map");
-        return;
-      }
-      // Static mode: the first (chosen) level ran inline; the map chains the
-      // remaining levels to the scheme's top from here.
+      await curriculumGenerate(profile.id, level);
+      // The first (chosen) level ran inline; the map chains the remaining
+      // levels to the scheme's top from here.
       requestCurriculumChain(profile.id);
       window.location.href = withBase("/map");
     } catch (e) {

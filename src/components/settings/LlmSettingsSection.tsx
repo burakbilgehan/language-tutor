@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStrings } from "@/lib/i18n/use-strings";
-import { IS_STATIC, llmConfigGet, type LlmConfigDto } from "@/lib/client-api";
+import { llmConfigGet, type LlmConfigDto } from "@/lib/client-api";
 import { CATALOG, providerForBaseUrl, type ProviderId } from "@/lib/llm/catalog";
 import { refreshCatalogFromWorker } from "@/lib/llm/catalog-refresh";
 import { qualityForModels, modelLineFor } from "./llm-setup-logic";
@@ -287,7 +287,7 @@ function ConnectedCard({
       </p>
       <div className="mt-2">
         <LiveLocalStatus t={t} provider={provider} />
-        {IS_STATIC && provider === "openrouter" && <OpenRouterCreditLine t={t} />}
+        {provider === "openrouter" && <OpenRouterCreditLine t={t} />}
       </div>
     </section>
   );

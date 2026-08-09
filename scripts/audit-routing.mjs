@@ -41,8 +41,7 @@ function scan(file) {
     if (!CALL_RE.test(line)) return;
     if (/withBase\s*\(/.test(line)) return; // correctly wrapped
     if (!BARE_ABS_PATH_RE.test(line)) return; // no bare "/..." literal (dynamic/relative)
-    // server-only save export lives behind !IS_STATIC — allow an inline opt-out
-    if (/audit-routing:allow/.test(line)) return;
+    if (/audit-routing:allow/.test(line)) return; // inline opt-out with a reason
     violations.push(`${path.relative(process.cwd(), file)}:${i + 1}: ${line.trim()}`);
   });
 }
@@ -55,8 +54,8 @@ if (violations.length) {
   );
   for (const v of violations) console.error("  " + v);
   console.error(
-    "\nSee src/lib/base-path.ts. If the call is server-only (!IS_STATIC), add an\n" +
-      "// audit-routing:allow comment on that line with a reason."
+    "\nSee src/lib/base-path.ts. If the line is a justified exception, add an\n" +
+      "// audit-routing:allow comment on it with a reason."
   );
   process.exit(1);
 }

@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { invalidateLlmStatus } from "@/lib/llm-status";
-import { IS_STATIC, llmConfigGet, llmConfigPut, llmTest } from "@/lib/client-api";
+import { llmConfigGet, llmConfigPut, llmTest } from "@/lib/client-api";
 import { CATALOG, providerForBaseUrl, type ProviderId } from "@/lib/llm/catalog";
 import { BASE_PATH } from "@/lib/base-path";
 import {
@@ -763,11 +763,6 @@ export function LlmSetupWizard({
   const originFlag = isLocalOrigin ? "" : ` --origin ${origin}`;
   const bridgeCmd = useMemo(() => {
     const backendFlag = subBackend === "claude" ? "" : ` --backend ${subBackend}`;
-    if (!IS_STATIC && isLocalOrigin) {
-      // Repo içindeyken (sahibin server modu) yerel scripti çalıştırmak daha
-      // doğrudan; npm run llm:bridge argümanları `--` sonrası alır.
-      return `npm run llm:bridge${backendFlag ? ` --${backendFlag}` : ""}`;
-    }
     const url = `${origin}${BASE_PATH}/llm-bridge.mjs`;
     return os === "win"
       ? `iwr ${url} -OutFile llm-bridge.mjs; node llm-bridge.mjs${backendFlag}${originFlag}`

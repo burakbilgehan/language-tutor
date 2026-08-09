@@ -17,7 +17,7 @@ import { BackupBar } from "@/components/shared/BackupBar";
 // landing'i ayrı bir yola taşımak bile çözmezdi (her şey aynı layout altında).
 // Zaten üçü de profil gerektiren app-chrome'u — pazarlama sayfasında işlevsiz.
 //
-// BackupBar (IS_STATIC gate + yalnız localStorage) ve JobQueuePop (DB'siz
+// BackupBar (yalnız localStorage) ve JobQueuePop (DB'siz
 // store) ucuz; yine de landing'de görsel olarak anlamsız oldukları için
 // aynı kapının arkasındalar.
 const LANDING_PATHS = new Set(["/", ""]);

@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import { withBase } from "@/lib/base-path";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { ChipGrid, ChoiceCard } from "@/components/shared/ProfileControls";
-import { GeneratingScreen } from "./GeneratingScreen";
 import { pick } from "@/lib/i18n";
-import { AppError } from "@/lib/errors";
 import { localizeError } from "@/lib/i18n/errors";
 import { resolveUiLang } from "@/lib/i18n/use-localize-error";
 import { markVisited } from "@/lib/visited-flag";
@@ -16,12 +14,10 @@ import { resetProfileMeta } from "@/lib/use-profile-meta";
 import {
   profileData,
   createProfileApi,
-  curriculumGenerate,
   saveImportApi,
   cloudInfo,
   cloudPull,
   cloudPush,
-  IS_STATIC,
 } from "@/lib/client-api";
 import {
   fetchAuthStatus,
@@ -288,7 +284,6 @@ export function OnboardingWizard() {
     interests: [],
     motivation: "",
   });
-  const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // T-080. The profile row created by whichever door was taken first; both
@@ -382,7 +377,6 @@ export function OnboardingWizard() {
   >(null);
 
   useEffect(() => {
-    if (!IS_STATIC) return;
     const url = new URL(window.location.href);
     if (url.searchParams.get("cloud") !== "return") return;
     setCloudReturn(true);
@@ -552,10 +546,7 @@ export function OnboardingWizard() {
     }
   }, []);
 
-  // Refresh-safety: resume polling an in-flight generation.
   useEffect(() => {
-    const saved = localStorage.getItem("curriculumJobId");
-    if (saved) setJobId(saved);
     profileData()
       .then((d) => {
         // Müfredatı olan diller kilitlenir; yarım kalmış (müfredatsız) profil
@@ -640,47 +631,17 @@ export function OnboardingWizard() {
     try {
       const id = await ensureProfile();
 
-      if (IS_STATIC) {
-        // Static mode: do NOT run the multi-minute generation here; hand the
-        // user to the map immediately and let it own the whole chain (the
-        // chain flag makes the map auto-start the first level and continue to
-        // the scheme's top; the rest of the site stays usable meanwhile).
-        // SPA navigation on purpose: a full reload would kill nothing here,
-        // but the map's generation must survive later in-app navigation, and
-        // the profile-meta cache is reset explicitly instead (T-013's reason
-        // for the old full reload).
-        requestCurriculumChain(id);
-        resetProfileMeta();
-        router.push("/map");
-        return;
-      }
-
-      let gen: { jobId?: string };
-      try {
-        gen = await curriculumGenerate(id);
-      } catch (err) {
-        // T-056: LLM yoksa müfredat üretimi ATLANIR — kişiselleştirme bir
-        // augmentation, ön-koşul değil. Profil oluştu; /map müfredatsız
-        // durumunu kendisi gösterir (statik kütüphane + "LLM bağla").
-        // Deneyip 503/AppError yakalamak, useLlmStatus'un iyimser-varsayılan
-        // (stale-true) anlık görüntüsüne güvenmekten daha sağlam: iki modda da
-        // aynı kod (llm_unconfigured) fırlar.
-        if (err instanceof AppError && err.code === "llm_unconfigured") {
-          window.location.href = withBase("/map");
-          return;
-        }
-        throw err;
-      }
-      if (!gen.jobId) {
-        // Statik mod: ilk seviye inline tamamlandı; kalan seviyeleri harita
-        // zincirlemeye devam etsin (2026-08-06: tek üretim tüm şemayı kapsar).
-        // Full reload, profil meta cache tazelensin (T-013).
-        requestCurriculumChain(id);
-        window.location.href = withBase("/map");
-        return;
-      }
-      localStorage.setItem("curriculumJobId", gen.jobId);
-      setJobId(gen.jobId);
+      // Do NOT run the multi-minute generation here; hand the user to the map
+      // immediately and let it own the whole chain (the chain flag makes the
+      // map auto-start the first level and continue to the scheme's top; the
+      // rest of the site stays usable meanwhile). SPA navigation on purpose:
+      // a full reload would kill nothing here, but the map's generation must
+      // survive later in-app navigation, and the profile-meta cache is reset
+      // explicitly instead (T-013's reason for the old full reload).
+      requestCurriculumChain(id);
+      resetProfileMeta();
+      router.push("/map");
+      return;
     } catch (err) {
       setError(localizeError(err, resolveUiLang(draft.uiLanguage)));
     } finally {
@@ -704,25 +665,6 @@ export function OnboardingWizard() {
           onCancel={() => setCustomizing(false)}
         />
       </div>
-    );
-  }
-
-  // An in-flight generation job implies a profile already exists, so this
-  // takes priority over the intro/loading checks below.
-  if (jobId) {
-    return (
-      <GeneratingScreen
-        jobId={jobId}
-        uiLanguage={draft.uiLanguage}
-        onDone={() => {
-          localStorage.removeItem("curriculumJobId");
-          window.location.href = withBase("/map");
-        }}
-        onRetry={() => {
-          localStorage.removeItem("curriculumJobId");
-          setJobId(null);
-        }}
-      />
     );
   }
 

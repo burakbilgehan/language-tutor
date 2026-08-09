@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CozyButton } from "@/components/shared/CozyButton";
 import { CloudWarnings } from "@/components/shared/CloudWarnings";
-import { IS_STATIC, cloudInfo, cloudPull, cloudPush } from "@/lib/client-api";
+import { cloudInfo, cloudPull, cloudPush } from "@/lib/client-api";
 import { markVisited } from "@/lib/visited-flag";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
@@ -143,7 +143,6 @@ export function CloudAccountSection() {
   } | null>(null);
 
   useEffect(() => {
-    if (!IS_STATIC) return;
     setApiBase(readCloudApiBase());
   }, []);
 
@@ -256,8 +255,6 @@ export function CloudAccountSection() {
     auth.reload();
   };
 
-  // Server mode: no Worker, no session, nothing to render.
-  if (!IS_STATIC) return null;
   // Anonymous-only deployment (the GitHub Pages mirror, or no backend
   // configured): the entire login/cloud surface stays invisible EXCEPT the
   // API-base override, which is the only way to point a mirror at a backend.

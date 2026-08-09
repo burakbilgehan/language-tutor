@@ -10,7 +10,6 @@ import { useRouter } from "next/navigation";
 import { StatsHeader, visibleNavItems } from "@/components/shared/StatsHeader";
 import { CenteredPage } from "@/components/shared/CenteredPage";
 import { CozyButton } from "@/components/shared/CozyButton";
-import { GeneratingScreen } from "@/components/onboarding/GeneratingScreen";
 import { PromptCustomizer } from "@/components/curriculum/PromptCustomizer";
 import { LessonPlayer } from "@/components/lesson/LessonPlayer";
 import { useStrings } from "@/lib/i18n/use-strings";
@@ -231,11 +230,10 @@ export function RoadmapView() {
   const [data, setData] = useState<RoadmapDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
-  const [extendJobId, setExtendJobId] = useState<string | null>(null);
-  // Static mode runs the extend INLINE (no job table, no jobId): the await
-  // below is the whole multi-minute generation. Without this flag the click
-  // produced no visible state change at all and the map never refreshed when
-  // the chapter finally landed.
+  // The extend runs INLINE (no job table): the await below is the whole
+  // multi-minute generation. Without this flag the click produced no visible
+  // state change at all and the map never refreshed when the chapter
+  // finally landed.
   const [extendBusy, setExtendBusy] = useState(false);
   const [extendError, setExtendError] = useState<string | null>(null);
   const [openLessonId, setOpenLessonId] = useState<string | null>(null);
@@ -244,7 +242,6 @@ export function RoadmapView() {
   // (sonradan bağlandıysa) üretimi buradan başlat.
   const llm = useLlmStatus();
   const [notReady, setNotReady] = useState(false);
-  const [genJobId, setGenJobId] = useState<string | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   // T-080: the second door on the generate flow. The profile already exists
@@ -359,7 +356,7 @@ export function RoadmapView() {
   );
 
   // Poll while a chapter is generating (either auto-triggered or manual).
-  const generating = extendJobId != null || data?.isGenerating != null;
+  const generating = data?.isGenerating != null;
   useEffect(() => {
     if (!generating) return;
     const t = setInterval(() => {
@@ -369,11 +366,6 @@ export function RoadmapView() {
     }, 4000);
     return () => clearInterval(t);
   }, [generating]);
-
-  // Clear the local job id once the server confirms generation finished.
-  useEffect(() => {
-    if (extendJobId && data && data.isGenerating == null) setExtendJobId(null);
-  }, [data, extendJobId]);
 
   // T-056: while there is no curriculum, keep polling. Covers the "refreshed
   // mid-generation" case (a background chapter job finishes → the map appears
@@ -390,19 +382,14 @@ export function RoadmapView() {
 
   // T-056: generate the first chapter from the map — the recovery path for a
   // profile that finished onboarding without an LLM and connected one later.
-  // Server mode returns a jobId (GeneratingScreen polls it); static mode runs
-  // inline and resolves when the chapter is ready.
+  // Runs inline and resolves when the chapter is ready.
   const startGenerate = async (opts?: { auto?: boolean }) => {
     if (!profileId) return;
     setGenBusy(true);
     setGenError(null);
     try {
-      const r = await curriculumGenerate(profileId);
-      if (r.jobId) {
-        setGenJobId(r.jobId);
-        return; // GeneratingScreen takes over; busy state no longer renders
-      }
-      await loadRoadmap(); // static inline: chapter is ready (or notReady stays)
+      await curriculumGenerate(profileId);
+      await loadRoadmap(); // inline: chapter is ready (or notReady stays)
     } catch (e) {
       // Auto-start (chain flag from onboarding) on a profile with no LLM is
       // the legitimate T-056 no-LLM path, not an error: drop the flag quietly
@@ -431,7 +418,7 @@ export function RoadmapView() {
   // call via client-api's per-profile dedupe, so navigation away and back
   // shows the busy state again instead of starting a second generation.
   useEffect(() => {
-    if (!notReady || !profileId || genBusy || genJobId) return;
+    if (!notReady || !profileId || genBusy) return;
     let flagged = false;
     try {
       flagged = sessionStorage.getItem(CHAIN_KEY) === profileId;
@@ -439,31 +426,23 @@ export function RoadmapView() {
     if (!flagged) return;
     void startGenerate({ auto: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notReady, profileId, genBusy, genJobId]);
+  }, [notReady, profileId, genBusy]);
 
   const startExtend = async () => {
     if (!profileId) return;
     setExtendError(null);
     setExtendBusy(true);
-    // One click prepares EVERYTHING that remains, to the scheme's top. In
-    // static mode the chain is driven from here (the auto-chain effect below
-    // re-fires this function per level via the sessionStorage flag); in server
-    // mode the job runner chains server-side, so the flag is dropped.
+    // One click prepares EVERYTHING that remains, to the scheme's top: the
+    // chain is driven from here (the auto-chain effect below re-fires this
+    // function per level via the sessionStorage flag).
     try {
       sessionStorage.setItem(CHAIN_KEY, profileId);
     } catch {
       /* sessionStorage unavailable: single-level extend still works */
     }
     try {
-      const j = await curriculumExtend(profileId);
-      if (j.jobId) {
-        try {
-          sessionStorage.removeItem(CHAIN_KEY);
-        } catch {}
-        setExtendJobId(j.jobId); // server mode: the job poller takes over
-        return;
-      }
-      await loadRoadmap(); // static inline: the chapter is ready, show it
+      await curriculumExtend(profileId);
+      await loadRoadmap(); // inline: the chapter is ready, show it
     } catch (e) {
       try {
         sessionStorage.removeItem(CHAIN_KEY); // an error stops the chain
@@ -474,13 +453,13 @@ export function RoadmapView() {
     }
   };
 
-  // Static-mode chain driver: while the flag names this profile and levels
-  // remain, keep extending; each pass renders the freshly landed chapter
-  // before the next one starts. The flag is set by the extend click above and
-  // by onboarding/regenerate right after their inline first chapter, so a
+  // Chain driver: while the flag names this profile and levels remain, keep
+  // extending; each pass renders the freshly landed chapter before the next
+  // one starts. The flag is set by the extend click above and by
+  // onboarding/regenerate right after their inline first chapter, so a
   // plain page visit never spends tokens on its own.
   useEffect(() => {
-    if (!profileId || !data || extendBusy || extendJobId) return;
+    if (!profileId || !data || extendBusy) return;
     if (data.isGenerating != null) return;
     let flagged = false;
     try {
@@ -495,7 +474,7 @@ export function RoadmapView() {
     }
     void startExtend();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, profileId, extendBusy, extendJobId]);
+  }, [data, profileId, extendBusy]);
 
   const [retranslating, setRetranslating] = useState(false);
   const startRetranslate = async () => {
@@ -538,21 +517,6 @@ export function RoadmapView() {
           />
         </main>
       </div>
-    );
-  }
-  // T-056: a map-started server generation — reuse the onboarding screen
-  // (status lines + job polling + error/retry) instead of a bare spinner.
-  if (genJobId) {
-    return (
-      <GeneratingScreen
-        jobId={genJobId}
-        uiLanguage={meta?.uiLanguage}
-        onDone={() => {
-          setGenJobId(null);
-          void loadRoadmap();
-        }}
-        onRetry={() => setGenJobId(null)}
-      />
     );
   }
   // T-056: no curriculum yet. Never a blind empty map — the hub: an honest
@@ -741,7 +705,7 @@ export function RoadmapView() {
 
         {/* End-of-map: extend to the next level of the language's scheme */}
         <div className="my-10 flex flex-col items-center gap-3 text-center">
-          {data.isGenerating || extendJobId || extendBusy ? (
+          {data.isGenerating || extendBusy ? (
             <div className="flex flex-col items-center gap-2 rounded-cozy bg-surface px-6 py-5 shadow-cozy">
               <div className="flex gap-1.5">
                 {[0, 1, 2].map((i) => (

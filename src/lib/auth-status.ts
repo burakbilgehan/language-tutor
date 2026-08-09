@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { IS_STATIC } from "@/lib/client-api";
 import { readCloudApiBase } from "@/lib/backup/cloud";
 
 // T-048: shared client-side auth state for the cloud backend (T-046 better-auth
@@ -42,12 +41,6 @@ export interface AuthStatus {
    */
   backendAvailable: boolean;
 }
-
-const SIGNED_OUT: AuthStatus = {
-  user: null,
-  loading: false,
-  backendAvailable: false,
-};
 
 let cached: AuthStatus | null = null;
 let inflight: Promise<AuthStatus> | null = null;
@@ -115,12 +108,6 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
 
 async function fetchStatus(): Promise<AuthStatus> {
   if (cached) return cached;
-  // Server mode has no cloud backend by design (the save is already on disk,
-  // with its own .bak) — skip both probes entirely.
-  if (!IS_STATIC) {
-    cached = SIGNED_OUT;
-    return cached;
-  }
   if (!inflight) {
     const startedAt = generation;
     inflight = (async () => {

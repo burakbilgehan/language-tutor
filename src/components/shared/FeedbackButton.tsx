@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useProfileMeta } from "@/lib/use-profile-meta";
-import { IS_STATIC } from "@/lib/client-api";
 import { CozyButton } from "./CozyButton";
 
 const REPO_URL = "https://github.com/burakbilgehan/language-tutor";
@@ -196,7 +195,6 @@ export function FeedbackButton() {
           title: title.trim() || undefined,
           desc: desc.trim(),
           page: pathname,
-          mode: IS_STATIC ? "static" : "server",
           lang,
           ua: navigator.userAgent,
           screenshot:
@@ -216,7 +214,6 @@ export function FeedbackButton() {
     const meta = [
       `${t.bodyKind[kind]}`,
       `${t.bodyPage}: ${pathname}`,
-      `${t.bodyMode}: ${IS_STATIC ? "static" : "server"}`,
       `${t.bodyLang}: ${lang}`,
       `${t.bodyBrowser}: ${navigator.userAgent}`,
     ].join(" · ");

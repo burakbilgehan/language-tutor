@@ -22,7 +22,6 @@
 // snapshot goes 17.5 MB → 8.6 MB. The strip runs on a DETACHED COPY — never the
 // live DB, which would destroy the user's library.
 
-import { IS_STATIC } from "@/lib/client-api";
 import { AppError } from "@/lib/errors";
 import { SAVE_SCHEMA_VERSION } from "@/lib/save/version";
 import {
@@ -223,7 +222,6 @@ async function buildStrippedBlob(): Promise<{
  * Last-write-wins: this overwrites whatever is stored.
  */
 export async function pushToCloud(): Promise<PushResult> {
-  if (!IS_STATIC) throw new Error("cloud sync is static-mode only");
   await requireSession();
 
   // BLOCKER guard, same one autoUpload() applies for Drive — and it matters
@@ -340,7 +338,6 @@ export interface PullResult {
 }
 
 export async function pullFromCloud(): Promise<PullResult> {
-  if (!IS_STATIC) throw new Error("cloud sync is static-mode only");
   await requireSession();
 
   const res = await fetch(apiUrl("/api/save"), {

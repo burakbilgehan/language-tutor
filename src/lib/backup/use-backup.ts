@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { IS_STATIC } from "@/lib/client-api";
 import { readBackupState, shouldRemind } from "./state";
 import { getLessonCount, subscribeBackup } from "./controller";
 
@@ -23,8 +22,7 @@ export function useBackup(): BackupView {
     const state = readBackupState();
     const lessonCount = getLessonCount();
     return {
-      remind:
-        IS_STATIC && shouldRemind({ state, lessonCount, now: Date.now() }),
+      remind: shouldRemind({ state, lessonCount, now: Date.now() }),
       lessonsSinceBackup: Math.max(0, lessonCount - state.lastBackupLessonCount),
       lastBackupAt: state.lastBackupAt,
     };

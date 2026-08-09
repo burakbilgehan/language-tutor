@@ -6,8 +6,6 @@ import {
   onJobsChange,
   cancelJobApi,
   cancelAllJobsApi,
-  resumePendingJobsApi,
-  IS_STATIC,
 } from "@/lib/client-api";
 import {
   subscribeLessonGen,
@@ -134,23 +132,23 @@ export function JobQueuePanel() {
     () => lessonGenVersion(),
     () => 0
   );
-  const lessonRows: JobSummary[] = IS_STATIC
-    ? runningLessonGens().map(({ nodeId, startedAt }) => {
-        const st = lessonGenState(nodeId);
-        const urgent = st?.kind === "running" && st.urgent;
-        return {
-          id: `lesson-gen:${nodeId}`,
-          jobType: "lesson",
-          refId: nodeId,
-          kind: urgent ? "user" : "system",
-          status: "running",
-          error: null,
-          createdAt: startedAt,
-          startedAt,
-          finishedAt: null,
-        } as JobSummary;
-      })
-    : [];
+  const lessonRows: JobSummary[] = runningLessonGens().map(
+    ({ nodeId, startedAt }) => {
+      const st = lessonGenState(nodeId);
+      const urgent = st?.kind === "running" && st.urgent;
+      return {
+        id: `lesson-gen:${nodeId}`,
+        jobType: "lesson",
+        refId: nodeId,
+        kind: urgent ? "user" : "system",
+        status: "running",
+        error: null,
+        createdAt: startedAt,
+        startedAt,
+        finishedAt: null,
+      } as JobSummary;
+    }
+  );
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -219,17 +217,6 @@ export function JobQueuePanel() {
       <h2 className="mb-1 font-semibold">{t.title}</h2>
       <p className="mb-3 text-sm text-ink-soft">{t.desc}</p>
 
-      {snap && snap.counts.pendingApproval > 0 && !IS_STATIC && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void run(resumePendingJobsApi)}
-          className="mb-3 rounded-full bg-amber/20 px-4 py-1.5 text-sm font-semibold text-amber-text transition-colors hover:bg-amber/30 disabled:opacity-60"
-        >
-          {busy ? t.resumed : t.resume(snap.counts.pendingApproval)}
-        </button>
-      )}
-
       {lessonRows.length === 0 && (!snap || snap.active.length === 0) ? (
         <p className="text-sm text-ink-soft">{t.idle}</p>
       ) : (
@@ -276,9 +263,7 @@ export function JobQueuePanel() {
         </div>
       )}
 
-      {IS_STATIC && (
-        <p className="mt-3 text-xs text-ink-soft">{t.staticNote}</p>
-      )}
+      <p className="mt-3 text-xs text-ink-soft">{t.staticNote}</p>
     </section>
   );
 }

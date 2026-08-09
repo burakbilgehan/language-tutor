@@ -1,69 +1,22 @@
 "use client";
 
-// İstemci veri katmanı seam'i. İki mod:
-//   - Sunuculu (bugünkü varsayılan): /api/* fetch — davranış birebir eski.
-//   - Statik (NEXT_PUBLIC_STATIC_BUILD=1): aynı iş mantığı (src/core/*)
-//     tarayıcıdaki sql.js DB'siyle çalışır; ağ çağrısı yok.
-// Bileşenler fetch yerine bu fonksiyonları çağırır; taşınan her route buraya
-// bir fonksiyon olarak eklenir.
+// Client data layer: business logic (src/core/*) runs against the sql.js DB
+// in the browser; no network calls. Components call these functions instead
+// of fetch. (T-069: the server runtime is gone; static/local-first is the
+// only mode. A fresh environment starts on an empty IndexedDB and goes
+// through onboarding; Settings file import restores an existing save.)
 
 import type { Rating } from "@/lib/srs";
 import { AppError } from "@/lib/errors";
 import { startLessonGen } from "@/lib/lesson-gen-store";
 
-export const IS_STATIC = process.env.NEXT_PUBLIC_STATIC_BUILD === "1";
-
-let seeded = false;
-
-async function browserDb() {
-  // Dinamik import: sunuculu modda sql.js istemci bundle'ına hiç girmez.
-  const { getBrowserDb } = await import("@/db/browser");
-  const handle = await getBrowserDb();
-
-  // POC geçici iskele: tarayıcı DB'si boşsa (profil yok) dev sunucusundan
-  // save çekip tohumla. Gerçek statik deploy'da /api yok → sessizce atlanır;
-  // kalıcı akış Settings'teki dosya import'u olacak (T-009 kapsamı).
-  if (!seeded) {
-    seeded = true;
-    const core = await import("@/core/profile");
-    if (!core.getActiveProfile(handle.db)) {
-      try {
-        const res = await fetch("/api/save/export");
-        if (res.ok) {
-          const bytes = new Uint8Array(await res.arrayBuffer());
-          await handle.importBytes(bytes);
-          console.log("[browser-db] dev seed: sunucu save'i yüklendi");
-        }
-      } catch {
-        // statik ortam — seed yok, boş DB ile devam
-      }
-    }
-  }
-  return handle;
-}
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    // Routes return a stable error CODE in `body.error` (T-031 Layer 1); rethrow
-    // it as an AppError so the UI catch boundary localizes it. `params` carries
-    // interpolation values (e.g. save version numbers). Unknown/legacy codes
-    // still flow through — localizeError falls back to a generic message rather
-    // than rendering a raw (possibly wrong-language) string.
-    const { AppError, isErrorCode } = await import("@/lib/errors");
-    if (isErrorCode(body.error)) {
-      throw new AppError(body.error, body.params);
-    }
-    throw new Error(body.error ?? `HTTP ${res.status}`);
-  }
-  return res.json() as Promise<T>;
+function browserDb() {
+  return import("@/db/browser").then((m) => m.getBrowserDb());
 }
 
 // ------------------------------------------------------------------ Harita / Profil / Stats
 
 export async function roadmap(): Promise<import("@/core/roadmap").Roadmap> {
-  if (!IS_STATIC) return fetchJson("/api/roadmap");
   const { db } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreR = await import("@/core/roadmap");
@@ -89,7 +42,6 @@ export interface ProfileData {
 }
 
 export async function profileData(): Promise<ProfileData> {
-  if (!IS_STATIC) return fetchJson("/api/profile");
   const { db } = await browserDb();
   const core = await import("@/core/profile");
   return {
@@ -102,13 +54,6 @@ export async function profileData(): Promise<ProfileData> {
 export async function patchProfile(
   patch: Record<string, unknown>
 ): Promise<{ profile: import("@/core/profile").Profile }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-  }
   const { db, persistSoon } = await browserDb();
   const core = await import("@/core/profile");
   const profile = core.updateActiveProfile(
@@ -121,14 +66,6 @@ export async function patchProfile(
 }
 
 export async function switchProfile(profileId: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetchJson("/api/profile/switch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileId }),
-    });
-    return;
-  }
   const handle = await browserDb();
   const core = await import("@/core/profile");
   if (!core.setActiveProfile(handle.db, profileId))
@@ -139,7 +76,6 @@ export async function switchProfile(profileId: string): Promise<void> {
 }
 
 export async function stats(): Promise<ReturnType<typeof import("@/core/stats").getStats>> {
-  if (!IS_STATIC) return fetchJson("/api/stats");
   const { db } = await browserDb();
   const core = await import("@/core/stats");
   return core.getStats(db);
@@ -282,25 +218,10 @@ async function runLessonWindow(anchorNodeId: string, k = 2): Promise<void> {
 /** Oturum başına tek otomatik retry defteri (bkz. runLessonWindow). */
 const autoRetriedLessonGens = new Set<string>();
 
-/** Uygulama/harita açılışı tetiği (T-068 üçüncü tetik): frontier'dan bir kez.
- * Statikte sekme kapanınca ölen in-flight üretimi sessizce toparlar; pencere
- * doluysa no-op. Sunucu modunda harita zaten job kuyruğuna sahip, orada da
- * aynı invariant çalışsın diye route üstünden tetiklenir. */
+/** App/map open trigger (T-068 third trigger): once, from the frontier.
+ * Quietly recovers in-flight generations killed by a closed tab; no-op when
+ * the window is already full. */
 export async function primeLessonWindow(): Promise<void> {
-  if (!IS_STATIC) {
-    // Sunucu ayağı: ince kabuk route'u (çekirdek mantık orada da core'da).
-    // Hata yutulmaz, sadece bloklamaz: auth gate'i açık bir kurulumda süresi
-    // dolmuş cookie 401 döndürür ve tetik sessizce ölürdü.
-    try {
-      const res = await fetch("/api/lessons/window", { method: "POST" });
-      if (!res.ok) {
-        console.warn("[prefetch] pencere tetiklenemedi: HTTP", res.status);
-      }
-    } catch (err) {
-      console.warn("[prefetch] pencere tetiklenemedi:", err);
-    }
-    return;
-  }
   try {
     const { db } = await browserDb();
     const coreP = await import("@/core/profile");
@@ -362,7 +283,6 @@ async function maybeAutoExtendStatic(
 export async function kanjiList(): Promise<{
   entries: { char: string; level: string; status: string; meaningsEn: string[] }[];
 }> {
-  if (!IS_STATIC) return fetchJson("/api/kanji");
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreK = await import("@/core/kanji");
@@ -394,7 +314,6 @@ export async function kanjiDetail(char: string): Promise<{
   status: string;
   content: unknown | null;
 }> {
-  if (!IS_STATIC) return fetchJson(`/api/kanji/${encodeURIComponent(char)}`);
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreK = await import("@/core/kanji");
@@ -441,8 +360,6 @@ export type KanjiLookupResult = ReturnType<
 >;
 
 export async function kanjiLookupApi(text: string): Promise<KanjiLookupResult> {
-  if (!IS_STATIC)
-    return fetchJson(`/api/kanji/lookup?text=${encodeURIComponent(text)}`);
   const { db } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreK = await import("@/core/kanji");
@@ -467,7 +384,6 @@ export interface VocabEntrySummary {
 }
 
 export async function vocabList(): Promise<{ entries: VocabEntrySummary[] }> {
-  if (!IS_STATIC) return fetchJson("/api/vocab");
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreV = await import("@/core/vocab");
@@ -500,7 +416,6 @@ export async function vocabDetail(word: string): Promise<{
   status: string;
   content: unknown | null;
 }> {
-  if (!IS_STATIC) return fetchJson(`/api/vocab/${encodeURIComponent(word)}`);
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreV = await import("@/core/vocab");
@@ -544,10 +459,6 @@ export async function vocabDetail(word: string): Promise<{
 }
 
 export async function vocabGenerate(word: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch(`/api/vocab/${encodeURIComponent(word)}`, { method: "POST" });
-    return;
-  }
   const gen = await browserGen();
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
@@ -562,21 +473,13 @@ export async function vocabGenerate(word: string): Promise<void> {
 }
 
 export async function vocabGenerateBatch(level?: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch("/api/vocab/generate-batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level }),
-    });
-    return;
-  }
-  // Statik: sıralı inline üretim (sekme açık kaldıkça sürer; UI zaten
-  // durum rozetlerini poll'luyor).
+  // Sequential inline generation (runs as long as the tab stays open; the UI
+  // already polls the status badges).
   const gen = await browserGen();
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/llm-gen");
-  const { eq, and } = await import("drizzle-orm");
+  const { eq } = await import("drizzle-orm");
   const tables = await import("@/db/schema");
   const { readLangContent } = await import("@/lib/llm/lang-content");
   const profile = coreP.getActiveProfile(handle.db);
@@ -619,7 +522,6 @@ export async function vocabGenerateBatch(level?: string): Promise<void> {
 export async function overview(): Promise<
   ReturnType<typeof import("@/core/overview").getOverview>
 > {
-  if (!IS_STATIC) return fetchJson("/api/overview");
   const { db } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreO = await import("@/core/overview");
@@ -632,7 +534,6 @@ export async function chatHistoryApi(): Promise<{
   sessionId: string | null;
   messages: { role: string; content: string; lang: string }[];
 }> {
-  if (!IS_STATIC) return fetchJson("/api/chat");
   const { db } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreC = await import("@/core/chat");
@@ -645,13 +546,6 @@ export async function chatSend(body: {
   sessionId: string | null;
   message: string;
 }): Promise<{ sessionId: string; reply: string }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  }
   const gen = await browserGen();
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
@@ -670,13 +564,6 @@ export async function translateText(
   text: string,
   cachedOnly?: boolean
 ): Promise<{ translation: string | null }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cachedOnly ? { text, cachedOnly: true } : { text }),
-    });
-  }
   const { db } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreT = await import("@/core/translate");
@@ -703,10 +590,6 @@ export async function translateText(
 // ------------------------------------------------------------------ Save (statik: tarayıcı imajı)
 
 export async function saveExportApi(): Promise<void> {
-  if (!IS_STATIC) {
-    window.location.href = "/api/save/export"; // audit-routing:allow — server-only (!IS_STATIC), no basePath
-    return;
-  }
   const handle = await browserDb();
   await handle.persistNow();
   const bytes = handle.exportBytes();
@@ -750,26 +633,13 @@ export async function cloudInfo(): Promise<import("@/lib/backup/cloud").CloudSav
   return getCloudInfo();
 }
 
-/** Bulut senkronu bu ortamda kullanılabilir mi (statik mod + oturum)? */
+/** Is cloud sync available here (i.e. is the user signed in)? */
 export async function cloudAvailable(): Promise<boolean> {
-  if (!IS_STATIC) return false;
   const { isSignedIn } = await import("@/lib/backup/cloud");
   return isSignedIn();
 }
 
 export async function saveImportApi(file: File): Promise<void> {
-  if (!IS_STATIC) {
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/save/import", { method: "POST", body: fd });
-    const body = await res.json();
-    if (!res.ok) {
-      const { isErrorCode } = await import("@/lib/errors");
-      if (isErrorCode(body.error)) throw new AppError(body.error, body.params);
-      throw new AppError("save_load_failed");
-    }
-    return;
-  }
   // T-041 S4: boyutu wasm'a DOKUNMADAN önce ele. `browserDb()` sql.js'i
   // başlatır ve `file.arrayBuffer()` dosyayı belleğe alır — çok-GB'lık sahte
   // bir "save" ikisinden önce reddedilmeli.
@@ -792,20 +662,6 @@ export async function regenerateLesson(
   nodeId: string,
   feedback?: string | null
 ): Promise<void> {
-  if (!IS_STATIC) {
-    const res = await fetch(`/api/nodes/${nodeId}/regenerate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ feedback: feedback ?? null }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const { isErrorCode } = await import("@/lib/errors");
-      if (isErrorCode(body.error)) throw new AppError(body.error, body.params);
-      throw new AppError("lesson_gen_failed");
-    }
-    return;
-  }
   const gen = await browserGen();
   const { db, persistSoon } = await browserDb();
   const coreG = await import("@/core/llm-gen");
@@ -813,20 +669,19 @@ export async function regenerateLesson(
   persistSoon();
 }
 
-// Static mode has no jobs table and therefore no (jobType, refId) dedupe:
-// without this guard every extra click on a generate/extend button (or an
-// impatient reload-and-click) would start a REAL second multi-minute LLM
-// generation and burn money. One in-flight chapter generation per profile;
-// concurrent callers JOIN the running one, exactly like createJob returning
-// the in-flight job id. The promise self-clears when it settles; a full page
-// reload kills the generation with the JS context, so a stale entry cannot
-// outlive the work it guards.
-const inflightChapterGen = new Map<string, Promise<{ jobId?: string }>>();
+// There is no jobs table and therefore no (jobType, refId) dedupe: without
+// this guard every extra click on a generate/extend button (or an impatient
+// reload-and-click) would start a REAL second multi-minute LLM generation and
+// burn money. One in-flight chapter generation per profile; concurrent
+// callers JOIN the running one. The promise self-clears when it settles; a
+// full page reload kills the generation with the JS context, so a stale
+// entry cannot outlive the work it guards.
+const inflightChapterGen = new Map<string, Promise<void>>();
 
 function joinChapterGen(
   profileId: string,
-  start: () => Promise<{ jobId?: string }>
-): Promise<{ jobId?: string }> {
+  start: () => Promise<void>
+): Promise<void> {
   const running = inflightChapterGen.get(profileId);
   if (running) return running;
   const p = start().finally(() => inflightChapterGen.delete(profileId));
@@ -834,18 +689,11 @@ function joinChapterGen(
   return p;
 }
 
-export async function curriculumExtend(profileId: string): Promise<{ jobId?: string }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/curriculum/extend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileId }),
-    });
-  }
+export async function curriculumExtend(profileId: string): Promise<void> {
   return joinChapterGen(profileId, () => curriculumExtendInline(profileId));
 }
 
-async function curriculumExtendInline(profileId: string): Promise<{ jobId?: string }> {
+async function curriculumExtendInline(profileId: string): Promise<void> {
   const gen = await browserGen();
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
@@ -869,14 +717,9 @@ async function curriculumExtendInline(profileId: string): Promise<{ jobId?: stri
     onPedagogyReady: () => handle.persistNow(),
   });
   await handle.persistNow();
-  return {};
 }
 
 export async function grammarGenerate(slug: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch(`/api/grammar/${slug}`, { method: "POST" });
-    return;
-  }
   const gen = await browserGen();
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
@@ -891,16 +734,8 @@ export async function grammarGenerate(slug: string): Promise<void> {
 }
 
 export async function grammarGenerateBatch(level?: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch("/api/grammar/generate-batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level }),
-    });
-    return;
-  }
-  // Statik: sıralı inline üretim (sekme açık kaldıkça sürer; UI zaten
-  // durum rozetlerini poll'luyor).
+  // Sequential inline generation (runs as long as the tab stays open; the UI
+  // already polls the status badges).
   const gen = await browserGen();
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
@@ -945,10 +780,6 @@ export async function grammarGenerateBatch(level?: string): Promise<void> {
 }
 
 export async function kanjiGenerate(char: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch(`/api/kanji/${encodeURIComponent(char)}`, { method: "POST" });
-    return;
-  }
   const gen = await browserGen();
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
@@ -963,13 +794,6 @@ export async function kanjiGenerate(char: string): Promise<void> {
 }
 
 export async function kanjiGenerateBatch(level: string): Promise<{ queued: number }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/kanji/generate-batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level }),
-    });
-  }
   const gen = await browserGen();
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
@@ -1020,13 +844,6 @@ export async function kanjiGenerateBatch(level: string): Promise<{ queued: numbe
 export async function createProfileApi(
   input: Record<string, unknown>
 ): Promise<{ profile: import("@/core/profile").Profile | null }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-  }
   const handle = await browserDb();
   const core = await import("@/core/profile");
   const { profile, duplicate } = core.createOrReuseProfile(
@@ -1048,17 +865,10 @@ export async function createProfileApi(
 export async function curriculumGenerate(
   profileId: string,
   level?: string | null
-): Promise<{ jobId?: string }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/curriculum/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileId, level: level ?? null }),
-    });
-  }
-  // Statik: job kuyruğu yok — üretim inline (2-5 dk sürebilir; çağıran
-  // bekleme ekranını kendisi gösterir). jobId dönmez. Aynı profil için süren
-  // bir üretim varsa ikinci çağrı ONA katılır (yukarıdaki inflight dedupe).
+): Promise<void> {
+  // No job queue: generation runs inline (can take 2-5 min; the caller shows
+  // its own waiting screen). A second call for the same profile JOINS the
+  // running one (inflight dedupe above).
   return joinChapterGen(profileId, async () => {
     const gen = await browserGen();
     const handle = await browserDb();
@@ -1069,7 +879,6 @@ export async function curriculumGenerate(
       onPedagogyReady: () => handle.persistNow(),
     });
     await handle.persistNow();
-    return {};
   });
 }
 
@@ -1083,13 +892,6 @@ export async function curriculumGenerate(
 export async function curriculumDelete(profileId: string): Promise<{
   deleted: import("@/core/curriculum-delete").CurriculumDeletionCounts;
 }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/curriculum", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileId }),
-    });
-  }
   const handle = await browserDb();
   const coreD = await import("@/core/curriculum-delete");
   const result = coreD.deleteCurriculum(handle.db, profileId);
@@ -1102,10 +904,6 @@ export async function curriculumDelete(profileId: string): Promise<{
  * DEĞİŞMEZ. Sonraki açılışta ders sıfırdan üretilir.
  */
 export async function lessonDiscard(nodeId: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetchJson(`/api/nodes/${nodeId}/lesson`, { method: "DELETE" });
-    return;
-  }
   const handle = await browserDb();
   const coreD = await import("@/core/curriculum-delete");
   coreD.discardLesson(handle.db, nodeId);
@@ -1128,13 +926,6 @@ export async function curriculumPedagogyPreview(
   profileId: string,
   force?: boolean
 ): Promise<import("@/core/curriculum-gen").PedagogyPreview> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/curriculum/pedagogy", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileId, force }),
-    });
-  }
   const gen = await browserGen();
   const handle = await browserDb();
   const coreC = await import("@/core/curriculum-gen");
@@ -1154,14 +945,6 @@ export async function curriculumPedagogySave(
   profileId: string,
   pedagogy: string
 ): Promise<void> {
-  if (!IS_STATIC) {
-    await fetchJson("/api/curriculum/pedagogy", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileId, pedagogy }),
-    });
-    return;
-  }
   const handle = await browserDb();
   const coreC = await import("@/core/curriculum-gen");
   coreC.saveCurriculumPedagogy(handle.db, profileId, pedagogy);
@@ -1171,9 +954,6 @@ export async function curriculumPedagogySave(
 /** Müfredat başlıklarını mevcut ana dile yerinde çevirir (T-031). İlerleme
  * silinmez; yalnızca görünen metinler değişir. */
 export async function curriculumRetranslate(): Promise<{ translated: number }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/curriculum/retranslate", { method: "POST" });
-  }
   const gen = await browserGen();
   const handle = await browserDb();
   const coreP = await import("@/core/profile");
@@ -1203,7 +983,6 @@ export interface GrammarTopicSummary {
 }
 
 export async function grammarTopics(): Promise<{ topics: GrammarTopicSummary[] }> {
-  if (!IS_STATIC) return fetchJson("/api/grammar");
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/grammar");
@@ -1234,7 +1013,6 @@ export async function grammarTopic(slug: string): Promise<{
   status: string;
   content: unknown | null;
 }> {
-  if (!IS_STATIC) return fetchJson(`/api/grammar/${slug}`);
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreG = await import("@/core/grammar");
@@ -1288,9 +1066,6 @@ export async function openNodeApi(nodeId: string): Promise<
   | import("@/core/lesson").OpenNodeResult
   | { status: "generating"; jobId: string | null }
 > {
-  if (!IS_STATIC) {
-    return fetchJson(`/api/nodes/${nodeId}/open`, { method: "POST" });
-  }
   const { db } = await browserDb();
   const core = await import("@/core/lesson");
   const coreP = await import("@/core/profile");
@@ -1340,12 +1115,6 @@ export async function retryLessonGen(
   nodeId: string,
   opts?: { urgent?: boolean }
 ): Promise<void> {
-  if (!IS_STATIC) {
-    // Sunucuda retry = yeni job; regenerateLessonJob satırı "generating"e
-    // çevirdiği için açılıştaki error dalı da temizlenmiş olur.
-    await regenerateLesson(nodeId, null);
-    return;
-  }
   const { clearLessonGen } = await import("@/lib/lesson-gen-store");
   clearLessonGen(nodeId);
   await ensureLessonGen(nodeId, opts?.urgent ?? true);
@@ -1357,9 +1126,6 @@ export async function completeNodeApi(nodeId: string): Promise<{
   unlockedNodeIds: string[];
   extendingLevel: string | null;
 }> {
-  if (!IS_STATIC) {
-    return fetchJson(`/api/nodes/${nodeId}/complete`, { method: "POST" });
-  }
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreL = await import("@/core/lesson");
@@ -1419,15 +1185,6 @@ export async function attemptApi(
   | { needsSelfCheck: true; expected: { answer: string; acceptAlso: string[] } }
   | import("@/core/lesson").AttemptResultDto
 > {
-  if (!IS_STATIC) {
-    return fetchJson(`/api/exercises/${exerciseId}/attempt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        selfVerdict === undefined ? { response } : { response, selfVerdict }
-      ),
-    });
-  }
   const { db, persistSoon } = await browserDb();
   const coreP = await import("@/core/profile");
   const coreL = await import("@/core/lesson");
@@ -1458,7 +1215,6 @@ export async function srsDue(): Promise<{
   cards: import("@/core/srs").DueCard[];
   dueCount: number;
 }> {
-  if (!IS_STATIC) return fetchJson("/api/srs/due");
   const { db } = await browserDb();
   const core = await import("@/core/srs");
   const result = core.srsDue(db);
@@ -1469,13 +1225,6 @@ export async function srsReview(
   cardId: string,
   rating: Rating
 ): Promise<{ remaining: number }> {
-  if (!IS_STATIC) {
-    return fetchJson("/api/srs/review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardId, rating }),
-    });
-  }
   const { db, persistSoon } = await browserDb();
   const core = await import("@/core/srs");
   const result = core.srsReview(db, cardId, rating);
@@ -1503,7 +1252,6 @@ function maskKey(key?: string): string | undefined {
 }
 
 export async function llmConfigGet(): Promise<LlmConfigDto> {
-  if (!IS_STATIC) return fetchJson("/api/llm-config");
   const { readBrowserLlmConfig } = await import("@/lib/llm/browser-provider");
   const c = readBrowserLlmConfig();
   return {
@@ -1526,14 +1274,6 @@ export interface LlmConfigPutInput {
 }
 
 export async function llmConfigPut(input: LlmConfigPutInput): Promise<void> {
-  if (!IS_STATIC) {
-    await fetchJson("/api/llm-config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    return;
-  }
   const { readBrowserLlmConfig, writeBrowserLlmConfig } = await import(
     "@/lib/llm/browser-provider"
   );
@@ -1566,14 +1306,6 @@ export async function llmConfigPut(input: LlmConfigPutInput): Promise<void> {
 export async function llmTest(
   candidate?: LlmConfigPutInput
 ): Promise<{ ok: boolean; ms?: number; error?: string }> {
-  if (!IS_STATIC) {
-    const res = await fetch("/api/health/llm", {
-      method: "POST",
-      headers: candidate ? { "Content-Type": "application/json" } : undefined,
-      body: candidate ? JSON.stringify(candidate) : undefined,
-    });
-    return res.json();
-  }
   if (candidate) {
     const { probeBrowserConfig } = await import("@/lib/llm/browser-provider");
     return probeBrowserConfig({
@@ -1605,75 +1337,32 @@ export async function llmTest(
   }
 }
 
-// ------------------------------------------------------------------ Job kuyruğu (T-034)
-// Pop + panel için ortak seam. Sunuculu: GET/POST /api/jobs*. Statik: iş
-// tablosu yok — tarayıcı-içi store (src/lib/jobs-store.ts) beslendiği için
-// aynı UI iki modda da çalışır. onJobsChange, mod ayrımını UI'dan gizler:
-// sunucuda 4s poll (roadmap kalıbı), statikte store aboneliği.
+// ------------------------------------------------------------------ Job queue (T-034)
+// Shared seam for the pop + panel UI, fed by the in-browser store
+// (src/lib/jobs-store.ts); there is no jobs table.
 
 export async function jobsList(): Promise<import("@/core/jobs").JobsSnapshot> {
-  if (!IS_STATIC) return fetchJson("/api/jobs");
   const { snapshotJobs } = await import("@/lib/jobs-store");
   return snapshotJobs();
 }
 
 export async function cancelJobApi(jobId: string): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, {
-      method: "POST",
-    });
-    return;
-  }
   const { cancelJobLocal } = await import("@/lib/jobs-store");
   cancelJobLocal(jobId);
 }
 
 export async function cancelAllJobsApi(includeSystem = false): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch("/api/jobs/cancel-all", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ includeSystem }),
-    });
-    return;
-  }
   const { cancelAllJobsLocal } = await import("@/lib/jobs-store");
   cancelAllJobsLocal({ userOnly: !includeSystem });
 }
 
-export async function resumePendingJobsApi(): Promise<void> {
-  if (!IS_STATIC) {
-    await fetch("/api/jobs/resume-pending", { method: "POST" });
-    return;
-  }
-  // Statikte boot-recovery kavramı yok (sekme kapanınca kuyruk zaten ölür).
-}
-
 /**
- * Job değişikliklerini dinle; UI'yı mod ayrımından kurtarır. Sunuculu modda
- * roadmap'in 4s poll kalıbıyla GET /api/jobs çeker; statik modda tarayıcı
- * store'una abone olur. `cb` her güncel snapshot'ta çağrılır. Dönen fonksiyon
- * aboneliği kapatır.
+ * Subscribe to job changes (browser store). `cb` fires on every fresh
+ * snapshot; the returned function closes the subscription.
  */
 export function onJobsChange(
   cb: (snap: import("@/core/jobs").JobsSnapshot) => void
 ): () => void {
-  if (!IS_STATIC) {
-    let stopped = false;
-    const tick = () => {
-      jobsList()
-        .then((s) => {
-          if (!stopped) cb(s);
-        })
-        .catch(() => {});
-    };
-    tick();
-    const timer = setInterval(tick, 4000);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }
   let unsub = () => {};
   void (async () => {
     const { subscribeJobs } = await import("@/lib/jobs-store");

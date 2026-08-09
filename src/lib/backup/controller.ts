@@ -15,7 +15,6 @@
 // `getLessonCount` and `emitBackupChange` are imported by cloud.ts and keep
 // living here on purpose (the module name is unchanged so no consumer moved).
 
-import { IS_STATIC } from "@/lib/client-api";
 import {
   readBackupState,
   writeBackupState,
@@ -54,12 +53,11 @@ function emit() {
 }
 
 /**
- * Called after a lesson completes (from client-api's completeNodeApi, static
- * mode). Bumps the counter and takes a throttled local snapshot. Never throws;
+ * Called after a lesson completes (from client-api's completeNodeApi).
+ * Bumps the counter and takes a throttled local snapshot. Never throws;
  * backup is best-effort and must not break the completion flow.
  */
 export async function onLessonCompleted(): Promise<void> {
-  if (!IS_STATIC) return;
   bumpLessonCount();
   emit();
   await maybeSnapshot();

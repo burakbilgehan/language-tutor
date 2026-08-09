@@ -15,7 +15,7 @@
 // OAuth return leg and the Settings cloud section.
 
 import { useCallback, useEffect, useState } from "react";
-import { IS_STATIC, saveExportApi } from "@/lib/client-api";
+import { saveExportApi } from "@/lib/client-api";
 import { useStrings } from "@/lib/i18n/use-strings";
 import { useBackup } from "@/lib/backup/use-backup";
 import { readBackupState, writeBackupState, markDismissed } from "@/lib/backup/state";
@@ -41,7 +41,6 @@ export function BackupBar() {
 
   // (1) One-time: ask the browser to keep our IndexedDB image.
   useEffect(() => {
-    if (!IS_STATIC) return;
     void requestPersist();
   }, []);
 
@@ -59,7 +58,6 @@ export function BackupBar() {
     emitBackupChange();
   }, []);
 
-  if (!IS_STATIC) return null;
   if (!backup.remind) return null;
 
   return (
