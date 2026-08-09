@@ -117,7 +117,7 @@ test("applyGrammarSeed still applies the real tr packaged seed to a tr-native pr
   assert.equal(isMachineTranslated(localized), false);
 });
 
-test("end-to-end: an en-native ja profile gets the real MT seed, untranslated slugs stay honestly pending", (t) => {
+test("end-to-end: an en-native ja profile gets the committed en seed; any uncovered slug stays honestly pending", (t) => {
   const seedPath = path.join(process.cwd(), "public", "grammar-seed", "ja.en.json");
   if (!fs.existsSync(seedPath)) {
     t.skip("public/grammar-seed/ja.en.json not present in this checkout");
@@ -146,21 +146,26 @@ test("end-to-end: an en-native ja profile gets the real MT seed, untranslated sl
   assert.equal(filled, translatedSlugs.length);
 
   const topics = listGrammarTopics(db as never, "ja", "en");
-  assert.ok(topics.length > translatedSlugs.length, "the full ja index should be seeded");
+  // The seed may legitimately cover the ENTIRE index: since 2026-08-07 the en
+  // file carries from-scratch generated content for every topic, so ">" (the
+  // old always-partial-MT assumption) would fail exactly when the library is
+  // complete. Full coverage is the success state, not an error.
+  assert.ok(topics.length >= translatedSlugs.length, "the full ja index should be seeded");
 
   for (const slug of translatedSlugs) {
     const row = topics.find((tp) => tp.slug === slug);
     assert.ok(row, `${slug} should exist in the index`);
-    assert.equal(row!.status, "ready", `${slug} should read ready (MT-filled)`);
+    assert.equal(row!.status, "ready", `${slug} should read ready (seed-filled)`);
   }
 
-  // Honest gap: a slug the MT run hasn't reached yet must NOT silently read
-  // ready — it's what layer 4 (the UI's no-LLM CTA) keys off.
+  // Honest gap: while coverage is partial, an uncovered slug must NOT
+  // silently read ready — it's what layer 4 (the UI's no-LLM CTA) keys off.
   const untranslated = topics.find(
     (tp) => !translatedSlugs.includes(tp.slug)
   );
-  assert.ok(untranslated, "there should be at least one not-yet-translated topic");
-  assert.equal(untranslated!.status, "pending");
+  if (untranslated) {
+    assert.equal(untranslated.status, "pending");
+  }
 });
 
 test("titleFor resolves a real committed title translation, falls back for an untranslated slug", () => {
