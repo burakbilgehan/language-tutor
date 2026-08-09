@@ -5,6 +5,10 @@
   "scripts": {
     "predev": "node scripts/sync-assets.mjs",
     "dev": "next dev --turbopack",
+    "predev:static": "node scripts/sync-assets.mjs",
+    "dev:static": "NEXT_PUBLIC_STATIC_BUILD=1 NEXT_PUBLIC_LLM_FIXTURE=1 next dev --turbopack",
+    "predev:static:llm": "node scripts/sync-assets.mjs",
+    "dev:static:llm": "NEXT_PUBLIC_STATIC_BUILD=1 next dev --turbopack",
     "prebuild": "node scripts/sync-assets.mjs",
     "build:static": "node scripts/build-static.mjs",
     "build": "next build --turbopack",

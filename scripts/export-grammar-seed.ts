@@ -1,14 +1,16 @@
 // Lokal DB'de LLM ile üretilmiş gramer içeriğini statik seed'e çevirir:
 // public/grammar-seed/<lang>.json. Deploy'da yeni profiller bu dosyadan
 // beslenir (bkz. src/core/grammar.ts applyGrammarSeed) — LLM'siz tam gramer.
-// Çalıştır: npm run seed:grammar  (data/app.db'ye ihtiyaç duyar)
+// Çalıştır: npm run seed:grammar [-- <db-yolu>]
+// Kaynak varsayılan data/app.db; argüman olarak export edilmiş bir save
+// snapshot'ı da verilebilir (aynı raw SQLite imajı, T-069 ön koşulu 3).
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { GrammarTopicSchema } from "@/lib/llm/schemas";
 import { readLangContent } from "@/lib/llm/lang-content";
 
-const DB_PATH = "data/app.db";
+const DB_PATH = process.argv[2] ?? "data/app.db";
 const OUT_DIR = "public/grammar-seed";
 
 if (!fs.existsSync(DB_PATH)) {

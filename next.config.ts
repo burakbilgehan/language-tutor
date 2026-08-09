@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
           : {}),
       }
     : {}),
+  // Fixture bayrağı HER build'de tanımlı olmalı: tanımsız kalırsa bundler
+  // process.env okumasını inline edemez, browser-fixture dalını ölü kod
+  // olarak düşüremez ve fixture chunk'ı (bundle.json içeriğiyle) prod
+  // çıktısına sızar (build sonrası grep ile doğrulandı, 2026-08-10).
+  env: {
+    NEXT_PUBLIC_LLM_FIXTURE: process.env.NEXT_PUBLIC_LLM_FIXTURE ?? "",
+  },
   serverExternalPackages: ["better-sqlite3"],
   // Sol alt köşe feedback butonunun (FeedbackButton) — dev indicator'ı oradan çek.
   devIndicators: { position: "bottom-right" },

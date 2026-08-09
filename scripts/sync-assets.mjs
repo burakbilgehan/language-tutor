@@ -5,6 +5,30 @@
 import fs from "node:fs";
 import path from "node:path";
 
+// LLM fixture bundle: tarayıcı fixture sağlayıcısı (NEXT_PUBLIC_LLM_FIXTURE=1,
+// bkz. src/lib/llm/browser-fixture.ts) fs okuyamaz; fixtures/ içeriği tek bir
+// commit'li bundle.json'a toplanır. Deterministik (sıralı) yazım: fixture
+// değişmedikçe diff üretmez. Stroke senkronundan ÖNCE koşar; stroke verisi
+// eksikse script erken çıkıyor.
+const FIXTURE_DIR = "src/lib/llm/fixtures";
+const FIXTURE_BUNDLE = path.join(FIXTURE_DIR, "bundle.json");
+const bundle = { json: {}, text: {} };
+for (const f of fs.readdirSync(FIXTURE_DIR).sort()) {
+  if (f === "bundle.json") continue;
+  const body = fs.readFileSync(path.join(FIXTURE_DIR, f), "utf8");
+  const key = f.replace(/\.(json|txt)$/, "");
+  if (f.endsWith(".json")) bundle.json[key] = JSON.parse(body);
+  else if (f.endsWith(".txt")) bundle.text[key] = body;
+}
+const serialized = JSON.stringify(bundle);
+const prevBundle = fs.existsSync(FIXTURE_BUNDLE)
+  ? fs.readFileSync(FIXTURE_BUNDLE, "utf8")
+  : null;
+if (prevBundle !== serialized) fs.writeFileSync(FIXTURE_BUNDLE, serialized);
+console.log(
+  `[sync-assets] llm fixtures: ${Object.keys(bundle.json).length} json + ${Object.keys(bundle.text).length} txt${prevBundle === serialized ? " (değişmedi)" : ""}`
+);
+
 const SRC = "node_modules/@k1low/hanzi-writer-data-jp";
 const DST = "public/strokes-data";
 

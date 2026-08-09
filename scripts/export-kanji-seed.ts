@@ -1,14 +1,16 @@
 // Lokal DB'de LLM ile üretilmiş kanji/hanzi içeriğini statik seed'e çevirir:
 // public/kanji-seed/<lang>.json. Deploy'da yeni profiller bu dosyadan
 // beslenir (bkz. src/core/kanji.ts applyKanjiSeed) — LLM'siz tam kanji sözlüğü.
-// Çalıştır: npm run seed:kanji  (data/app.db'ye ihtiyaç duyar)
+// Çalıştır: npm run seed:kanji [-- <db-yolu>]
+// Kaynak varsayılan data/app.db; argüman olarak export edilmiş bir save
+// snapshot'ı da verilebilir (aynı raw SQLite imajı, T-069 ön koşulu 3).
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { KanjiContentSchema } from "@/lib/llm/schemas";
 import { readLangContent } from "@/lib/llm/lang-content";
 
-const DB_PATH = "data/app.db";
+const DB_PATH = process.argv[2] ?? "data/app.db";
 const OUT_DIR = "public/kanji-seed";
 
 if (!fs.existsSync(DB_PATH)) {

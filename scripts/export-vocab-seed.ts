@@ -1,14 +1,16 @@
 // Lokal DB'de LLM ile üretilmiş kelime sözlüğü içeriğini statik seed'e çevirir:
 // public/vocab-seed/<lang>.json. Deploy'da yeni profiller bu dosyadan
 // beslenir (bkz. src/core/vocab.ts applyVocabSeed) — LLM'siz tam sözlük.
-// Çalıştır: npm run seed:vocab  (data/app.db'ye ihtiyaç duyar)
+// Çalıştır: npm run seed:vocab [-- <db-yolu>]
+// Kaynak varsayılan data/app.db; argüman olarak export edilmiş bir save
+// snapshot'ı da verilebilir (aynı raw SQLite imajı, T-069 ön koşulu 3).
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { VocabContentSchema } from "@/lib/llm/schemas";
 import { readLangContent } from "@/lib/llm/lang-content";
 
-const DB_PATH = "data/app.db";
+const DB_PATH = process.argv[2] ?? "data/app.db";
 const OUT_DIR = "public/vocab-seed";
 
 if (!fs.existsSync(DB_PATH)) {
