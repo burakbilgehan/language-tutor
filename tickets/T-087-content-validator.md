@@ -104,3 +104,10 @@ Not scanned: `vocab_entries` rows with null content (the 8189 pending ja vocab
 rows), `lessons`/`exercises`/`translations`/`chat_messages` (outside the
 ticket's three tables), and the static conjugation tables in
 `src/lib/conjugation` (code, covered by T-086).
+
+Known fragility for whoever re-runs this after T-091 regenerates content: only
+`excerpt()` escapes U+2014, so the detail fields that bypass it (`host`,
+`reading`, `expected`, `sample`, `coveredSuffix`, `items[].text`) would emit a
+raw em dash if regenerated content ever put one there. This run's output was
+verified to contain none, but re-check the JSON for U+2014 before committing a
+future run.
