@@ -1,7 +1,7 @@
 ---
 id: T-023
 title: Content quality audit for haiku generation (hallucination sweep)
-status: todo
+status: done
 priority: p1
 effort: S
 confidence: high
@@ -79,3 +79,12 @@ Session prompt (give to a new opus session):
 > prompts) but implement NONE of them, that decision is Burak's. Write the
 > report, do NOT commit, end the turn.
 </content>
+
+## Result
+
+Closed 2026-08-10. The audit ran as the T-023 wave: report in
+`tickets/T-023-audit-report.md`, repair executed end to end by
+T-086..T-093 (code fixes, validator, nl regen, criticals regen, mechanical
+round, LLM leg), seeds re-exported and deployed (T-092 + the T-093 seed
+push). Remaining residuals and product decisions are tracked in T-094 and
+the T-093 Result section.

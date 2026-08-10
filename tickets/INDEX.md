@@ -84,7 +84,7 @@ file + a row here. This index is updated with every ticket change.
 | [T-005](T-005-zh-stroke-dictionary.md) | zh stroke order + hanzi dictionary (CEDICT) | backlog | p2 | L | medium |
 | [T-004](T-004-overview-llm-layer.md) | Overview LLM commentary layer | backlog | p3 | S | medium |
 | [T-002](T-002-skill-tree.md) | Skill tree (branching lesson graph) | backlog | p3 | XL | low |
-| [T-023](T-023-haiku-content-qa.md) | Content quality audit: all languages/surfaces, read-only report; session prompt in the ticket | todo | p1 | S | high |
+| [T-023](T-023-haiku-content-qa.md) | Content quality audit: all languages/surfaces, read-only report; session prompt in the ticket | done | p1 | S | high |
 | [T-019](T-019-vocab-bulk-fill-seed.md) | zh dictionary seed infrastructure (export + applyVocabSeed) | done | p2 | M | high |
 | [T-003](T-003-remaining-grammar.md) | Remaining grammar (zh 99 + ja 16); weekend quota | done | p1 | S | high |
 | [T-021](T-021-conjugate-zh-nl-content.md) | Conjugation cheatsheet: zh weak, nl empty | done | p2 | M | medium |
