@@ -17,7 +17,9 @@ export function grammarPrompt(opts: {
       ? " Kanji içeren her ifadede furigana'yı köşeli parantezle ver: 勉強[べんきょう]. Tablolarda ve örneklerde de bu notasyonu kullan."
       : opts.topic.targetLanguage === "zh"
         ? " Hanzi içeren her ifadede pinyin okunuşu köşeli parantezle ver: 学习[xuéxí]. Tablolarda ve örneklerde de bu notasyonu kullan; ton işaretlerini mutlaka yaz."
-        : ` Hedef dil Latin alfabesiyle yazıldığı için okunuş (reading) alanlarını boş bırak; telaffuz ancak konu gerektiriyorsa kısa bir not olarak geçsin.`;
+        : opts.topic.targetLanguage === "nl"
+          ? " Hollandaca Latin alfabesiyle yazılır ve resmi bir fonetik transkripsiyon kuralı YOK: examples[].reading alanını her zaman null bırak, ASLA uydurma sözde-fonetik yazım üretme (ör. \"zay sHaamen ziH\" gibi telaffuz taklidi YASAK). Telaffuz konu gerektiriyorsa intro_tr içinde kısa bir cümleyle anlat, reading alanına yazma."
+          : ` Hedef dil Latin alfabesiyle yazıldığı için okunuş (reading) alanlarını boş bırak; telaffuz ancak konu gerektiriyorsa kısa bir not olarak geçsin.`;
 
   const system =
     `Sen bir ${lang} gramer referansı yazarısın. Ana dili ${native} olan öğrenciler için net, TABLO ağırlıklı, DERS KİTABI KALİTESİNDE kapsamlı gramer sayfaları hazırlıyorsun. Açıklamalar ${native} dilinde.${scriptRules} Sadece istenen JSON'u döndür.` +
