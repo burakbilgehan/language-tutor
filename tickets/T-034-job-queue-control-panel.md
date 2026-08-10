@@ -1,7 +1,7 @@
 ---
 id: T-034
 title: Job queue control panel, visibility + cancel + boot-time confirmation
-status: backlog
+status: done
 priority: p1
 effort: L
 confidence: medium

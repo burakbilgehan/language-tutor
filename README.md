@@ -35,11 +35,15 @@ plain code and data. UI in Turkish and English.
 
 ```sh
 npm install
-LLM_PROVIDER=fixture npm run dev   # token-free dev loop (canned LLM fixtures)
-npm run dev                        # real LLM via the local `claude` CLI
-npm test                           # unit tests
-npm run build:static               # static export to out/ (what production serves)
+npm run dev          # token-free dev loop (canned LLM fixtures in the browser)
+npm run dev:llm      # real LLM via the browser config (bridge/Ollama/API key)
+npm test             # unit tests
+npm run build:static # static export to out/ (what production serves)
 ```
+
+Dev runs the SAME local-first runtime as production (T-069: there is no
+server mode); a fresh checkout starts on an empty browser DB and goes
+through onboarding.
 
 Backend (Cloudflare Worker) lives in `worker/` with its own package:
 
@@ -59,8 +63,9 @@ npm test           # test suite on real workerd, includes the auth gate
   enforced by the route-table types and a test gate.
 - **Cloud saves:** R2, tenant-scoped by the server-derived user id: the key
   never comes from client input.
-- **Server mode** (`npm run dev` at the root) is the same app against
-  on-disk SQLite; shared logic lives in the env-agnostic `src/core/*` seam.
+- **One runtime:** the app runs entirely in the browser (business logic in
+  the env-agnostic `src/core/*` seam over sql.js); the only server-side
+  code is the Worker backend above.
 - Deep docs: `AGENTS.md` (app conventions; the single source of truth,
   `CLAUDE.md` just imports it), `worker/README.md` (backend + deploy
   runbook), `tickets/` (work log).

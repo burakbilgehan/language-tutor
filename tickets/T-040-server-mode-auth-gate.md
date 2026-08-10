@@ -8,6 +8,11 @@ confidence: high
 depends: []
 created: 2026-07-22
 ---
+**No longer applies; superseded by [T-069](T-069-kill-server-static-duality.md)
+(2026-08-10):** the server runtime this gate protected was removed; the gate,
+`src/lib/auth.ts` and the `auth.test.ts` route-walker are gone. Successor
+invariant: `src/lib/runtime-purity.test.ts`.
+
 **Scope narrowed (2026-07-26):** This ticket = the env-token gate
 (proportionate closure). Real multi-tenant isolation (per-user DB /
 profile ownership, tenanting the job IDOR) -> split off to **T-043**

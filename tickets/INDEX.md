@@ -103,12 +103,12 @@ at curriculum creation only; Web Speech TTS; delete/regenerate flows.
 The 2026-08-05 prompt hotfix (latinCore etc., uncommitted) is superseded by
 T-079 and gets dissolved there.
 
-- Wave C1 — T-078:sonnet T-079:opus — parallel; fences: player/practice UI vs
+- Wave C1: T-078:sonnet T-079:opus, parallel; fences: player/practice UI vs
   llm-prompts+core/curriculum-gen+schema; disjoint. T-079 merges last (schema).
-- Wave C2 — T-080:opus T-081:sonnet — parallel after C1; fences: wizard/
+- Wave C2: T-080:opus T-081:sonnet, parallel after C1; fences: wizard/
   settings/client-api vs tts util+player/vocab surfaces. T-081 must not touch
   client-api; T-080 must not touch LessonPlayer.
-- Wave C3 — T-082:opus — solo (destructive data ops both modes; overlaps C2's
+- Wave C3: T-082:opus, solo (destructive data ops both modes; overlaps C2's
   settings surface, hence after).
 
 Not in a wave: T-083/T-084/T-085 (parked backlog, need rulings or field
