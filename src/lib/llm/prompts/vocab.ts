@@ -50,7 +50,7 @@ Bu kelime için üret:
 - "note_tr": 1-2 cümlelik kullanım notu (${native} dilinde) — register, tipik bağlam, sık karıştırılan yakın anlamlı kelimelerle farkı. Yoksa null.${classifierInstruction}
 - "examples": 2-4 GERÇEK ve doğal örnek cümle, öğrencinin seviyesine uygun. "sentence" hedef dilde, "translation_tr" ${native} dilinde.
 - "collocations": 2-5 yaygın eşdizim/kalıp ("phrase" hedef dilde, "meaning_tr" ${native} dilinde). Yoksa null.
-- "chars": kelimedeki ${charsUnit} için { "char", "reading", "meaning_tr", "hint_tr" } — "hint_tr" karakteri hatırlatan kısa bir bileşen ipucu (radikal anlamı / fonetik bileşen), yoksa null.${isZh ? "" : " Kelimede kanji yoksa (yalnızca kana) boş bırak."}
+- "chars": kelimedeki ${charsUnit} için { "char", "reading", "meaning_tr" }.${isZh ? "" : " Kelimede kanji yoksa (yalnızca kana) boş bırak."}
 
 Sadece şemaya uygun JSON döndür.`;
 
