@@ -13,7 +13,7 @@ file + a row here. This index is updated with every ticket change.
 | [T-089](T-089-nl-grammar-regen.md) | Regenerate all nl grammar topic content with sonnet | done | p1 | M | medium |
 | [T-090](T-090-regen-confirmed-criticals.md) | Regenerate the 28 verified-critical content items with sonnet | done | p1 | S | high |
 | [T-091](T-091-targeted-fix-round.md) | Targeted fix round driven by the T-087 validator report | done | p1 | M | medium |
-| [T-093](T-093-llm-leg-residuals.md) | T-091 LLM leg (944 items) + residual content decisions | todo | p1 | M | high |
+| [T-093](T-093-llm-leg-residuals.md) | T-091 LLM leg (944 items) + residual content decisions | done | p1 | M | high |
 | [T-094](T-094-conjugation-edge-bugs.md) | Conjugation edge bugs found while fixing T-086 (ja sou-form, nl schwa) | todo | p3 | S | high |
 | [T-092](T-092-seed-reexport-gate.md) | Seed re-export + deploy after content repair (owner-gated) | done | p1 | XS | high |
 | [T-078](T-078-mcq-option-shuffle.md) | MCQ option shuffle in the code layer (answer is always option A) | done | p1 | S | high |

@@ -463,6 +463,263 @@ async function regenCriticals() {
 }
 
 // ---------------------------------------------------------------------------
+// T-093: targeted regen fed straight from a validate-content.mjs JSON report.
+// Selects three finding classes (headword_missing, script_contamination:
+// foreign_script, pinyin_mismatch:syllable_mismatch minus slash-alternation
+// notation), groups them into row-as-unit work items (tr+en sequential in
+// one worker, same lost-update rule as the other modes), regenerates each
+// flagged language half, then verifies the targeted defect classes against
+// the fresh payload with the ported validator checks (scripts/
+// t093-checks.mjs). A failed verify re-rolls the half up to MAX_ATTEMPTS.
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore untyped .mjs helper module
+import { buildReadingTable, verifyHalf } from "./t093-checks.mjs";
+
+function argStr(flag: string, fallback: string): string {
+  const raw = process.argv.find((a) => a.startsWith(`--${flag}=`))?.split("=")[1];
+  return raw || fallback;
+}
+
+const T093_MAX_ATTEMPTS = 3;
+const T093_VERIFY_LOG = path.join(process.cwd(), "data", "t093-verify.jsonl");
+const T093_REPORT = path.join(process.cwd(), "data", "t093-report.json");
+
+type T093Class = "headword" | "foreign" | "pinyin";
+type T093Kind = "vocab" | "kanji" | "grammar";
+
+async function regenT093() {
+  const gen = getProvider();
+  const targetsPath = argStr("targets", "tickets/T-093-validator-before.json");
+  const report = JSON.parse(fs.readFileSync(targetsPath, "utf8")) as {
+    findings: {
+      table: string;
+      id: string;
+      key: string;
+      lang: string | null;
+      class: string;
+      detail?: { severity?: string; reading?: string };
+    }[];
+  };
+
+  // finding class -> T093Class, with the exclusions the spec names.
+  let excludedAlternation = 0;
+  const classBefore = { headword: 0, foreign: 0, pinyin: 0 };
+  type ItemAgg = {
+    table: string;
+    id: string;
+    key: string;
+    classesByLang: Map<string, Set<T093Class>>;
+  };
+  const items = new Map<string, ItemAgg>();
+  for (const f of report.findings) {
+    if (f.lang !== "tr" && f.lang !== "en") continue;
+    let cls: T093Class | null = null;
+    if (f.class === "headword_missing") cls = "headword";
+    else if (
+      f.class === "script_contamination" &&
+      f.detail?.severity === "foreign_script"
+    )
+      cls = "foreign";
+    else if (
+      f.class === "pinyin_mismatch" &&
+      f.detail?.severity === "syllable_mismatch"
+    ) {
+      if (f.detail?.reading?.includes("/")) {
+        // X/Y[readingX/readingY] alternation notation: a validator labeling
+        // quirk, not a content defect (T-091 Result item 7). Explained residual.
+        excludedAlternation++;
+        continue;
+      }
+      cls = "pinyin";
+    }
+    if (!cls) continue;
+    classBefore[cls]++;
+    const itemKey = `${f.table}:${f.id}`;
+    let agg = items.get(itemKey);
+    if (!agg) {
+      agg = { table: f.table, id: f.id, key: f.key, classesByLang: new Map() };
+      items.set(itemKey, agg);
+    }
+    if (!agg.classesByLang.has(f.lang)) agg.classesByLang.set(f.lang, new Set());
+    agg.classesByLang.get(f.lang)!.add(cls);
+  }
+
+  // Row metadata (headword forms, target language) straight from the live DB.
+  const rowMeta = new Map<
+    string,
+    { kind: T093Kind; targetLanguage: string; word?: string; traditional?: string | null }
+  >();
+  for (const r of db.select().from(tables.vocabEntries).all())
+    rowMeta.set(`vocab_entries:${r.id}`, {
+      kind: "vocab",
+      targetLanguage: r.targetLanguage,
+      word: r.word,
+      traditional: r.traditional,
+    });
+  for (const r of db.select().from(tables.kanjiEntries).all())
+    rowMeta.set(`kanji_entries:${r.id}`, {
+      kind: "kanji",
+      targetLanguage: r.targetLanguage,
+      word: r.char,
+    });
+  for (const r of db.select().from(tables.grammarTopics).all())
+    rowMeta.set(`grammar_topics:${r.id}`, {
+      kind: "grammar",
+      targetLanguage: r.targetLanguage,
+    });
+
+  // Reading table for pinyin verification, same sources as the validator.
+  const pairs: { word: string; reading: string }[] = db.$client
+    .prepare("select word, reading from vocab_entries where target_language = 'zh'")
+    .all() as never;
+  const idxPath = path.join("src", "lib", "vocab-index", "zh-data.json");
+  for (const e of JSON.parse(fs.readFileSync(idxPath, "utf8")))
+    pairs.push({ word: e.word, reading: e.reading });
+  const readingTable = buildReadingTable(pairs);
+
+  type Unit = {
+    kind: T093Kind;
+    table: string;
+    id: string;
+    key: string;
+    targetLanguage: string;
+    langs: { lang: NativeLang; classes: Set<T093Class> }[];
+    hasNonPinyin: boolean;
+  };
+  const units: Unit[] = [];
+  let skippedMissingRow = 0;
+  for (const agg of items.values()) {
+    const meta = rowMeta.get(`${agg.table}:${agg.id}`);
+    if (!meta) {
+      skippedMissingRow++;
+      continue;
+    }
+    const langs = [...agg.classesByLang.entries()]
+      .filter(([lang]) => !ledger[`t093:${agg.table}:${agg.key}:${lang}`])
+      .map(([lang, classes]) => ({ lang: lang as NativeLang, classes }));
+    if (!langs.length) continue;
+    units.push({
+      kind: meta.kind,
+      table: agg.table,
+      id: agg.id,
+      key: agg.key,
+      targetLanguage: meta.targetLanguage,
+      langs,
+      hasNonPinyin: langs.some(
+        (l) => l.classes.has("headword") || l.classes.has("foreign")
+      ),
+    });
+  }
+  // Mechanically-cheap-to-verify classes first (T-091 Result follow-up 1).
+  units.sort((a, b) => Number(b.hasNonPinyin) - Number(a.hasNonPinyin));
+
+  const totalHalves = units.reduce((n, u) => n + u.langs.length, 0);
+  console.log(
+    `RUN t093 items=${items.size} units-pending=${units.length} halves-pending=${totalHalves} ` +
+      `conc=${concurrency} excluded-alternation-findings=${excludedAlternation} ` +
+      `skipped-missing-row=${skippedMissingRow} ` +
+      `class-findings before: headword=${classBefore.headword} foreign=${classBefore.foreign} pinyin=${classBefore.pinyin}`
+  );
+
+  let done = 0;
+  let rerolls = 0;
+  const verifyFailures: string[] = [];
+  const logVerify = (entry: object) =>
+    fs.appendFileSync(T093_VERIFY_LOG, JSON.stringify(entry) + "\n");
+
+  const regenHalf = (u: Unit, lang: NativeLang) => {
+    if (u.kind === "vocab") return generateVocabContent(db as never, gen, u.id, lang);
+    if (u.kind === "kanji") return generateKanjiContent(db as never, gen, u.id, lang);
+    return generateGrammarContent(db as never, gen, u.id, lang);
+  };
+
+  const freshHalf = (u: Unit, lang: NativeLang): unknown => {
+    const t =
+      u.kind === "vocab"
+        ? tables.vocabEntries
+        : u.kind === "kanji"
+          ? tables.kanjiEntries
+          : tables.grammarTopics;
+    const row = db
+      .select()
+      .from(t)
+      .where(eq((t as typeof tables.vocabEntries).id, u.id))
+      .limit(1)
+      .get();
+    return normalizeLangContent<unknown>((row as { content?: unknown })?.content)[lang];
+  };
+
+  await runPool(units, async (u) => {
+    const meta = rowMeta.get(`${u.table}:${u.id}`)!;
+    for (const { lang, classes } of u.langs) {
+      const key = `t093:${u.table}:${u.key}:${lang}`;
+      const label = `${u.kind}:${u.key} (${lang})`;
+      let verified = false;
+      let attempts = 0;
+      let lastProblems: string[] = [];
+      while (attempts < T093_MAX_ATTEMPTS && !verified) {
+        attempts++;
+        const success = await attemptCall(label, () => regenHalf(u, lang));
+        if (!success) return; // quota/transient/failure: unmarked, retried on relaunch
+        const res = verifyHalf(freshHalf(u, lang), {
+          classes,
+          headword:
+            u.kind === "grammar"
+              ? undefined
+              : { kind: u.kind, word: meta.word, traditional: meta.traditional },
+          readingTable: u.targetLanguage === "zh" ? readingTable : undefined,
+        }) as { pass: boolean; problems: string[] };
+        verified = res.pass;
+        lastProblems = res.problems;
+        if (!verified && attempts < T093_MAX_ATTEMPTS) {
+          rerolls++;
+          console.log(
+            `${ts()} REROLL ${label} attempt=${attempts} problems=${res.problems.length}: ${res.problems[0]?.slice(0, 120)}`
+          );
+        }
+      }
+      mark(key);
+      done++;
+      logVerify({
+        key,
+        attempts,
+        pass: verified,
+        problems: verified ? [] : lastProblems.slice(0, 5),
+      });
+      if (!verified) {
+        verifyFailures.push(label);
+        console.log(
+          `${ts()} VERIFY-FAIL ${label} after ${attempts} attempts: ${lastProblems[0]?.slice(0, 160)}`
+        );
+      } else {
+        console.log(`${ts()} OK ${label} attempts=${attempts} [${done}/${totalHalves}]`);
+      }
+    }
+  });
+
+  const summary = {
+    targetsPath,
+    items: items.size,
+    unitsPending: units.length,
+    halvesPending: totalHalves,
+    halvesDone: done,
+    rerolls,
+    verifyFailures,
+    excludedAlternationFindings: excludedAlternation,
+    classFindingsBefore: classBefore,
+    failures,
+    transientSkipped,
+    quotaExhausted,
+  };
+  fs.writeFileSync(T093_REPORT, JSON.stringify(summary, null, 2));
+  console.log(
+    `DONE t093 halves=${done}/${totalHalves} rerolls=${rerolls} verify-failures=${verifyFailures.length}`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Zod validation report, used for the checkpoint + close-out evidence.
 // ---------------------------------------------------------------------------
 
@@ -799,13 +1056,14 @@ const t0 = Date.now();
 async function main() {
   if (mode === "nl-grammar") await regenNlGrammar();
   else if (mode === "criticals") await regenCriticals();
+  else if (mode === "t093") await regenT093();
   else if (mode === "validate-nl") return validate("nl-grammar");
   else if (mode === "validate-criticals") return validate("criticals");
   else if (mode === "verify-criticals") return verifyCriticals();
   else {
     console.error(
-      "usage: regen-content.ts <nl-grammar|criticals|validate-nl|validate-criticals|verify-criticals> " +
-        "[--conc=N] [--max-conc=N] [--creep-min=N]"
+      "usage: regen-content.ts <nl-grammar|criticals|t093|validate-nl|validate-criticals|verify-criticals> " +
+        "[--conc=N] [--max-conc=N] [--creep-min=N] [--targets=report.json]"
     );
     process.exit(2);
   }
