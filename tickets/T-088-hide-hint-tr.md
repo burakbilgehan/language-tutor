@@ -1,7 +1,7 @@
 ---
 id: T-088
 title: Stop rendering fabricated character etymology hints (hint_tr)
-status: todo
+status: done
 priority: p1
 effort: XS
 confidence: high
@@ -24,3 +24,19 @@ wired in; that would be a new ticket.
 
 Acceptance: vocab detail no longer shows the hint line; `npm test` green;
 no schema or save-format change.
+
+## Result
+
+Done 2026-08-10.
+
+- `VocabEntryView.tsx`: removed the `hint_tr` conditional paragraph under the
+  character card (was lines 239-241); char, reading, meaning_tr remain.
+- `src/lib/llm/prompts/vocab.ts`: the `chars` bullet now asks only for
+  `{ "char", "reading", "meaning_tr" }`; the `hint_tr` clause is gone.
+- `src/lib/llm/schemas.ts` untouched as scoped (`hint_tr` stays `nullish()`);
+  existing DB rows, packaged seeds, and the fixture bundle keep their stored
+  values, now inert since nothing reads the field. The vocab fixture is keyed
+  by a static `fixtureKey: "vocab"` literal, not a prompt hash, so the prompt
+  edit does not stale the fixture bundle.
+- No test referenced the removed rendering; `npm test` and `tsc --noEmit`
+  green.

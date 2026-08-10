@@ -236,9 +236,6 @@ export function VocabEntryView({ word }: { word: string }) {
                       <span className="text-sm text-ink-soft">{c.reading}</span>
                       <span className="text-sm font-medium">{c.meaning_tr}</span>
                     </div>
-                    {c.hint_tr && (
-                      <p className="mt-1 text-xs text-ink-soft">{c.hint_tr}</p>
-                    )}
                   </div>
                 ))}
               </div>
