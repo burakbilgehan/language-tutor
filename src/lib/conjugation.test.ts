@@ -151,6 +151,11 @@ test("i-adjective: かわいい is not an いい compound", () => {
   expectForms({ surface: "可愛い", reading: "かわいい", wordClass: "i-adjective" }, {
     kunai: "可愛くない", katta: "可愛かった",
   });
+  // the kana column derives from the reading, which must take the same branch
+  assert.equal(
+    forms({ surface: "可愛い", reading: "かわいい", wordClass: "i-adjective" }).get("kunai")?.kana,
+    "かわいくない"
+  );
   // and it must not pick up the いい note
   const res = conjugateJa({ surface: "かわいい", wordClass: "i-adjective" });
   assert.ok(res.ok);

@@ -128,6 +128,11 @@ test("separable present plural splits instead of duplicating the prefix", () => 
   assert.equal(val("opstaan", "wij"), "staan op");
   assert.equal(val("aankomen", "wij"), "komen aan");
   assert.equal(val("aanraken", "wij"), "raken aan");
+  // the example sentence is built from the same value; it must split too
+  const r = conjugateNl({ infinitive: "opbellen" });
+  assert.ok(r.ok);
+  const wij = r.groups[0].forms.find((f) => f.id === "wij");
+  assert.equal(wij?.exNl, "Wij bellen op samen.");
   // non-separable verbs keep the bare infinitive
   assert.equal(val("werken", "wij"), "werken");
   assert.equal(val("vergeten", "wij"), "vergeten");
