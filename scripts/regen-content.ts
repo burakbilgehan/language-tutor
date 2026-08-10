@@ -10,10 +10,14 @@
 //     <worktree>/scripts/regen-content.ts nl-grammar
 //     <worktree>/scripts/regen-content.ts criticals
 //
-// Serial execution only (no pool/concurrency): every LLM call is awaited
-// before the next starts. A resume ledger (data/regen-ledger.json, next to
-// the DB) records completed units so a killed run can restart without
-// redoing finished work or burning extra calls.
+// Bounded worker pool (default 4, --conc N to override): every LLM call
+// runs against one node process, so all DB writes happen in that same
+// process and better-sqlite3 serializes them in-process; only the CLI
+// subprocess spawns run concurrently. Concurrency backs off dynamically on
+// rate-limit/overloaded errors (see BACKOFF below) and drops to serial
+// after two consecutive such errors. A resume ledger (data/regen-ledger.json,
+// next to the DB) records completed units so a killed/relaunched run does
+// not redo finished work or burn extra calls.
 import fs from "node:fs";
 import path from "node:path";
 import { eq, and } from "drizzle-orm";
@@ -69,31 +73,128 @@ function ts() {
   return `[${new Date().toTimeString().slice(0, 8)}]`;
 }
 
-let stopRequested = false;
+// ---------------------------------------------------------------------------
+// Concurrency + backoff state machine.
+//
+// LlmQuotaError (claude-cli.ts QUOTA_RE) covers two different situations
+// that need different responses:
+//   - transient: "overloaded", "429", "too many requests" -> back off
+//     (halve concurrency), the run should continue.
+//   - exhausted: "usage limit", "rate limit reached", "resets at/in ..." ->
+//     the 5h window is actually spent; stop the run entirely and report,
+//     per the owner's instruction not to burn retries against a dead quota.
+// ---------------------------------------------------------------------------
+
+const TRANSIENT_RE = /overloaded|429|too many requests/i;
+
+let concurrency = Math.max(1, Math.min(6, Number(process.argv.find((a) => a.startsWith("--conc="))?.split("=")[1]) || 4));
+const startConcurrency = concurrency;
+let minConcurrencySeen = concurrency;
+let consecutiveTransient = 0;
+let droppedToSerialNote = "";
+let quotaExhausted = false;
+let quotaExhaustedDetail = "";
+let cleanSince = Date.now();
+
+function noteTransientError(detail: string) {
+  consecutiveTransient++;
+  console.log(
+    `${ts()} BACKOFF transient rate-limit/overloaded (${consecutiveTransient} consecutive): ${detail.slice(0, 160)}`
+  );
+  if (consecutiveTransient >= 2 && concurrency > 1) {
+    concurrency = 1;
+    droppedToSerialNote = `dropped to serial after ${consecutiveTransient} consecutive transient errors`;
+    console.log(`${ts()} CONCURRENCY -> 1 (${droppedToSerialNote})`);
+  } else if (concurrency > 1) {
+    concurrency = Math.max(1, Math.floor(concurrency / 2));
+    console.log(`${ts()} CONCURRENCY -> ${concurrency} (halved on transient error)`);
+  }
+  minConcurrencySeen = Math.min(minConcurrencySeen, concurrency);
+  cleanSince = Date.now();
+}
+function noteCleanCall() {
+  consecutiveTransient = 0;
+  // Allowed to creep back up to 6 after 15 clean minutes at the current
+  // level, per the owner's instruction ("you may go up to 6 if you see
+  // zero errors for 15 minutes"). Never exceeds 6, never exceeds what the
+  // run started at needing (no reason to go past 6).
+  if (concurrency < 6 && Date.now() - cleanSince >= 15 * 60_000) {
+    concurrency = Math.min(6, concurrency + 1);
+    console.log(`${ts()} CONCURRENCY -> ${concurrency} (15 clean minutes)`);
+    cleanSince = Date.now();
+  }
+}
+
 // Labels of halves that failed on a non-quota error and were NOT marked done
 // in the ledger (a relaunch retries them). Surfaced in the final report as
 // "anything unverified or skipped".
 const failures: string[] = [];
 
 /** Returns true only when `fn` actually completed the LLM call + write.
- * A quota hit stops the whole run (stopRequested); any OTHER error is
- * logged and swallowed so one bad call can't kill 143 already-serial
- * remaining calls -- but the caller must NOT mark the ledger key on
- * false, or a failed half would be permanently (and silently) skipped. */
+ * Quota-exhausted stops the whole run. A transient rate-limit/overloaded
+ * error triggers backoff and is retried by simply leaving the ledger key
+ * unmarked (picked back up by the pool). Any OTHER error is logged and
+ * swallowed so one bad call can't kill the rest of a large serial-cost run
+ * -- but the caller must NOT mark the ledger key on false, or a failed half
+ * would be permanently (and silently) skipped. */
+const transientSkipped: string[] = [];
+
 async function attemptCall(label: string, fn: () => Promise<void>): Promise<boolean> {
   try {
     await fn();
+    noteCleanCall();
     return true;
   } catch (e) {
     if (e instanceof LlmQuotaError) {
-      stopRequested = true;
-      console.log(`${ts()} QUOTA ${label}: ${(e.rawOutput ?? e.message).slice(0, 160)}`);
+      const detail = e.rawOutput ?? e.message;
+      if (TRANSIENT_RE.test(detail)) {
+        noteTransientError(detail);
+        // NOT retried within this process -- runPool only ever advances its
+        // cursor, it never re-queues a failed item. The unit is left
+        // unmarked in the ledger (this same relaunch invocation moves on to
+        // the next unit; a fresh `nl-grammar`/`criticals` relaunch is what
+        // actually retries it, resuming from the ledger).
+        transientSkipped.push(label);
+        return false;
+      }
+      quotaExhausted = true;
+      quotaExhaustedDetail = detail.slice(0, 200);
+      console.log(`${ts()} QUOTA-EXHAUSTED ${label}: ${quotaExhaustedDetail}`);
       return false;
     }
     failures.push(label);
     console.log(`${ts()} FAIL ${label}: ${(e as Error).message?.slice(0, 200)}`);
     return false;
   }
+}
+
+/** Bounded concurrent pool over `items`. `concurrency` is read live on every
+ * loop iteration of every worker, so a mid-run backoff shrinks the pool
+ * immediately (workers already in flight finish; new ones don't start
+ * beyond the new limit) and a later creep-up spawns additional workers. */
+async function runPool<T>(items: T[], work: (item: T) => Promise<void>) {
+  let next = 0;
+  let liveWorkers = 0;
+  await new Promise<void>((resolve) => {
+    const maybeSpawn = () => {
+      if (quotaExhausted) {
+        if (liveWorkers === 0) resolve();
+        return;
+      }
+      while (liveWorkers < concurrency && next < items.length) {
+        const item = items[next++];
+        liveWorkers++;
+        work(item)
+          .catch((e) => console.log(`${ts()} POOL-ERROR: ${(e as Error).message}`))
+          .finally(() => {
+            liveWorkers--;
+            maybeSpawn();
+          });
+      }
+      if (liveWorkers === 0 && (next >= items.length || quotaExhausted)) resolve();
+    };
+    maybeSpawn();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +212,19 @@ function nullNlReadings(content: unknown): GrammarTopicContent | unknown {
   } satisfies GrammarTopicContent;
 }
 
+/** Once BOTH lang halves of a unit are in the ledger, run the finalize
+ * callback exactly once. Guards against the concurrent case where tr and en
+ * finish in either order on different workers -- a simple mutex per key so
+ * two workers finishing back-to-back don't double-finalize. */
+const finalizedUnits = new Set<string>();
+function tryFinalize(unitKey: string, bothKeys: [string, string], finalize: () => void) {
+  if (finalizedUnits.has(unitKey)) return;
+  if (ledger[bothKeys[0]] && ledger[bothKeys[1]]) {
+    finalizedUnits.add(unitKey);
+    finalize();
+  }
+}
+
 async function regenNlGrammar() {
   const gen = getProvider();
   const topics = db
@@ -119,48 +233,73 @@ async function regenNlGrammar() {
     .where(eq(tables.grammarTopics.targetLanguage, "nl"))
     .orderBy(tables.grammarTopics.position)
     .all();
-  console.log(`RUN nl-grammar total=${topics.length}`);
-  let done = 0;
+  console.log(`RUN nl-grammar total=${topics.length} conc=${concurrency}`);
+
+  // IMPORTANT: the work unit is the ROW, not the (row, lang) pair.
+  // generateGrammarContent reads the row, awaits the LLM call (60-110s),
+  // then writes mergeLangContent(<the pre-call snapshot>, lang, fresh) --
+  // a read-modify-write with no optimistic lock. If tr and en of the SAME
+  // row were separate pool items, two concurrent workers would each read
+  // the old {tr,en} pair and the second write-back would silently discard
+  // the first worker's result (lost update). Keeping both langs of one row
+  // inside a single worker (sequential within the row, concurrent across
+  // rows) gets full pool throughput with zero intra-row overlap.
+  type Unit = { topicId: string; slug: string; langs: NativeLang[] };
+  const units: Unit[] = [];
   for (const topic of topics) {
-    if (stopRequested) break;
-    for (const lang of ["tr", "en"] as NativeLang[]) {
-      const key = `nl-grammar:${topic.slug}:${lang}`;
-      if (ledger[key]) continue;
-      if (stopRequested) break;
-      const label = `${topic.slug} (${lang})`;
+    const langs = (["tr", "en"] as NativeLang[]).filter(
+      (lang) => !ledger[`nl-grammar:${topic.slug}:${lang}`]
+    );
+    if (langs.length) units.push({ topicId: topic.id, slug: topic.slug, langs });
+    // Already-complete units from a prior run still need their finalize
+    // check (idempotent: re-nulling already-null readings is a no-op, but
+    // this makes a resumed run self-healing if a previous run crashed
+    // between marking both keys and finalizing).
+    const bothKeys: [string, string] = [
+      `nl-grammar:${topic.slug}:tr`,
+      `nl-grammar:${topic.slug}:en`,
+    ];
+    tryFinalize(`nl-grammar:${topic.slug}`, bothKeys, () => finalizeNlTopic(topic.id));
+  }
+
+  await runPool(units, async (u) => {
+    for (const lang of u.langs) {
+      const key = `nl-grammar:${u.slug}:${lang}`;
+      const label = `${u.slug} (${lang})`;
       const success = await attemptCall(label, () =>
-        generateGrammarContent(db as never, gen, topic.id, lang)
+        generateGrammarContent(db as never, gen, u.topicId, lang)
       );
-      if (!success) {
-        if (stopRequested) break;
-        continue; // non-quota failure: leave unmarked, retried on relaunch
-      }
+      if (!success) return; // quota/transient/failure: left unmarked, retried on relaunch
       mark(key);
       console.log(`${ts()} OK ${label}`);
     }
-    // Null reading + flip status only once both halves exist this run OR
-    // were already done in a prior run (ledger has both keys either way).
-    if (ledger[`nl-grammar:${topic.slug}:tr`] && ledger[`nl-grammar:${topic.slug}:en`]) {
-      const row = db
-        .select()
-        .from(tables.grammarTopics)
-        .where(eq(tables.grammarTopics.id, topic.id))
-        .limit(1)
-        .get()!;
-      const map = normalizeLangContent<GrammarTopicContent>(row.content);
-      const cleaned: typeof map = {
-        ...map,
-        tr: map.tr ? (nullNlReadings(map.tr) as GrammarTopicContent) : map.tr,
-        en: map.en ? (nullNlReadings(map.en) as GrammarTopicContent) : map.en,
-      };
-      db.update(tables.grammarTopics)
-        .set({ content: cleaned, status: "ready", generatedAt: new Date() })
-        .where(eq(tables.grammarTopics.id, topic.id))
-        .run();
-      done++;
-    }
-  }
-  console.log(`DONE nl-grammar topics-completed=${done}/${topics.length}`);
+    tryFinalize(
+      `nl-grammar:${u.slug}`,
+      [`nl-grammar:${u.slug}:tr`, `nl-grammar:${u.slug}:en`],
+      () => finalizeNlTopic(u.topicId)
+    );
+  });
+
+  console.log(`DONE nl-grammar topics-completed=${finalizedUnits.size}/${topics.length}`);
+}
+
+function finalizeNlTopic(topicId: string) {
+  const row = db
+    .select()
+    .from(tables.grammarTopics)
+    .where(eq(tables.grammarTopics.id, topicId))
+    .limit(1)
+    .get()!;
+  const map = normalizeLangContent<GrammarTopicContent>(row.content);
+  const cleaned: typeof map = {
+    ...map,
+    tr: map.tr ? (nullNlReadings(map.tr) as GrammarTopicContent) : map.tr,
+    en: map.en ? (nullNlReadings(map.en) as GrammarTopicContent) : map.en,
+  };
+  db.update(tables.grammarTopics)
+    .set({ content: cleaned, status: "ready", generatedAt: new Date() })
+    .where(eq(tables.grammarTopics.id, topicId))
+    .run();
 }
 
 // ---------------------------------------------------------------------------
@@ -213,86 +352,99 @@ async function regenCriticals() {
   });
 
   console.log(
-    `RUN criticals vocab=${vocabRows.length} kanji=${kanjiRows.length} grammar=${grammarRows.length}`
+    `RUN criticals vocab=${vocabRows.length} kanji=${kanjiRows.length} grammar=${grammarRows.length} conc=${concurrency}`
   );
 
+  // Same rule as regenNlGrammar: the work unit is the ROW (both langs
+  // handled sequentially by one worker), never a bare (row, lang) pair --
+  // generateVocabContent/generateKanjiContent/generateGrammarContent all
+  // do the same read-then-await-then-merge-write with no lock, so two
+  // concurrent workers on the same row would lose one language's update.
+  type Unit =
+    | { kind: "vocab"; id: string; label: string; langs: NativeLang[] }
+    | { kind: "kanji"; id: string; label: string; langs: NativeLang[] }
+    | { kind: "grammar"; id: string; label: string; langs: NativeLang[] };
+
+  const units: Unit[] = [];
+
   for (const row of vocabRows) {
-    if (stopRequested) break;
-    for (const lang of ["tr", "en"] as NativeLang[]) {
-      const key = `vocab:${row.word}:${lang}`;
-      if (ledger[key]) continue;
-      if (stopRequested) break;
-      const label = `v:${row.word} (${lang})`;
-      const success = await attemptCall(label, () =>
-        generateVocabContent(db as never, gen, row.id, lang)
-      );
-      if (!success) {
-        if (stopRequested) break;
-        continue;
-      }
-      mark(key);
-      console.log(`${ts()} OK ${label}`);
-    }
-    if (ledger[`vocab:${row.word}:tr`] && ledger[`vocab:${row.word}:en`]) {
-      db.update(tables.vocabEntries)
+    const langs = (["tr", "en"] as NativeLang[]).filter((l) => !ledger[`vocab:${row.word}:${l}`]);
+    if (langs.length) units.push({ kind: "vocab", id: row.id, label: row.word, langs });
+    tryFinalize(`vocab:${row.word}`, [`vocab:${row.word}:tr`, `vocab:${row.word}:en`], () =>
+      db
+        .update(tables.vocabEntries)
         .set({ status: "ready", generatedAt: new Date() })
         .where(eq(tables.vocabEntries.id, row.id))
-        .run();
-    }
+        .run()
+    );
   }
-
   for (const row of kanjiRows) {
-    if (stopRequested) break;
-    for (const lang of ["tr", "en"] as NativeLang[]) {
-      const key = `kanji:${row.char}:${lang}`;
-      if (ledger[key]) continue;
-      if (stopRequested) break;
-      const label = `k:${row.char} (${lang})`;
-      const success = await attemptCall(label, () =>
-        generateKanjiContent(db as never, gen, row.id, lang)
-      );
-      if (!success) {
-        if (stopRequested) break;
-        continue;
-      }
-      mark(key);
-      console.log(`${ts()} OK ${label}`);
-    }
-    if (ledger[`kanji:${row.char}:tr`] && ledger[`kanji:${row.char}:en`]) {
-      db.update(tables.kanjiEntries)
+    const langs = (["tr", "en"] as NativeLang[]).filter((l) => !ledger[`kanji:${row.char}:${l}`]);
+    if (langs.length) units.push({ kind: "kanji", id: row.id, label: row.char, langs });
+    tryFinalize(`kanji:${row.char}`, [`kanji:${row.char}:tr`, `kanji:${row.char}:en`], () =>
+      db
+        .update(tables.kanjiEntries)
         .set({ status: "ready", generatedAt: new Date() })
         .where(eq(tables.kanjiEntries.id, row.id))
-        .run();
-    }
+        .run()
+    );
+  }
+  for (const row of grammarRows) {
+    const itemKey = `grammar:${row.targetLanguage}/${row.slug}`;
+    const langs = (["tr", "en"] as NativeLang[]).filter((l) => !ledger[`${itemKey}:${l}`]);
+    if (langs.length)
+      units.push({ kind: "grammar", id: row.id, label: `${row.targetLanguage}/${row.slug}`, langs });
+    tryFinalize(itemKey, [`${itemKey}:tr`, `${itemKey}:en`], () =>
+      db
+        .update(tables.grammarTopics)
+        .set({ status: "ready", generatedAt: new Date() })
+        .where(eq(tables.grammarTopics.id, row.id))
+        .run()
+    );
   }
 
-  for (const row of grammarRows) {
-    if (stopRequested) break;
-    for (const lang of ["tr", "en"] as NativeLang[]) {
-      const key = `grammar:${row.targetLanguage}/${row.slug}:${lang}`;
-      if (ledger[key]) continue;
-      if (stopRequested) break;
-      const label = `g:${row.targetLanguage}/${row.slug} (${lang})`;
-      const success = await attemptCall(label, () =>
-        generateGrammarContent(db as never, gen, row.id, lang)
-      );
-      if (!success) {
-        if (stopRequested) break;
-        continue;
-      }
+  await runPool(units, async (u) => {
+    const prefix = u.kind === "vocab" ? "v" : u.kind === "kanji" ? "k" : "g";
+    for (const lang of u.langs) {
+      const key = `${u.kind}:${u.label}:${lang}`;
+      const label = `${prefix}:${u.label} (${lang})`;
+      const success = await attemptCall(label, () => {
+        if (u.kind === "vocab") return generateVocabContent(db as never, gen, u.id, lang);
+        if (u.kind === "kanji") return generateKanjiContent(db as never, gen, u.id, lang);
+        return generateGrammarContent(db as never, gen, u.id, lang);
+      });
+      if (!success) return; // quota/transient/failure: left unmarked, retried on relaunch
       mark(key);
       console.log(`${ts()} OK ${label}`);
     }
-    if (
-      ledger[`grammar:${row.targetLanguage}/${row.slug}:tr`] &&
-      ledger[`grammar:${row.targetLanguage}/${row.slug}:en`]
-    ) {
-      db.update(tables.grammarTopics)
-        .set({ status: "ready", generatedAt: new Date() })
-        .where(eq(tables.grammarTopics.id, row.id))
-        .run();
+    const itemKey = `${u.kind}:${u.label}`;
+    const bothKeys: [string, string] = [`${itemKey}:tr`, `${itemKey}:en`];
+    if (u.kind === "vocab") {
+      tryFinalize(itemKey, bothKeys, () =>
+        db
+          .update(tables.vocabEntries)
+          .set({ status: "ready", generatedAt: new Date() })
+          .where(eq(tables.vocabEntries.id, u.id))
+          .run()
+      );
+    } else if (u.kind === "kanji") {
+      tryFinalize(itemKey, bothKeys, () =>
+        db
+          .update(tables.kanjiEntries)
+          .set({ status: "ready", generatedAt: new Date() })
+          .where(eq(tables.kanjiEntries.id, u.id))
+          .run()
+      );
+    } else {
+      tryFinalize(itemKey, bothKeys, () =>
+        db
+          .update(tables.grammarTopics)
+          .set({ status: "ready", generatedAt: new Date() })
+          .where(eq(tables.grammarTopics.id, u.id))
+          .run()
+      );
     }
-  }
+  });
 
   console.log("DONE criticals");
 }
@@ -630,6 +782,7 @@ async function verifyCriticals() {
 }
 
 const mode = process.argv[2];
+const t0 = Date.now();
 async function main() {
   if (mode === "nl-grammar") await regenNlGrammar();
   else if (mode === "criticals") await regenCriticals();
@@ -638,7 +791,7 @@ async function main() {
   else if (mode === "verify-criticals") return verifyCriticals();
   else {
     console.error(
-      "usage: regen-content.ts <nl-grammar|criticals|validate-nl|validate-criticals|verify-criticals>"
+      "usage: regen-content.ts <nl-grammar|criticals|validate-nl|validate-criticals|verify-criticals> [--conc=N]"
     );
     process.exit(2);
   }
@@ -647,11 +800,25 @@ async function main() {
     if (failures.length) {
       console.log(`UNRESOLVED (non-quota failures, retried on relaunch): ${failures.join(", ")}`);
     }
+    if (transientSkipped.length) {
+      console.log(
+        `UNRESOLVED (transient rate-limit/overloaded, retried on relaunch): ${transientSkipped.join(", ")}`
+      );
+    }
+    const wallSec = Math.round((Date.now() - t0) / 1000);
+    console.log(
+      `CONCURRENCY-SUMMARY start=${startConcurrency} min-seen=${minConcurrencySeen} end=${concurrency}` +
+        (droppedToSerialNote ? ` note="${droppedToSerialNote}"` : "") +
+        ` wall=${wallSec}s`
+    );
+    if (quotaExhausted) {
+      console.log(`STOPPED-QUOTA-EXHAUSTED: ${quotaExhaustedDetail}`);
+    }
   }
 }
 
 main()
-  .then(() => process.exit(stopRequested ? 3 : 0))
+  .then(() => process.exit(quotaExhausted ? 3 : 0))
   .catch((e) => {
     console.error("FATAL", e);
     process.exit(1);
