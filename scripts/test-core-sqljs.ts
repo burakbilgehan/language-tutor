@@ -1,5 +1,8 @@
-// sql.js sürücü parite testi: gerçek app.db imajını sql.js'e yükle, core
-// SRS fonksiyonlarını çalıştır (tarayıcıda çalışacak yolun aynısı, node'da).
+// Core-on-sql.js harness (T-069: formerly test-sqljs-parity.ts; with one
+// runtime there is no server "parity" left to check): load a real save image
+// into sql.js and exercise src/core/* on the exact driver the browser uses,
+// in node. Source defaults to data/app.db; pass an exported save snapshot
+// path as the first argument to run against it.
 import fs from "node:fs";
 import initSqlJs from "sql.js";
 import { drizzle } from "drizzle-orm/sql-js";
@@ -13,7 +16,7 @@ async function main() {
 const SQL = await initSqlJs({
   locateFile: (f: string) => `node_modules/sql.js/dist/${f}`,
 });
-const bytes = fs.readFileSync("data/app.db");
+const bytes = fs.readFileSync(process.argv[2] ?? "data/app.db");
 const sqlite = new SQL.Database(bytes);
 sqlite.run("PRAGMA foreign_keys = ON");
 // `data/app.db` is a real, possibly OLD image: it predates every schema
