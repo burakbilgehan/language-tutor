@@ -103,6 +103,58 @@ test("coincidental prefix is not split (false-positive guard)", () => {
   assert.equal(val("openen", "participle"), "geopeend");
 });
 
+// T-086 bug 1: the participle must not write a doubled final consonant.
+test("weak participle absorbs a stem-final t/d", () => {
+  assert.equal(val("praten", "participle"), "gepraat");
+  assert.equal(val("wachten", "participle"), "gewacht");
+  assert.equal(val("antwoorden", "participle"), "geantwoord");
+  assert.equal(val("redden", "participle"), "gered");
+  assert.equal(val("voeden", "participle"), "gevoed");
+  assert.equal(val("verwachten", "participle"), "verwacht");
+  assert.equal(val("zetten", "participle"), "gezet");
+  assert.equal(val("kosten", "participle"), "gekost");
+  assert.equal(val("landen", "participle"), "geland");
+  // the PAST keeps the doubling; a vowel follows the suffix there
+  assert.equal(val("praten", "past-sg"), "praatte");
+  assert.equal(val("wachten", "past-pl"), "wachtten");
+  assert.equal(val("antwoorden", "past-sg"), "antwoordde");
+  assert.equal(val("redden", "past-sg"), "redde");
+  assert.equal(val("voeden", "past-sg"), "voedde");
+});
+
+// T-086 bug 2: the plural row must not repeat the prefix the infinitive carries.
+test("separable present plural splits instead of duplicating the prefix", () => {
+  assert.equal(val("opbellen", "wij"), "bellen op");
+  assert.equal(val("opstaan", "wij"), "staan op");
+  assert.equal(val("aankomen", "wij"), "komen aan");
+  assert.equal(val("aanraken", "wij"), "raken aan");
+  // the example sentence is built from the same value; it must split too
+  const r = conjugateNl({ infinitive: "opbellen" });
+  assert.ok(r.ok);
+  const wij = r.groups[0].forms.find((f) => f.id === "wij");
+  assert.equal(wij?.exNl, "Wij bellen op samen.");
+  // non-separable verbs keep the bare infinitive
+  assert.equal(val("werken", "wij"), "werken");
+  assert.equal(val("vergeten", "wij"), "vergeten");
+});
+
+// T-086 bug 3: closing the syllable with -t forces the long vowel to double,
+// and a vowel-initial stem must still lengthen (eten -> eet).
+test("open-syllable stems keep their long vowel", () => {
+  assert.equal(val("gaan", "jij"), "gaat");
+  assert.equal(val("staan", "jij"), "staat");
+  assert.equal(val("slaan", "jij"), "slaat");
+  assert.equal(val("gaan", "hij"), "gaat");
+  assert.equal(val("eten", "ik"), "eet");
+  assert.equal(val("eten", "jij"), "eet");
+  // digraph stems already spell the long vowel; no doubling
+  assert.equal(val("doen", "jij"), "doet");
+  assert.equal(val("zien", "jij"), "ziet");
+  // short stems are unaffected
+  assert.equal(val("werken", "jij"), "werkt");
+  assert.equal(val("zitten", "jij"), "zit");
+});
+
 test("inseparable prefix over strong base", () => {
   assert.equal(val("vertrekken", "past-sg"), "vertrok");
   assert.equal(val("vertrekken", "participle"), "vertrokken");

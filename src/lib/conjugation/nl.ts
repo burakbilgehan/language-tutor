@@ -183,8 +183,12 @@ export function nlStemParts(infinitive: string): {
   }
   // Open-syllable long vowel restore: mak→maak. Only when the infinitive
   // syllable was open — a de-doubled stem (stop) keeps its short vowel.
+  // A vowel-initial stem (et from eten) has an empty prefix; "aeiou".includes("")
+  // is true in JS, so the raw check wrongly reported "preceded by a vowel" and
+  // skipped the lengthening. Treat the empty prefix as "no preceding vowel".
   const m = s.match(/^(.*?)([aeou])([bcdfgklmnprstvz])$/);
-  if (m && !deDoubled && !VOWELS.includes(m[1].slice(-1) ?? "")) {
+  const prev = m ? (m[1].slice(-1) ?? "") : "";
+  if (m && !deDoubled && (prev === "" || !VOWELS.includes(prev))) {
     s = m[1] + m[2] + m[2] + m[3];
   }
   const decisionChar = s.endsWith("ch") ? "ch" : s.slice(-1);
@@ -200,6 +204,32 @@ export function nlStem(infinitive: string): string {
 
 function isKofschip(decisionChar: string): boolean {
   return KOFSCHIP.has(decisionChar) || decisionChar === "ch";
+}
+
+/**
+ * Adds the 2sg/3sg -t. Appending t closes a previously open syllable, so a
+ * stem ending in a single long vowel must write that vowel double: ga → gaat,
+ * sta → staat, sla → slaat. Digraph stems (doe, zie) already spell the long
+ * vowel, and a stem that already ends in t takes nothing (jij zit, jij praat).
+ */
+function nlAddPresentT(stem: string): string {
+  if (stem.endsWith("t")) return stem;
+  const m = stem.match(/^(.*?)([aeou])$/);
+  if (m && !VOWELS.includes(m[1].slice(-1) ?? "")) {
+    return m[1] + m[2] + m[2] + "t";
+  }
+  return stem + "t";
+}
+
+/**
+ * Weak participle body: ge + stem + t/d, except that Dutch never writes a
+ * doubled final consonant. A stem already ending in the suffix consonant
+ * absorbs it: praat + t = gepraat, voed + d = gevoed. The PAST keeps the
+ * doubling (praatte, voedde) because a vowel follows, so this helper is used
+ * for the participle only.
+ */
+function nlParticipleBody(stem: string, d: "t" | "d"): string {
+  return stem.endsWith(d) ? stem : stem + d;
 }
 
 // Unambiguously separable prefixes. onder/over/om/voor/door are excluded:
@@ -290,8 +320,9 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
     const d = isKofschip(decisionChar) ? "t" : "d";
     pastSg = stem + d + "e";
     pastPl = stem + d + "en";
-    part = inseparable ? stem + d : "ge" + stem + d;
-    if (sepPrefix) part = sepPrefix + "ge" + stem + d;
+    const body = nlParticipleBody(stem, d);
+    part = inseparable ? body : "ge" + body;
+    if (sepPrefix) part = sepPrefix + "ge" + body;
     aux = "h";
     verbType = "zwak";
     if (!inf.endsWith("en")) {
@@ -321,7 +352,7 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
   // Present forms (separable verbs split in main clauses).
   const pres = PRESENT[base];
   const presIk = pres?.[0] ?? stem;
-  const presJij = pres?.[1] ?? (stem.endsWith("t") ? stem : stem + "t");
+  const presJij = pres?.[1] ?? nlAddPresentT(stem);
   const presHij = pres?.[2] ?? presJij;
   const impStem = base === "zijn" ? "wees" : presIk;
   const sepTail = sepPrefix ? " " + sepPrefix : "";
@@ -341,8 +372,12 @@ export function conjugateNl(input: NlConjInput): NlConjResult {
           exNl: `Jij ${show(presJij)} goed.`, exTr: "Sen iyi 〜rsın.", exEn: "You 〜 well." },
         { id: "hij", labelTr: "hij/zij (3. tekil)", labelEn: "hij/zij (3sg)", pattern: "kök + t", value: show(presHij),
           exNl: `Hij ${show(presHij)} vaak.`, exTr: "O sık sık 〜r.", exEn: "He often 〜s." },
-        { id: "wij", labelTr: "wij/jullie/zij (çoğul)", labelEn: "plural", pattern: "mastar", value: show(inf),
-          exNl: `Wij ${show(inf)} samen.`, exTr: "Birlikte 〜rız.", exEn: "We 〜 together." },
+        // The plural equals the infinitive, but a separable verb splits in a
+        // main clause: wij bellen op, not "wij opbellen op". show() appends the
+        // prefix, so the core here is the prefix-less base (base === inf for
+        // every non-separable verb, so those rows are unchanged).
+        { id: "wij", labelTr: "wij/jullie/zij (çoğul)", labelEn: "plural", pattern: "mastar", value: show(base),
+          exNl: `Wij ${show(base)} samen.`, exTr: "Birlikte 〜rız.", exEn: "We 〜 together." },
       ],
     },
     {
