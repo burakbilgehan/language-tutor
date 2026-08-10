@@ -87,7 +87,22 @@ function ts() {
 
 const TRANSIENT_RE = /overloaded|429|too many requests/i;
 
-let concurrency = Math.max(1, Math.min(6, Number(process.argv.find((a) => a.startsWith("--conc="))?.split("=")[1]) || 4));
+// --conc=N sets the starting pool size; --max-conc=N sets the ceiling the
+// pool is allowed to creep back up to after sustained clean calls (default
+// 20, per the owner's second override -- "raise to 16 now, go to 20 after
+// 10 clean minutes"). Kept as a flag rather than a literal so a further
+// change doesn't require another hand-edit + relaunch cycle.
+function argNum(flag: string, fallback: number): number {
+  const raw = process.argv.find((a) => a.startsWith(`--${flag}=`))?.split("=")[1];
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+const MAX_CONCURRENCY = Math.max(1, argNum("max-conc", 20));
+// Clean-minutes-required-before-creep-up is also a flag: the owner's second
+// override shortened this from 15 to 10 minutes.
+const CREEP_MINUTES = Math.max(1, argNum("creep-min", 10));
+
+let concurrency = Math.max(1, Math.min(MAX_CONCURRENCY, argNum("conc", 4)));
 const startConcurrency = concurrency;
 let minConcurrencySeen = concurrency;
 let consecutiveTransient = 0;
@@ -114,13 +129,11 @@ function noteTransientError(detail: string) {
 }
 function noteCleanCall() {
   consecutiveTransient = 0;
-  // Allowed to creep back up to 6 after 15 clean minutes at the current
-  // level, per the owner's instruction ("you may go up to 6 if you see
-  // zero errors for 15 minutes"). Never exceeds 6, never exceeds what the
-  // run started at needing (no reason to go past 6).
-  if (concurrency < 6 && Date.now() - cleanSince >= 15 * 60_000) {
-    concurrency = Math.min(6, concurrency + 1);
-    console.log(`${ts()} CONCURRENCY -> ${concurrency} (15 clean minutes)`);
+  // Creeps back up to MAX_CONCURRENCY after CREEP_MINUTES clean minutes at
+  // the current level. Never exceeds the configured ceiling.
+  if (concurrency < MAX_CONCURRENCY && Date.now() - cleanSince >= CREEP_MINUTES * 60_000) {
+    concurrency = Math.min(MAX_CONCURRENCY, concurrency + 1);
+    console.log(`${ts()} CONCURRENCY -> ${concurrency} (${CREEP_MINUTES} clean minutes)`);
     cleanSince = Date.now();
   }
 }
@@ -791,7 +804,8 @@ async function main() {
   else if (mode === "verify-criticals") return verifyCriticals();
   else {
     console.error(
-      "usage: regen-content.ts <nl-grammar|criticals|validate-nl|validate-criticals|verify-criticals> [--conc=N]"
+      "usage: regen-content.ts <nl-grammar|criticals|validate-nl|validate-criticals|verify-criticals> " +
+        "[--conc=N] [--max-conc=N] [--creep-min=N]"
     );
     process.exit(2);
   }
