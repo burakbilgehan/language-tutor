@@ -95,7 +95,9 @@ have corrupted by silently dropping one of the two valid readings; the rest
 are genuine per-character ambiguity (polyphones with no word-level table
 entry) where the spec's "never guess a polyphone" rule applies.
 
-**3. bracket_shape (4675/19857 fixed).** `empty_bracket`: all 3 stripped
+**3. bracket_shape (4695/19857 brackets actually removed, per the validator
+delta; the script's own per-finding counter reads 4675, see the note at the
+end of this section on why the two differ).** `empty_bracket`: all 3 stripped
 (`[]` removed from the host). `unpaired_bracket` (11354 total): stripped only
 when the orphan bracket immediately follows sentence-final punctuation
 (`。！？!?`, after trimming whitespace) AND its inner text plausibly reads as
@@ -135,6 +137,21 @@ dash (`" — "`) becomes `"; "`, an unspaced one (`"word—word"`) becomes
 Skipped 2756 occurrences inside `chars[].hint_tr` on purpose: that field
 stopped being rendered or requested as of T-088, so fixing it would be a
 wasted write to dead data. All fixed occurrences are outside `hint_tr`.
+Semantic-risk check before commit: scanned the pre-fix snapshot for any
+digit-adjacent em dash that could be a numeric/level range written with an
+em dash instead of a hyphen (`N5—N1`, `3—5`), where turning it into a comma
+or semicolon would change meaning, not just style. Zero such patterns exist
+anywhere in the corpus (`/[0-9]—[0-9]|[A-Za-z][0-9]—[A-Za-z]?[0-9]/` matched
+nothing); every em dash in the corpus is prose punctuation, so the
+transform is safe as applied. Note also: `stripOrphanIfSentenceFinal`
+strips every qualifying orphan bracket in a field in one pass, so a field
+with several qualifying brackets only increments the `bracket_shape.fixed`
+counter once while the other brackets in that same field return null and
+inflate `skippedNotSentenceFinal`; the per-finding counter (4675) therefore
+undercounts the actual bracket removals. The validator's own before/after
+delta (11354 -> 6662 `unpaired_bracket`, i.e. 4692 brackets actually
+removed, plus 3 `empty_bracket`) is the authoritative fixed count for this
+class, not the script's internal counter.
 
 **5. pinyin_mismatch:tone_only -- sampled, not fixed wholesale.** 30 findings
 sampled with a fixed seed (42) out of 3229 and hand-judged against standard
