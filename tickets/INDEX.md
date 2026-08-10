@@ -8,7 +8,7 @@ file + a row here. This index is updated with every ticket change.
 | ID | Title | Status | Priority | Effort | Confidence |
 |---|---|---|---|---|---|
 | [T-086](T-086-conjugation-code-bugs.md) | Fix 4 confirmed conjugation algorithm bugs (nl x3, ja x1) | done | p1 | S | high |
-| [T-087](T-087-content-validator.md) | LLM-free mechanical content validator over the full corpus | todo | p1 | M | high |
+| [T-087](T-087-content-validator.md) | LLM-free mechanical content validator over the full corpus | done | p1 | M | high |
 | [T-088](T-088-hide-hint-tr.md) | Stop rendering fabricated character etymology hints (hint_tr) | done | p1 | XS | high |
 | [T-089](T-089-nl-grammar-regen.md) | Regenerate all nl grammar topic content with sonnet | todo | p1 | M | medium |
 | [T-090](T-090-regen-confirmed-criticals.md) | Regenerate the 28 verified-critical content items with sonnet | todo | p1 | S | high |
