@@ -22,7 +22,7 @@ file + a row here. This index is updated with every ticket change.
 | [T-074](T-074-bridge-log-ids.md) | Bridge logs should stamp the job id on every line | todo | p3 | XS | high |
 | [T-072](T-072-bridge-job-reattach.md) | Bridge job id + result cache: refresh must not kill generation, finished jobs must not vanish | done | p2 | M | medium |
 | [T-071](T-071-lesson-skeleton-lazy-load.md) | Split lesson generation: fast skeleton + exercises completed in the background | todo | p1 | L | medium |
-| [T-069](T-069-kill-server-static-duality.md) | Remove the server/static duality: converge to static as the single runtime | todo | p1 | XL | medium |
+| [T-069](T-069-kill-server-static-duality.md) | Remove the server/static duality: converge to static as the single runtime | done | p1 | XL | medium |
 | [T-070](T-070-lesson-gen-failure-ux.md) | Lesson generation failure black hole: bridge timeout + swallowed error + cancel/retry | done | p1 | M | high |
 | [T-068](T-068-lesson-window-prefetch.md) | Lesson prefetch window: the "if active is n, keep through n+2 ready" invariant (both modes) | done | p1 | M | high |
 | [T-056](T-056-llmless-first-content.md) | No-LLM flow: Phase 1 bug fix + Phase 2 library hub + anonymous door (ruling B) | done | p1 | M | high |

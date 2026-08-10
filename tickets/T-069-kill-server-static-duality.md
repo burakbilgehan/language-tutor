@@ -1,7 +1,7 @@
 ---
 id: T-069
 title: Kill the server/static duality: converge to static (local-first) as the single runtime
-status: todo
+status: done
 priority: p1
 effort: XL
 confidence: medium
@@ -42,3 +42,21 @@ Direction of convergence: static/local-first - production is already static (oku
 
 - T-068 ships BEFORE this and independently of it; it's the first brick of the convergence since it moves orchestration policy into core.
 - T-043 (self-host multi-tenant) effectively falls away / gets rescoped by this ticket: once the server runtime is gone, self-hosting = static files.
+
+## Completion (2026-08-10)
+
+Shipped as prerequisites commit ed7e8a0 + steps 1-8 (17eb1e3, 243af29,
+cb74b6f, 1311c54, fa08312, runtime-purity walker, test-core-sqljs rename,
+AGENTS.md rewrite). Deviations from the plan, both deliberate:
+
+- src/core/jobs.ts was kept INTACT instead of stripped: cancelJob is a live
+  dependency of core/curriculum-delete and the core-on-sqljs harness
+  exercises the module; it is env-agnostic core, not server orchestration.
+- src/lib/profile.ts was deleted in step 4 (not 3); its last importer was
+  save/export.ts.
+
+The auth.test.ts route-walker's successor is src/lib/runtime-purity.test.ts
+(no node-only imports under src/ outside a justified allowlist). The
+generation_jobs table stays as dead schema (a DROP would force a
+SAVE_SCHEMA_VERSION bump). T-043 is rescoped by this ticket: with no server
+runtime, self-hosting = serving static files.

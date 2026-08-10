@@ -8,6 +8,12 @@ confidence: low
 depends: [T-040]
 created: 2026-07-26
 ---
+Rescoped by T-069 (2026-08-10): the server runtime this ticket wanted to
+isolate no longer exists; self-hosting is now static files + the Worker
+backend, whose per-user tenancy already ships (T-046/47). Kept in backlog
+only as a pointer; close it on the next backlog sweep unless a new server
+runtime appears.
+
 Split off from T-040 (2026-07-26). T-040's env-token gate CLOSES server
 mode to non-localhost access (single operator = owner). This ticket goes
 beyond that: the **real multi-user** scenario; every user should see
