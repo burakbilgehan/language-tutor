@@ -140,6 +140,30 @@ test("i-adjective incl. いい exception", () => {
   });
 });
 
+// T-086 bug 4: the よ stem belongs to the いい morpheme only. かわいい is one
+// morpheme whose final いい is not that morpheme, so it inflects regularly.
+test("i-adjective: かわいい is not an いい compound", () => {
+  expectForms({ surface: "かわいい", wordClass: "i-adjective" }, {
+    dict: "かわいい", kunai: "かわいくない", katta: "かわいかった",
+    kunakatta: "かわいくなかった", kute: "かわいくて", kereba: "かわいければ",
+    ku: "かわいく", sa: "かわいさ", sou: "かわいそう",
+  });
+  expectForms({ surface: "可愛い", reading: "かわいい", wordClass: "i-adjective" }, {
+    kunai: "可愛くない", katta: "可愛かった",
+  });
+  // and it must not pick up the いい note
+  const res = conjugateJa({ surface: "かわいい", wordClass: "i-adjective" });
+  assert.ok(res.ok);
+  assert.ok(!res.notes.some((n) => n.en.includes("よ stem")));
+  // real いい compounds keep the よ stem and the note
+  const ii = conjugateJa({ surface: "いい", wordClass: "i-adjective" });
+  assert.ok(ii.ok);
+  assert.ok(ii.notes.some((n) => n.en.includes("よ stem")));
+  expectForms({ surface: "良い", reading: "よい", wordClass: "i-adjective" }, {
+    dict: "良い", kunai: "良くない", katta: "良かった", kereba: "良ければ",
+  });
+});
+
 test("na-adjective + copula", () => {
   expectForms({ surface: "静か", reading: "しずか", wordClass: "na-adjective" }, {
     da: "静かだ", desu: "静かです", janai: "静かじゃない",

@@ -333,9 +333,14 @@ const VERB_GROUPS: GroupDef[] = [
 
 // ---------------------------------------------------------------------------
 // Adjectives. Builders take the base (surface or kana) directly.
-// i-adjective: stem = base minus い; anything ending in いい (いい itself,
-// かっこいい…) inflects on よ (よくない, よかった) while the dictionary form
-// keeps いい. そう also irregular there: よさそう.
+// i-adjective: stem = base minus い; a word whose final いい IS the いい
+// morpheme (いい itself, かっこいい, 気持ちいい…) inflects on よ (よくない,
+// よかった) while the dictionary form keeps いい. そう is also irregular
+// there: よさそう.
+// かわいい/可愛い only LOOK like that: they are single morphemes whose final
+// いい is not the いい adjective, so they inflect regularly (かわいくない,
+// かわいかった). The suffix alone cannot tell the two apart, hence the
+// exception set; add a word here only when it is one morpheme ending in いい.
 // ---------------------------------------------------------------------------
 interface AdjFormDef {
   id: string;
@@ -348,8 +353,16 @@ interface AdjFormDef {
   exEn?: string;
 }
 
+// Single-morpheme adjectives ending in いい that do NOT contain the いい
+// morpheme, so they take the regular stem.
+const II_LOOKALIKES = new Set(["かわいい", "可愛い"]);
+
+/** True when the trailing いい is the いい morpheme, i.e. the よ stem applies. */
+const usesYoStem = (base: string) =>
+  base.endsWith("いい") && !II_LOOKALIKES.has(base);
+
 const iStem = (base: string) =>
-  base.endsWith("いい") ? base.slice(0, -2) + "よ" : base.slice(0, -1);
+  usesYoStem(base) ? base.slice(0, -2) + "よ" : base.slice(0, -1);
 
 const I_ADJ_FORMS: AdjFormDef[] = [
   { id: "dict", labelTr: "Sözlük", labelEn: "Dictionary", pattern: "〜い", build: (b) => b,
@@ -380,7 +393,7 @@ const I_ADJ_FORMS: AdjFormDef[] = [
     exJa: "〇なります。", exTr: "〜 hale gelir (〜laşır).", exEn: "It becomes 〜." },
   { id: "sa", labelTr: "İsimleşme (…lik)", labelEn: "Noun (-ness)", pattern: "〜さ", build: (b) => iStem(b) + "さ",
     exJa: "〇はどのくらい？", exTr: "〜liği ne kadar?", exEn: "How much is its 〜ness?" },
-  { id: "sou", labelTr: "…görünümlü", labelEn: "Looks", pattern: "〜そう", build: (b) => (b.endsWith("いい") ? iStem(b) + "さそう" : iStem(b) + "そう"),
+  { id: "sou", labelTr: "…görünümlü", labelEn: "Looks", pattern: "〜そう", build: (b) => (usesYoStem(b) ? iStem(b) + "さそう" : iStem(b) + "そう"),
     exJa: "〇ですね。", exTr: "〜 görünüyor.", exEn: "It looks 〜." },
 ];
 
@@ -546,7 +559,7 @@ export function conjugateJa(input: ConjInput): ConjResult {
       labelEn: wordClass === "i-adjective" ? "い-adjective" : "な-adjective + copula",
       forms: defs.map((d) => toForm(d, d.build(base), kBase ? d.build(kBase) : null)),
     };
-    if (wordClass === "i-adjective" && base.endsWith("いい")) {
+    if (wordClass === "i-adjective" && usesYoStem(base)) {
       notes.push({
         tr: "いい, çekimde よ köküne döner: よくない, よかった, よさそう.",
         en: "いい inflects on the よ stem: よくない, よかった, よさそう.",
