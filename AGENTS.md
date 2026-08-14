@@ -158,8 +158,10 @@ IndexedDB, `src/db/browser.ts`); better-sqlite3 is dev tooling only
   manifest + template). Registered production-only by
   `src/components/shared/SwRegister.tsx` (root layout, all pages incl.
   landing) with `updateViaCache: "none"`; skipWaiting + clients.claim;
-  navigations are network-first with cached-HTML fallback, assets/seed JSONs
-  cache-first; the SW follows the host's html_handling redirects MANUALLY
+  navigations are network-first (4s cap) with cached-HTML fallback, and the
+  network attempt is skipped entirely when `navigator.onLine` is false (a
+  dead-radio fetch hangs for tens of seconds on iOS, freezing airplane-mode
+  reloads); assets/seed JSONs cache-first; the SW follows the host's html_handling redirects MANUALLY
   (redirect:"manual") because browsers reject `redirected: true` responses
   from a SW for navigations (Chrome ERR_FAILED, WebKit "response served by
   service worker has redirections") and the auto-trailing-slash host

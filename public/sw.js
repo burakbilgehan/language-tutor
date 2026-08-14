@@ -31,10 +31,13 @@
 //   completes (progress posted to clients as {type:"okumo-precache"}).
 // - activate: drop older okumo-shell caches, claim clients, top up.
 // - fetch: same-origin GETs only, never /api/*.
-//   - navigations: network-first, cached-HTML fallback (exact path, then
-//     path + ".html" for the static export's file mapping, then index.html).
-//     Visited pages are runtime-cached under their pathname so a later
-//     offline visit with a different query string still hits.
+//   - navigations: network-first with a 4s cap, cached-HTML fallback (exact
+//     path, then path + ".html" for the static export's file mapping, then
+//     index.html); when navigator.onLine is false the network is skipped
+//     entirely (a dead-radio fetch hangs for tens of seconds on iOS, which
+//     would make an airplane-mode reload look frozen). Visited pages are
+//     runtime-cached under their pathname so a later offline visit with a
+//     different query string still hits.
 //   - everything else (hashed _next/static chunks, packaged seeds, wasm):
 //     cache-first, network fill on miss.
 const VERSION = "__OKUMO_VERSION__";
@@ -53,6 +56,7 @@ const precacheUrls = PRECACHE.map((p) => `${BASE}/${p}`).sort(
 );
 
 const INSTALL_CONCURRENCY = 8;
+const NAV_TIMEOUT_MS = 4000;
 
 let precacheDone = false;
 let topUpRunning = null;
@@ -127,6 +131,35 @@ async function fetchFollowingSameOrigin(req, init) {
   return { res, finalUrl: cur };
 }
 
+// Network-first with a cap: on a dead network (airplane mode, iOS suspending
+// the radio) fetch() can HANG for tens of seconds instead of rejecting; a
+// reload would look like it never finishes. After the cap, serve the cache.
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("network-timeout")), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+async function cachedHtml(pathname) {
+  const cache = await caches.open(CACHE);
+  return (
+    (await cache.match(pathname)) ||
+    (await cache.match(`${pathname}.html`)) ||
+    (await cache.match(`${BASE}/index.html`)) ||
+    null
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
@@ -167,8 +200,22 @@ self.addEventListener("fetch", (event) => {
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
+        // Offline: skip the network entirely. A dead-radio fetch can hang for
+        // tens of seconds (airplane mode on iOS especially); the user's
+        // reload must resolve from the cache immediately.
+        if (!navigator.onLine) {
+          const cached = await cachedHtml(url.pathname);
+          if (cached) return cached;
+          return new Response(
+            "Çevrimdışı: bu sayfa henüz önbellekte yok / Offline: this page is not cached yet",
+            { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } }
+          );
+        }
         try {
-          const { res: fresh, finalUrl } = await fetchFollowingSameOrigin(req);
+          const { res: fresh, finalUrl } = await withTimeout(
+            fetchFollowingSameOrigin(req),
+            NAV_TIMEOUT_MS
+          );
           if (fresh.ok && fresh.type === "basic") {
             const cache = await caches.open(CACHE);
             cache.put(url.pathname, fresh.clone());
@@ -178,15 +225,11 @@ self.addEventListener("fetch", (event) => {
           }
           return fresh;
         } catch {
-          const cache = await caches.open(CACHE);
-          return (
-            (await cache.match(url.pathname)) ||
-            (await cache.match(`${url.pathname}.html`)) ||
-            (await cache.match(`${BASE}/index.html`)) ||
-            new Response("Çevrimdışı: bu sayfa henüz önbellekte yok / Offline: this page is not cached yet", {
-              status: 503,
-              headers: { "content-type": "text/plain; charset=utf-8" },
-            })
+          const cached = await cachedHtml(url.pathname);
+          if (cached) return cached;
+          return new Response(
+            "Çevrimdışı: bu sayfa henüz önbellekte yok / Offline: this page is not cached yet",
+            { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } }
           );
         }
       })()
@@ -199,7 +242,8 @@ self.addEventListener("fetch", (event) => {
       const cache = await caches.open(CACHE);
       const hit = await cache.match(req, { ignoreSearch: true });
       if (hit) return hit;
-      const { res: fresh } = await fetchFollowingSameOrigin(req);
+      if (!navigator.onLine) throw new Error("offline"); // fail fast, no hang
+      const { res: fresh } = await withTimeout(fetchFollowingSameOrigin(req), 8000);
       if (fresh.ok && fresh.type === "basic") cache.put(req, fresh.clone());
       return fresh;
     })()
