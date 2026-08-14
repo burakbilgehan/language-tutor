@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Nunito_Sans } from "next/font/google";
 import { AppChrome } from "@/components/shared/AppChrome";
+import { SwRegister } from "@/components/shared/SwRegister";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -39,6 +40,9 @@ export default function RootLayout({
         {/* T-054: global app-chrome — landing (`/`) rotasında mount edilmez,
             bkz. AppChrome. */}
         <AppChrome />
+        {/* T-095: offline shell; prod'da SW'yi kurar, landing dahil tüm
+            sayfalarda mount edilir ki ilk ziyaret de precache'i başlatsın. */}
+        <SwRegister />
       </body>
     </html>
   );

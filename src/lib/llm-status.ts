@@ -46,11 +46,22 @@ export function useLlmStatus(): LlmStatus {
   const [status, setStatus] = useState<LlmStatus>(cached ?? DEFAULT_STATUS);
   useEffect(() => {
     let alive = true;
-    fetchStatus().then((s) => {
+    const apply = (s: LlmStatus) => {
       if (alive) setStatus(s);
-    });
+    };
+    fetchStatus().then(apply);
+    // T-095: ağ durumu değişince (uçak modu dahil) kapıyı yeniden değerlendir;
+    // browserLlmConfigured uzak endpoint'leri offline'da kapatır.
+    const recheck = () => {
+      cached = null;
+      fetchStatus().then(apply);
+    };
+    window.addEventListener("online", recheck);
+    window.addEventListener("offline", recheck);
     return () => {
       alive = false;
+      window.removeEventListener("online", recheck);
+      window.removeEventListener("offline", recheck);
     };
   }, []);
   return status;

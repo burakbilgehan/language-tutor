@@ -150,6 +150,25 @@ IndexedDB, `src/db/browser.ts`); better-sqlite3 is dev tooling only
   release step for zero gain; `packages/okumo-bridge/` stays as archive, see
   T-059). Long generations run inline (no job table); `curriculumGenerate`
   and `curriculumExtend` resolve when the chapter is ready.
+- **Offline shell / airplane mode (T-095)**: a service worker makes the site
+  open with ZERO network. `public/sw.js` is a TEMPLATE with token
+  placeholders; `scripts/build-static.mjs` walks `out/` post-build and
+  injects the precache manifest into `out/sw.js` (everything except
+  `strokes-data`, which is runtime-cached on first use; cache name = hash of
+  manifest + template). Registered production-only by
+  `src/components/shared/SwRegister.tsx` (root layout, all pages incl.
+  landing) with `updateViaCache: "none"`; skipWaiting + clients.claim;
+  navigations are network-first with cached-HTML fallback, assets/seed JSONs
+  cache-first. No Worker-side header rule on purpose (wrangler 4.x has no
+  per-asset header config; the auth-gate test forbids a pathname check in
+  worker/src/index.ts; `updateViaCache` is the spec-backed freshness
+  mechanism). LLM degrade: `browserLlmConfigured()` returns false when
+  `navigator.onLine` is false UNLESS the configured endpoint is loopback
+  (Ollama/bridge on the same machine keep working in airplane mode), so all
+  existing no-LLM paths (self-check grading, silent no-op generation) apply
+  without any network attempt; `useLlmStatus` re-evaluates on
+  online/offline events. First visit must be online (SW install); that is
+  inherent to the design.
 
 ## Architecture notes
 
