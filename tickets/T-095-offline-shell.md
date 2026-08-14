@@ -55,22 +55,27 @@ install), which the owner handles.
 
 ## Result (2026-08-14, code leg)
 
-Done on branch `t-095-offline-shell`:
+Done on branch `t-095-offline-shell`, merged to main (deploys):
 
 - `public/sw.js` (template): bounded-concurrency install precache with
-  per-file tolerance; HTML cached under extensionless + trailing-slash +
-  "/" (index) variants so navigations hit offline regardless of the host's
-  html_handling redirects; activate drops old `okumo-shell-*` buckets +
-  clients.claim; fetch: navigations network-first with cached-HTML fallback
-  (path → path+".html" → index.html), same-origin GETs cache-first with
-  network fill, `/api/*` and cross-origin never intercepted.
+  per-file tolerance, PRIORITY order (HTML pages first, then `_next/static`,
+  then bulk seeds/wasm) so a partial install still covers every navigation;
+  HTML cached under extensionless + trailing-slash + "/" (index) variants so
+  navigations hit offline regardless of the host's html_handling redirects;
+  self-heal: an interrupted install resumes via a top-up on activate and on
+  every fetch while incomplete (skip-if-cached, progress posted to clients);
+  activate drops old `okumo-shell-*` buckets + clients.claim; fetch:
+  navigations network-first with cached-HTML fallback (path → path+".html" →
+  index.html), same-origin GETs cache-first with network fill, `/api/*` and
+  cross-origin never intercepted.
 - `scripts/build-static.mjs`: walks `out/` (skips `strokes-data`, sw.js,
   .nojekyll), injects manifest into `out/sw.js`; cache name = sha256 of
   base+manifest+template (logic edits get a fresh bucket, identical rebuilds
   don't churn clients).
 - `src/components/shared/SwRegister.tsx` + root layout: production-only
   registration, `updateViaCache: "none"`, secure-context guard; mounts on all
-  pages including landing.
+  pages including landing; one-time per-version "offline ready" banner when
+  the SW reports precache completion (i18n tr/en tables).
 - Offline LLM gate: `browserLlmConfigured()` returns false when
   `navigator.onLine === false` unless the endpoint is loopback (Ollama/bridge
   on the same machine keep working in airplane mode). All existing no-LLM
@@ -82,9 +87,16 @@ Done on branch `t-095-offline-shell`:
 Verified: app tests 254/254, worker vitest 67 pass / 1 pre-existing skip,
 eslint clean on changed files, build emits sw.js with 162-entry manifest
 (16 html, 12 seed JSONs, sql-wasm included, 0 leftover tokens), all manifest
-entries exist on disk and serve 200 from a local static server.
+entries exist on disk and serve 200 from a local static server; owner
+verified offline navigation in desktop Chrome against a local static server.
 
-NOT verified (needs a real browser, owner): first-online-visit install →
-offline reload end to end; iOS Safari cache behavior. Also open: the
-deploy decision (merge to main deploys via the GitHub workflow).
+Field note (owner, phone): first field test failed because the precache had
+not completed before going offline (ERR_FAILED on navigation). The self-heal
++ readiness banner in this same ticket address that; re-verify by opening
+okumo.dev online once and waiting for the banner before airplane mode.
+
+NOT verified (needs a real browser on the device, owner): first-online-visit
+install → offline reload end to end on iOS Safari; iOS Cache Storage
+behavior under suspend/eviction.
+
 

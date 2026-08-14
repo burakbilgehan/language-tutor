@@ -167,8 +167,12 @@ IndexedDB, `src/db/browser.ts`); better-sqlite3 is dev tooling only
   (Ollama/bridge on the same machine keep working in airplane mode), so all
   existing no-LLM paths (self-check grading, silent no-op generation) apply
   without any network attempt; `useLlmStatus` re-evaluates on
-  online/offline events. First visit must be online (SW install); that is
-  inherent to the design.
+  online/offline events. First visit must be online (SW install); an
+  interrupted install (tab closed, iOS suspending a backgrounded page,
+  airplane mode before completion) self-heals: a top-up run on activate and
+  on every fetch re-fills missing entries (skip-if-cached), and `SwRegister`
+  shows a one-time per-version "offline ready" banner when the precache
+  completes, so the user knows when it is safe to go offline.
 
 ## Architecture notes
 
