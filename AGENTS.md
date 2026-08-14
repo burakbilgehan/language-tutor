@@ -159,7 +159,11 @@ IndexedDB, `src/db/browser.ts`); better-sqlite3 is dev tooling only
   `src/components/shared/SwRegister.tsx` (root layout, all pages incl.
   landing) with `updateViaCache: "none"`; skipWaiting + clients.claim;
   navigations are network-first with cached-HTML fallback, assets/seed JSONs
-  cache-first. No Worker-side header rule on purpose (wrangler 4.x has no
+  cache-first; the SW follows the host's html_handling redirects MANUALLY
+  (redirect:"manual") because browsers reject `redirected: true` responses
+  from a SW for navigations (Chrome ERR_FAILED, WebKit "response served by
+  service worker has redirections") and the auto-trailing-slash host
+  redirects every page. No Worker-side header rule on purpose (wrangler 4.x has no
   per-asset header config; the auth-gate test forbids a pathname check in
   worker/src/index.ts; `updateViaCache` is the spec-backed freshness
   mechanism). LLM degrade: `browserLlmConfigured()` returns false when

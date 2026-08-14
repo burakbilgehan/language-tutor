@@ -105,6 +105,28 @@ function topUp() {
   return topUpRunning;
 }
 
+// Fetch while following same-origin redirects OURSELVES (redirect:"manual").
+// Why: a plain fetch() follows redirects internally and marks the response
+// `redirected: true`; browsers REJECT such responses when served by a
+// service worker for a navigation ("response served by service worker has
+// redirections" / ERR_FAILED). The production host's html_handling
+// (auto-trailing-slash) redirects /settings -> /settings/ on every page, so
+// this path is the rule, not the exception. Manual follow also lets us cache
+// the FINAL content under the originally requested pathname.
+async function fetchFollowingSameOrigin(req, init) {
+  let cur = new URL(req.url);
+  let res = await fetch(cur.href, { ...init, redirect: "manual" });
+  for (let i = 0; i < 4 && res.status >= 300 && res.status < 400; i++) {
+    const loc = res.headers.get("location");
+    if (!loc) break;
+    const next = new URL(loc, cur);
+    if (next.origin !== self.location.origin) break; // let the browser handle
+    cur = next;
+    res = await fetch(cur.href, { ...init, redirect: "manual" });
+  }
+  return { res, finalUrl: cur };
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
@@ -146,10 +168,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       (async () => {
         try {
-          const fresh = await fetch(req);
+          const { res: fresh, finalUrl } = await fetchFollowingSameOrigin(req);
           if (fresh.ok && fresh.type === "basic") {
             const cache = await caches.open(CACHE);
             cache.put(url.pathname, fresh.clone());
+            if (finalUrl.pathname !== url.pathname) {
+              cache.put(finalUrl.pathname, fresh.clone());
+            }
           }
           return fresh;
         } catch {
@@ -174,7 +199,7 @@ self.addEventListener("fetch", (event) => {
       const cache = await caches.open(CACHE);
       const hit = await cache.match(req, { ignoreSearch: true });
       if (hit) return hit;
-      const fresh = await fetch(req);
+      const { res: fresh } = await fetchFollowingSameOrigin(req);
       if (fresh.ok && fresh.type === "basic") cache.put(req, fresh.clone());
       return fresh;
     })()

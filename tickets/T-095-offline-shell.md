@@ -95,6 +95,18 @@ not completed before going offline (ERR_FAILED on navigation). The self-heal
 + readiness banner in this same ticket address that; re-verify by opening
 okumo.dev online once and waiting for the banner before airplane mode.
 
+Field note 2 (owner, desktop Chrome + Safari, 2026-08-14): the REAL blocker
+was found in the navigation handler. The host's html_handling
+(auto-trailing-slash) 301-redirects every page; the SW's plain fetch()
+followed those internally and returned `redirected: true` responses, which
+browsers reject for SW-served navigations (Chrome: ERR_FAILED, WebKit:
+"response served by service worker has redirections"). The local static
+server had no redirects, so this never reproduced there. Fixed by following
+redirects manually (redirect:"manual", same-origin loop, cap 4) and caching
+the final content under both the requested and the final pathname. Shipped
+as "T-095: self-healing SW precache + offline-ready banner" + the redirect
+fix commit.
+
 NOT verified (needs a real browser on the device, owner): first-online-visit
 install → offline reload end to end on iOS Safari; iOS Cache Storage
 behavior under suspend/eviction.
