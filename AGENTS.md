@@ -100,6 +100,12 @@ IndexedDB, `src/db/browser.ts`); better-sqlite3 is dev tooling only
   `.github/workflows/deploy.yml` builds and deploys okumo.dev automatically
   (tickets/ and *.md-only pushes are skipped). Do NOT run `wrangler deploy`
   manually; just commit + push.
+- `npm run static`: the one-command local run: builds the static export
+  and serves it + the Worker (`/api/*`, Google sign-in) at
+  http://localhost:8787 via `wrangler dev --assets ../out`. This is the
+  production-shaped local loop; `npm run dev` has no `/api` and therefore
+  no cloud sign-in. Real Google sign-in locally needs a real client in
+  `worker/.dev.vars` (see worker README "Deploy").
 - `npx tsx --tsconfig tsconfig.json scripts/test-core-sqljs.ts [save.db]`:
   core-on-sql.js harness against `data/app.db` or an exported save snapshot
   (run after touching `src/core/*` or the browser DB layer)
