@@ -20,6 +20,7 @@ const S = {
       kana: "Kana",
       stroke: "Yazım",
       conjugate: "Çekim",
+      travel: "Seyahat",
       pinyin: "Pinyin",
       exam: "Sınav",
       review: "Tekrar",
@@ -45,6 +46,7 @@ const S = {
       kana: "Kana",
       stroke: "Writing",
       conjugate: "Conjugate",
+      travel: "Travel",
       pinyin: "Pinyin",
       exam: "Exams",
       review: "Review",
@@ -192,6 +194,8 @@ const NAV_ITEMS: NavItem[] = [
   // (T-077); an unlisted language would render an empty page, so gate it.
   { href: "/conjugate", label: "conjugate", langs: ["ja", "zh", "nl"] },
   { href: "/exam", label: "exam", langs: ["nl"] },
+  // T-099: offline Japan travel phrasebook (static, ja data only).
+  { href: "/travel", label: "travel", jaOnly: true },
   { href: "/review", label: "review" },
   { href: "/chat", label: "chat" },
 ];

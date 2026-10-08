@@ -283,6 +283,14 @@ IndexedDB, `src/db/browser.ts`); better-sqlite3 is dev tooling only
   curricula are backfilled to one N4 chapter lazily
   (`ensureChaptersBackfilled`), which also remaps pre-scheme non-ja chapters
   ("N5" as fake A1) onto the real scheme (`ensureLevelSchemeMigrated`).
+- **Japan travel sprint (T-099)**: an authored block of units
+  (`src/lib/curriculum/travel-sprint-ja.ts`) that `insertTravelSprint`
+  (`src/core/travel-sprint.ts`) splices in front of the frontier node of a
+  live ja curriculum: additive rows, unit position shift, one prereq
+  relink, never a status rewrite. Units are themed `travel-sprint:*`; the
+  lesson prompt adds travel rules for them. `/travel` is the matching
+  static offline phrasebook (`src/lib/travel/phrasebook-ja.ts`, nav
+  `jaOnly`).
 - **Side quests were removed (T-018)**; main pages + review practice already
   cover that ground. `nodes.side_quest_payload` / quest-typed `nodes` rows
   remain in the DB schema untouched (dead data; a column DROP would force a

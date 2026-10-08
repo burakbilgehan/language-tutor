@@ -47,6 +47,14 @@ const CATALOG: Record<ErrorCode, { tr: Msg; en: Msg }> = {
     tr: () => "Uzatılacak seviye kalmadı.",
     en: () => "No further level to extend to.",
   },
+  travel_sprint_exists: {
+    tr: () => "Seyahat sprinti zaten haritanda.",
+    en: () => "The travel sprint is already on your map.",
+  },
+  travel_sprint_unsupported: {
+    tr: () => "Seyahat sprinti yalnızca Japonca için var.",
+    en: () => "The travel sprint exists only for Japanese.",
+  },
   save_invalid: {
     tr: () => "Geçersiz kayıt dosyası (SQLite değil).",
     en: () => "Invalid save file (not SQLite).",

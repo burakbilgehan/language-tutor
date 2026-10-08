@@ -1,6 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import * as tables from "@/db/schema";
 import { totalXp, getStreak } from "./xp";
+import { travelSprintAvailable } from "./travel-sprint";
 import { nextLevelFor, isLevelOf, schemeFor } from "@/lib/curriculum/levels";
 import type { AppDb } from "./db-types";
 
@@ -130,6 +131,8 @@ export function getRoadmap(
     topLevel: topLevel ?? null,
     nextLevel: next,
     isGenerating: generatingChapter?.level ?? null,
+    /** T-099: the map offers the Japan travel sprint (ja, not yet added). */
+    travelSprintAvailable: travelSprintAvailable(db, profileId),
     xpTotal: totalXp(db, profileId),
     streak: getStreak(db, profileId),
   };

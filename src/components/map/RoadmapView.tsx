@@ -27,6 +27,7 @@ import {
   curriculumGenerate,
   curriculumRetranslate,
   primeLessonWindow,
+  travelSprintInsert,
   retryLessonGen,
 } from "@/lib/client-api";
 import { CHAIN_KEY } from "@/lib/curriculum-chain";
@@ -47,6 +48,11 @@ const S = {
     preparing: (lvl: string) =>
       `${lvl} hazırlanıyor... Bu birkaç dakika sürebilir.`,
     nextLevelFallback: "Sonraki seviye",
+    sprintTitle: "Japonya seyahat sprinti",
+    sprintBody:
+      "7 ünite, 33 ders: havalimanı, tren, otel, yemek, alışveriş, yol sorma, acil durum. Sıradaki dersinin önüne eklenir; tamamladıkların ve ilerlemen olduğu gibi kalır.",
+    sprintAdd: "Haritama ekle",
+    sprintAdding: "Ekleniyor...",
     nextAutoPre: "Devam edersen ",
     nextAutoPost:
       " ile başlayıp kalan tüm seviyeler sırayla hazırlanır; her seviye bittikçe haritada görünür.",
@@ -117,6 +123,11 @@ const S = {
     preparing: (lvl: string) =>
       `Preparing ${lvl}... This can take a few minutes.`,
     nextLevelFallback: "The next level",
+    sprintTitle: "Japan travel sprint",
+    sprintBody:
+      "7 units, 33 lessons: airport, trains, hotel, food, shopping, directions, emergencies. Inserted before your next lesson; everything you completed stays as it is.",
+    sprintAdd: "Add to my map",
+    sprintAdding: "Adding...",
     nextAutoPre: "Continue and every remaining level is prepared in order, starting with ",
     nextAutoPost: "; each one appears on the map as it finishes.",
     prepareNext: (lvl: string) => `Prepare the remaining levels (${lvl} onward)`,
@@ -211,6 +222,7 @@ interface RoadmapDto {
   topLevel: string | null;
   nextLevel: string | null;
   isGenerating: string | null;
+  travelSprintAvailable?: boolean;
   xpTotal: number;
   streak: { current: number; longest: number };
   dueCards?: number;
@@ -236,6 +248,8 @@ export function RoadmapView() {
   // finally landed.
   const [extendBusy, setExtendBusy] = useState(false);
   const [extendError, setExtendError] = useState<string | null>(null);
+  const [sprintBusy, setSprintBusy] = useState(false);
+  const [sprintError, setSprintError] = useState<string | null>(null);
   const [openLessonId, setOpenLessonId] = useState<string | null>(null);
   // T-056: profil var ama müfredat yok (LLM'siz onboarding). Kör boş harita
   // yerine açık bir durum: LLM yoksa statik kütüphaneye yönlendir, varsa
@@ -427,6 +441,19 @@ export function RoadmapView() {
     void startGenerate({ auto: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notReady, profileId, genBusy]);
+
+  const addTravelSprint = async () => {
+    setSprintError(null);
+    setSprintBusy(true);
+    try {
+      await travelSprintInsert();
+      await loadRoadmap();
+    } catch (e) {
+      setSprintError(localize(e));
+    } finally {
+      setSprintBusy(false);
+    }
+  };
 
   const startExtend = async () => {
     if (!profileId) return;
@@ -661,6 +688,24 @@ export function RoadmapView() {
             >
               {retranslating ? t.retranslating : t.retranslate}
             </button>
+          </div>
+        )}
+        {data.travelSprintAvailable && !data.contentLangMismatch && (
+          <div className="my-6 rounded-cozy border border-indigo/30 bg-surface px-5 py-4 shadow-cozy">
+            <div className="font-semibold">🗾 {t.sprintTitle}</div>
+            <p className="mt-1 text-sm text-ink-soft">{t.sprintBody}</p>
+            <div className="mt-3">
+              <CozyButton
+                variant="soft"
+                onClick={() => void addTravelSprint()}
+                disabled={sprintBusy}
+              >
+                {sprintBusy ? t.sprintAdding : t.sprintAdd}
+              </CozyButton>
+            </div>
+            {sprintError && (
+              <p className="mt-2 text-sm text-danger">{sprintError}</p>
+            )}
           </div>
         )}
         {data.units.map((unit, ui) => (

@@ -719,6 +719,19 @@ async function curriculumExtendInline(profileId: string): Promise<void> {
   await handle.persistNow();
 }
 
+/** T-099: splice the Japan travel sprint before the frontier node, persist,
+ * then prefetch its first lessons (no-op without an LLM). */
+export async function travelSprintInsert(): Promise<void> {
+  const handle = await browserDb();
+  const coreP = await import("@/core/profile");
+  const coreT = await import("@/core/travel-sprint");
+  const profile = coreP.getActiveProfile(handle.db);
+  if (!profile) throw new AppError("profile_missing");
+  coreT.insertTravelSprint(handle.db, profile.id);
+  await handle.persistNow();
+  void primeLessonWindow();
+}
+
 export async function grammarGenerate(slug: string): Promise<void> {
   const gen = await browserGen();
   const { db, persistSoon } = await browserDb();

@@ -21,6 +21,9 @@ export const ERROR_CODES = [
   "duplicate_profile",
   "profile_mismatch",
   "no_level_to_extend",
+  // T-099: Japan travel sprint splice.
+  "travel_sprint_exists",
+  "travel_sprint_unsupported",
   "save_invalid",
   "save_version_mismatch",
   "save_read_failed",

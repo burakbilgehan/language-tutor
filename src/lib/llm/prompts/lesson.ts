@@ -1,4 +1,5 @@
 import { languageName, nativeLanguageName } from "@/lib/profile-options";
+import { TRAVEL_SPRINT_THEME_PREFIX } from "@/lib/curriculum/travel-sprint-ja";
 
 type Profile = typeof import("@/db/schema").profiles.$inferSelect;
 type Node = typeof import("@/db/schema").nodes.$inferSelect;
@@ -43,6 +44,18 @@ export function lessonPrompt(opts: {
         ? "\nBu bir KONTROL NOKTASI: yeni konu öğretme, önceki derslerin karması ağırlıklı alıştırma yap."
         : "";
 
+  // T-099: authored Japan travel sprint units. The learner is about to travel;
+  // the lesson serves real situations, not the level's grammar sequence.
+  const travel = opts.unitTheme.startsWith(TRAVEL_SPRINT_THEME_PREFIX)
+    ? `\nBu bir SEYAHAT SPRİNTİ dersi: öğrenci birkaç hafta içinde Japonya'ya gidiyor. Ders gerçek durumlara hizmet etsin:
+- Kalıpları BÜTÜN İFADE olarak öğret: seviyenin üstünde bir dilbilgisi içerse bile (ör. 〜てもいいですか, 〜ています) kalıbı ezberlenecek bir parça olarak ver, dilbilgisini tek cümleyle açıkla, derine inme.
+- Kibar biçim (です/ます) esas; Japonya'da gerçekten duyulan ifadeleri kullan (personelin keigo cümleleri dahil: 何名様ですか, 温めますか). Öğrencinin bunları ANLAması, kendisinin ise sade kibar biçimle CEVAP vermesi hedef.
+- Gerçek tabela ve menü yazısını tanımaya ağırlık ver: kanjiyi tabelada göründüğü haliyle göster, okunuşunu ve anlamını ver.
+- "examples" içine en az bir kısa diyalog satırı dizisi koy (personel / öğrenci sırasıyla).
+- "explanation_tr" sonunda 1-2 cümlelik pratik bir kültür/görgü ipucu ver (ör. bahşiş verilmez, para tepsiye konur).
+- Alıştırmaların çoğu durum temelli olsun: "Garson 何名様ですか diyor; iki kişisin. Ne dersin?" gibi. Duyulan cümleyi anlama ve doğru cevabı üretme yönlerini karıştır.`
+    : "";
+
   const prompt = `Ders bilgisi:
 - Ünite: "${opts.unitTitle}" (tema: ${opts.unitTheme})
 - Ders: "${opts.node.titleTr}" — ${opts.node.subtitleTr}
@@ -59,7 +72,7 @@ export function lessonPrompt(opts: {
       ? `\n- ZORLANDIĞI alanlar (${opts.strugglesLine}) — bu ders konusuyla kesişiyorsa alıştırmalarda bunlara ekstra tekrar ve pekiştirme fırsatı ver; kesişmiyorsa zorla dahil etme. Bu veriyi ASLA öğrenciye söyleme ("zorlandığını biliyorum" gibi meta yorum yasak) — sadece içerik seçimini sessizce yönlendirsin.`
       : ""
   }
-${boss}${
+${boss}${travel}${
     opts.regenerationFeedback?.trim()
       ? `\nÖNCEKİ ÜRETİMDEKİ SORUNLAR — BUNLARI DÜZELT (öğrenci bu dersi daha önce üretilmiş haliyle gördü ve şikayet etti; yeni üretim bu şikayeti gidersin):${
           opts.previousLessonSummary ? `\n- Önceki üretim özeti: ${opts.previousLessonSummary}` : ""
