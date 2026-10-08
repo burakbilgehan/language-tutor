@@ -289,8 +289,11 @@ IndexedDB, `src/db/browser.ts`); better-sqlite3 is dev tooling only
   live ja curriculum: additive rows, unit position shift, one prereq
   relink, never a status rewrite. Units are themed `travel-sprint:*`; the
   lesson prompt adds travel rules for them. `/travel` is the matching
-  static offline phrasebook (`src/lib/travel/phrasebook-ja.ts`, nav
-  `jaOnly`).
+  static offline handbook (T-100: guides + sign kanji + phrasebook,
+  `src/lib/travel/`, nav `jaOnly`); its content is gated by
+  `src/lib/travel-content.test.ts`. Sign mockups use REAL-WORLD sign
+  colours (green 非常口, yellow exits...): depicted content is exempt from
+  the palette rules below, which govern the app's own UI.
 - **Side quests were removed (T-018)**; main pages + review practice already
   cover that ground. `nodes.side_quest_payload` / quest-typed `nodes` rows
   remain in the DB schema untouched (dead data; a column DROP would force a
@@ -385,4 +388,6 @@ Color roles: vermilion = action only (max ONE dominant focus per page),
 indigo = info + success + state (links, hints, progress, focus ring, Kumo
 mark), amber = reward (XP/streak/badges; `--amber-text` on light bg). No
 green, no pale pastel blue, no purple gradients, no dashboard aesthetic.
+These rules govern the app's own UI, not depicted real-world objects: the
+/travel sign mockups keep real sign colours (T-100).
 Fraunces + Nunito Sans. UI copy via the i18n string tables (tr canonical).

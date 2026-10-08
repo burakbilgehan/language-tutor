@@ -7,6 +7,7 @@ file + a row here. This index is updated with every ticket change.
 
 | ID | Title | Status | Priority | Effort | Confidence |
 |---|---|---|---|---|---|
+| [T-100](T-100-travel-guide-depth.md) | /travel becomes a full offline handbook (guides, sign kanji, big phrasebook) | done | p1 | M | medium |
 | [T-099](T-099-japan-travel-sprint.md) | Japan travel sprint (map units) + offline travel phrasebook (/travel) | done | p1 | M | high |
 | [T-098](T-098-catalog-model-generation-refresh.md) | Model catalog pins stale Claude versions on the API-key and OpenRouter doors | todo | p2 | S | medium |
 | [T-096](T-096-turkic-languages-launch.md) | Turkic languages launch (az/uz/kk/ky/tk): content generation + ship (parked on branch wip/turkic-languages) | backlog | p1 | L | high |
